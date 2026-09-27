@@ -24,6 +24,9 @@ Files: `app/lib/server/models.ts` (target chain, `FailureKind`, error classifica
 ## Provider status (checked 2026-09-27)
 - The HF free tier runs out of monthly credits quickly (402 → `quota`, so the chain skips to NVIDIA).
 - NVIDIA `google/gemma-4-31b-it` sometimes doesn't answer at all, not even a text-only prompt within 60 s. `moonshotai/kimi-k3` accepts images and works, but it's slow (19–40 s to first token, 25–95 s total), so it can hit the 35 s first-token watchdog. `meta/llama-4-maverick-*` and `qwen/qwen3.5-397b-a17b` are end-of-life (410); `gemma-3-12b-it`, `kimi-k2.6` and `phi-3-vision` return 404 for this account.
+- HF credits are account-wide: once depleted, **every** router model returns 402, whichever provider serves it. Switching models doesn't help; wait for the monthly reset, buy credits, or use another token.
+- To list HF vision models with live providers, prices and first-token latency: `curl -H "Authorization: Bearer $HF_TOKEN" https://router.huggingface.co/v1/models | jq '.data[] | select(.architecture.input_modalities | index("image"))'`. None are free.
+- The user prefers an HF-only chain (NVIDIA disabled in `.env.local`): `Qwen/Qwen3-VL-30B-A3B-Instruct` → `google/gemma-4-26B-A4B-it` → `Qwen/Qwen3-VL-235B-A22B-Instruct`.
 - To probe a model directly, stream one small vision request with the `openai` client and log time-to-first-token (count `reasoning_content` deltas too).
 
 ## Debugging
