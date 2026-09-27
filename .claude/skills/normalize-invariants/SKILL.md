@@ -26,5 +26,7 @@ Files: `app/lib/analysis/types.ts` (contract), `prompt.ts` (SYSTEM_PROMPT / USER
 - Gluten escalates to "contains" for a strong gluten ingredient or a **declared** gluten allergen, never for "gluten is contains in the allergen map": oats alone put it there too, and oats only mean "likely".
 - A compound ingredient (a bracketed list, or "x: a, b") gets no name-implied E-number and no untrusted model allergens. Its additives are found per part.
 - Ambiguous additives (code `null`: modified starch, caramel colour) are deduplicated by kind (`additiveKey`), not by exact wording.
+- Models glue the "may contain" sentence onto the last ingredient ("ferments. Peut contenir des traces de fruits à coque…"). Ingredient keyword detection runs on the name with `mayContainStatements` removed; allergens found in those sentences become may-contain (fixture `fr-yogurt-traces.txt`).
+- An allergen the model lists in both `declared` and `may_contain` is treated as may-contain; a real ingredient keyword still raises it to "contains".
 - Allergen sources are filled in ("Declared on the label" / "Listed on the label") at the very end, after the gluten rule may have added an allergen.
 - `normalize()` wraps its body in a try/catch that falls back to `normalize({})`. That is a last resort, not a licence to skip guards.

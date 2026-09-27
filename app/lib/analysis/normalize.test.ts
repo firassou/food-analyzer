@@ -55,7 +55,7 @@ describe("invariants", () => {
   });
 
   it("returns a complete object for every fixture", () => {
-    for (const f of ["eu-biscuit", "us-per-serving", "fr-peut-contenir", "arabic", "drink", "non-label", "truncated", "python-literals"])
+    for (const f of ["eu-biscuit", "us-per-serving", "fr-peut-contenir", "arabic", "drink", "non-label", "truncated", "python-literals", "fr-yogurt-traces"])
       expectComplete(analyze(`${f}.txt`));
   });
 
@@ -388,5 +388,20 @@ describe("rules", () => {
       "No ingredient list was readable, so allergen, gluten and additive checks are incomplete.",
       "The analysis was cut short; some sections may be incomplete.",
     ]);
+  });
+});
+
+describe("fr-yogurt-traces: may-contain glued to an ingredient, allergen in both model lists", () => {
+  const r = analyze("fr-yogurt-traces.txt");
+
+  it("keeps tree nuts as a trace, not an ingredient allergen", () => {
+    expect(byId(r).tree_nuts?.presence).toBe("may_contain");
+    expect(byId(r).tree_nuts?.declared).toBe(false);
+    expect(r.ingredients.at(-1)?.allergens).toEqual([]);
+  });
+
+  it("still reports the real ingredient allergens", () => {
+    expect(byId(r).milk?.presence).toBe("contains");
+    expect(r.lactose.status).toBe("contains");
   });
 });

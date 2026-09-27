@@ -571,6 +571,9 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     }
     mayContain.push(...inPrecautions);
   }
+  // listed as both declared and "may contain": the precautionary reading wins; a real
+  // ingredient still raises it back to "contains" through keyword detection below
+  for (let i = declared.length - 1; i >= 0; i--) if (mayContain.includes(declared[i])) declared.splice(i, 1);
   const declaredSet = new Set(declared);
 
   // ---- 3. ingredients
@@ -594,6 +597,15 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     let nameEn = isObj(item) ? str(pick(item, "name_en", "english", "translation", "en"), 160) : null;
     if (nameEn && fold(nameEn) === fold(name)) nameEn = null;
     const both = `${name} ${nameEn ?? ""}`;
+    // models sometimes glue the "may contain" sentence onto the last ingredient:
+    // its allergens are traces, so detect ingredient allergens without it
+    const ownTraces = mayContainStatements(both);
+    let own = fold(both);
+    for (const p of ownTraces) own = own.replace(p, " ");
+    if (ownTraces.length) {
+      precautions.push(...ownTraces);
+      mayContain.push(...ownTraces.flatMap(detectAllergens));
+    }
 
     // a percentage must actually be printed next to the ingredient
     const printedPct = num(both.match(/(\d+(?:[.,]\d+)?)\s*%/)?.[1]);
@@ -616,8 +628,11 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
     // the model's per-ingredient allergens are kept when the keywords support them, or when
     // the ingredient has no listed sub-ingredients (e.g. "brioche") and the label declares it
-    const keywordAllergens = detectAllergens(both);
-    const modelAllergens = isObj(item) ? allergenIds(pick(item, "allergens", "allergen")) : [];
+    const keywordAllergens = detectAllergens(own);
+    const traceAllergens = new Set(ownTraces.flatMap(detectAllergens));
+    const modelAllergens = (isObj(item) ? allergenIds(pick(item, "allergens", "allergen")) : []).filter(
+      (a) => keywordAllergens.includes(a) || !traceAllergens.has(a),
+    );
     const trustModel = !compound;
     const allergens = new Set<AllergenId>([
       ...keywordAllergens,
@@ -625,9 +640,9 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
         (a) => keywordAllergens.includes(a) || (trustModel && (declaredSet.size === 0 || declaredSet.has(a))),
       ),
     ]);
-    const gluten = allergens.has("gluten") || glutenSignal(both) !== null;
+    const gluten = allergens.has("gluten") || glutenSignal(own) !== null;
     if (gluten) allergens.add("gluten");
-    const dairy = allergens.has("milk") || isDairy(both);
+    const dairy = allergens.has("milk") || isDairy(own);
     if (dairy) allergens.add("milk");
     ingredients.push({
       name,
