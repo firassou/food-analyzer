@@ -3,7 +3,17 @@ import { normalize } from "../analysis/normalize";
 import { lastAnswerObject, parseModelJson } from "../analysis/parse";
 import { SYSTEM_PROMPT, USER_PROMPT } from "../analysis/prompt";
 import type { AnalyzeErrorCode, AnalyzeMeta, LabelAnalysis } from "../analysis/types";
-import { classify, describe, type FailureKind, getTargets, StallError, type Target } from "./models";
+import {
+  classify,
+  coolDown,
+  cooldownMs,
+  coolingDown,
+  describe,
+  type FailureKind,
+  getTargets,
+  StallError,
+  type Target,
+} from "./models";
 
 // Budget ordering must hold: DEADLINE_MS < route maxDuration (120 s) < client timeout (150 s).
 /** total time budget for one analysis, across every attempt */
@@ -14,7 +24,9 @@ const FIRST_TOKEN_MS = 35_000;
 const IDLE_MS = 20_000;
 /** don't start another attempt with less time than this left */
 const MIN_ATTEMPT_MS = 12_000;
+/** attempts that reached a model; instant rejections (limits, bad keys) don't count */
 const MAX_ATTEMPTS = 4;
+const INSTANT_FAILURES = new Set<Attempt["outcome"]>(["auth", "quota", "rate_limited", "bad_request"]);
 const MAX_TOKENS = 6000;
 /** reasoning kept per attempt, in case the answer only appears there */
 const MAX_REASONING_CHARS = 200_000;
@@ -53,7 +65,7 @@ export async function analyzeLabel(
   const targets = getTargets();
   if (targets.length === 0) {
     throw new AnalyzeError(
-      "The server has no AI provider configured. Set HF_TOKEN (and optionally NVIDIA_API_KEY) in .env.local.",
+      "The server has no AI provider configured. Set at least one provider key (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, HF_TOKEN or NVIDIA_API_KEY) in .env.local.",
       "not_configured",
       503,
     );
@@ -65,9 +77,13 @@ export async function analyzeLabel(
   // the best incomplete result so far, used if nothing better arrives
   let fallback: { result: LabelAnalysis; target: Target } | null = null;
 
-  for (const target of targets) {
+  // models that recently hit a limit go last: tried only if everything else fails
+  const ordered = [...targets.filter((t) => !coolingDown(t)), ...targets.filter((t) => coolingDown(t))];
+  const reachedModel = () => attempts.filter((a) => !INSTANT_FAILURES.has(a.outcome)).length;
+
+  for (const target of ordered) {
     if (signal.aborted) throw cancelled();
-    if (attempts.length >= MAX_ATTEMPTS) break;
+    if (reachedModel() >= MAX_ATTEMPTS) break;
     if (deadProviders.has(target.provider)) continue;
     const remaining = DEADLINE_MS - (Date.now() - started);
     if (remaining < MIN_ATTEMPT_MS) break;
@@ -109,7 +125,14 @@ export async function analyzeLabel(
       attempts.push({ target, outcome: kind, ms, detail: describe(error) });
       log(target, `failed after ${ms}ms: ${kind}`, describe(error));
       if (kind === "aborted" || signal.aborted) throw cancelled();
-      if (kind === "auth" || kind === "quota") deadProviders.add(target.provider);
+      const cooldown = cooldownMs(kind, error);
+      // bad keys and exhausted credits are account-wide: skip the provider's other models too
+      const accountWide = kind === "auth" || kind === "quota";
+      if (accountWide) deadProviders.add(target.provider);
+      if (cooldown !== null) {
+        for (const t of accountWide ? targets.filter((x) => x.provider === target.provider) : [target])
+          coolDown(t, cooldown);
+      }
     }
   }
 
@@ -224,13 +247,13 @@ function summarizeFailure(attempts: Attempt[]): AnalyzeError {
   const only = (...k: Attempt["outcome"][]) => kinds.size > 0 && [...kinds].every((x) => k.includes(x));
   if (only("auth"))
     return new AnalyzeError(
-      "The AI provider rejected the server's API key. Check HF_TOKEN / NVIDIA_API_KEY.",
+      "The AI provider rejected the server's API key. Check the provider keys in .env.local.",
       "upstream_auth",
       502,
     );
   if (only("quota", "auth"))
     return new AnalyzeError(
-      "The AI provider's credits are exhausted. Top up the account or add another provider key.",
+      "Every AI provider is out of credits or free quota. Try again later, or add another provider key.",
       "upstream_quota",
       502,
     );

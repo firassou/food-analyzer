@@ -6,7 +6,7 @@ An AI food-label analyzer. Upload (or paste) a photo of a packaged food label in
 
 ## Stack
 
-Next.js 16 (App Router), React 19, TypeScript (strict), Tailwind CSS v4, `sharp` for server-side image processing, and the `openai` package as a client for OpenAI-compatible providers (Hugging Face router, NVIDIA NIM). Unit tests use Vitest.
+Next.js 16 (App Router), React 19, TypeScript (strict), Tailwind CSS v4, `sharp` for server-side image processing, and the `openai` package as a client for OpenAI-compatible providers (Gemini, Groq, OpenRouter, Hugging Face router, NVIDIA NIM). Unit tests use Vitest.
 
 ## Setup
 
@@ -26,17 +26,30 @@ pnpm dev                     # http://localhost:3000
 
 ## Environment variables
 
-Set these in `.env.local`. At least one provider key is required.
+Set these in `.env.local` (see `.env.example`). At least one provider key is required; providers without a key are skipped.
 
-| Variable             | Default                              | Purpose                                                 |
-| -------------------- | ------------------------------------ | ------------------------------------------------------- |
-| `HF_TOKEN`           | none                                 | Hugging Face router key (primary provider)              |
-| `NVIDIA_API_KEY`     | none                                 | NVIDIA NIM key (second, independent provider)           |
-| `HF_MODEL`           | `Qwen/Qwen3-VL-30B-A3B-Instruct`     | primary HF model(s), comma-separated                    |
-| `HF_FALLBACK_MODELS` | `Qwen/Qwen3-VL-235B-A22B-Instruct`   | HF fallbacks, comma-separated (set empty to disable)    |
-| `NVIDIA_MODEL`       | `google/gemma-4-31b-it`              | NVIDIA model(s), comma-separated                        |
+| Variable             | Default                                                | Purpose                                         |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| `GEMINI_API_KEY`     | none                                                   | Google AI Studio key (free tier)                |
+| `GROQ_API_KEY`       | none                                                   | Groq key (free tier)                            |
+| `OPENROUTER_API_KEY` | none                                                   | OpenRouter key (free `:free` models)            |
+| `HF_TOKEN`           | none                                                   | Hugging Face router key (monthly credits)       |
+| `NVIDIA_API_KEY`     | none                                                   | NVIDIA NIM key                                  |
+| `PROVIDER_ORDER`     | `huggingface,nvidia,gemini,groq,openrouter`            | order the providers are tried in                |
+| `GEMINI_MODEL`       | `gemini-3.8-flash,gemini-3.5-flash-lite`               | Gemini model(s), comma-separated                |
+| `GROQ_MODEL`         | `qwen/qwen3.8-27b`                                     | Groq model(s)                                   |
+| `OPENROUTER_MODEL`   | `google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free`     | OpenRouter model(s)                             |
+| `HF_MODEL`           | `Qwen/Qwen3-VL-30B-A3B-Instruct`                       | primary HF model(s)                             |
+| `HF_FALLBACK_MODELS` | `Qwen/Qwen3-VL-235B-A22B-Instruct`                     | HF fallbacks (set empty to disable)             |
+| `NVIDIA_MODEL`       | `google/gemma-4-31b-it`                                | NVIDIA model(s)                                 |
 
-Models are tried in this order: HF primary, HF fallbacks, then NVIDIA. `GET /api/analyze` shows which providers and models are configured, without exposing secrets.
+### Free setup
+
+1. Create free keys: [Google AI Studio](https://aistudio.google.com/apikey), [Groq](https://console.groq.com/keys) and [OpenRouter](https://openrouter.ai/settings/keys). None needs a card.
+2. Put them in `.env.local` with `PROVIDER_ORDER=gemini,groq,openrouter`.
+3. `curl localhost:3000/api/analyze` should list the three providers.
+
+Free tiers are rate-limited per minute and per day, and Gemini's free tier may use requests to improve Google's products. The chain handles limits: a model that answers "rate limited", "out of quota" or "bad key" is skipped instantly (it doesn't use up one of the 4 attempts), put on a cooldown (the provider's `Retry-After`, else 1 minute; 1 hour for quota or bad keys, for the whole provider), and later requests go straight to the next model. Models on cooldown are still tried last if nothing else works. `GET /api/analyze` shows the chain in order.
 
 ## Architecture
 
@@ -56,12 +69,12 @@ Models are tried in this order: HF primary, HF fallbacks, then NVIDIA. `GET /api
                                               │
                                               ▼
                                            lib/server/analyze.ts  ◀── lib/server/models.ts
-                                           for each target (HF → HF fallbacks → NVIDIA):   target chain,
+                                           for each target (PROVIDER_ORDER, cooling last): target chain,
                                              stream with watchdog (first token 35 s,       error → FailureKind
                                              idle 20 s, 115 s total budget)
                                              complete JSON → done
                                              truncated → keep best as fallback, continue
-                                             auth/quota → skip the provider
+                                             limit/bad key → instant skip + cooldown
                                               │
                                               ▼
                                            lib/analysis/parse.ts      lenient JSON + truncation repair
