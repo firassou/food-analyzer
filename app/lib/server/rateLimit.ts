@@ -23,9 +23,19 @@ export class MemoryRateLimiter implements RateLimiter {
     const now = Date.now();
     const recent = (this.hits.get(key) ?? []).filter((t) => now - t < this.windowMs);
     recent.push(now);
-    if (this.hits.size >= this.maxKeys && !this.hits.has(key)) this.hits.clear();
+    this.hits.delete(key); // re-insert so the map stays ordered by last hit
+    if (this.hits.size >= this.maxKeys) this.evict(now);
     this.hits.set(key, recent);
     return recent.length > this.max;
+  }
+
+  /** drops keys with no hit inside the window, then the least recently seen ones */
+  private evict(now: number) {
+    for (const [k, times] of this.hits) if (now - times[times.length - 1] >= this.windowMs) this.hits.delete(k);
+    for (const k of this.hits.keys()) {
+      if (this.hits.size < this.maxKeys) break;
+      this.hits.delete(k);
+    }
   }
 }
 

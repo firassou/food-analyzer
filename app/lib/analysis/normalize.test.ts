@@ -405,3 +405,32 @@ describe("fr-yogurt-traces: may-contain glued to an ingredient, allergen in both
     expect(r.lactose.status).toBe("contains");
   });
 });
+
+describe("review regressions", () => {
+  it("keeps a declared allergen that a precaution sentence also mentions", () => {
+    const r = normalize({
+      label_detected: true,
+      allergens: { declared: ["milk"], may_contain: [] },
+      raw_text: "Contains milk. Made in a factory that also handles nuts and milk.",
+    });
+    expect(byId(r).milk?.presence).toBe("contains");
+    expect(byId(r).milk?.declared).toBe(true);
+    expect(byId(r).tree_nuts?.presence).toBe("may_contain");
+  });
+
+  it("keeps a model allergen listed in both lists when the label text declares it", () => {
+    const r = normalize({
+      label_detected: true,
+      allergens: { declared: ["soy"], may_contain: ["soy"] },
+      raw_text: "Allergens: soy. May contain traces of soy and sesame.",
+    });
+    expect(byId(r).soy?.presence).toBe("contains");
+  });
+
+  it("lists oats-only gluten as may contain, consistent with the gluten status", () => {
+    const r = normalize({ label_detected: true, ingredients: [{ name: "rolled oats" }, { name: "salt" }] });
+    expect(r.gluten.status).toBe("likely_contains");
+    expect(byId(r).gluten?.presence).toBe("may_contain");
+    expect(r.ingredients[0].gluten).toBe(true);
+  });
+});

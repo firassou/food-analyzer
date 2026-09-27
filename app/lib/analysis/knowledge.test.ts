@@ -161,6 +161,15 @@ describe("isDrink", () => {
   });
 });
 
+describe("isDrink with explicit drink words", () => {
+  it("lets drink, milkshake and boisson win over food words like chocolate", () => {
+    expect(isDrink("Hot chocolate drink")).toBe(true);
+    expect(isDrink("Chocolate milkshake")).toBe(true);
+    expect(isDrink("Boisson chocolatée au lait")).toBe(true);
+    expect(isDrink("Milk chocolate bar")).toBe(false);
+  });
+});
+
 describe("E-numbers", () => {
   it("canonicalises spacing, dashes, INS and roman suffixes", () => {
     expect(canonicalENumber("E 500 (ii)")).toBe("E500ii");

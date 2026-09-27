@@ -1,6 +1,6 @@
 import "server-only";
 import { normalize } from "../analysis/normalize";
-import { parseModelJson } from "../analysis/parse";
+import { lastAnswerObject, parseModelJson } from "../analysis/parse";
 import { SYSTEM_PROMPT, USER_PROMPT } from "../analysis/prompt";
 import type { AnalyzeErrorCode, AnalyzeMeta, LabelAnalysis } from "../analysis/types";
 import { classify, describe, type FailureKind, getTargets, StallError, type Target } from "./models";
@@ -16,6 +16,8 @@ const IDLE_MS = 20_000;
 const MIN_ATTEMPT_MS = 12_000;
 const MAX_ATTEMPTS = 4;
 const MAX_TOKENS = 6000;
+/** reasoning kept per attempt, in case the answer only appears there */
+const MAX_REASONING_CHARS = 200_000;
 
 const DEV = process.env.NODE_ENV !== "production";
 
@@ -77,8 +79,9 @@ export async function analyzeLabel(
       let parsed = parseModelJson(content);
       // reasoning models occasionally put the whole answer in the reasoning channel and
       // leave content empty: use it, but only as a fallback candidate, never as "complete"
-      const fromReasoning = !parsed && !content.trim() && reasoning.includes("{");
-      if (fromReasoning) parsed = parseModelJson(reasoning);
+      const answer = parsed || content.trim() ? null : lastAnswerObject(reasoning);
+      const fromReasoning = answer !== null;
+      if (answer) parsed = parseModelJson(answer);
 
       if (!parsed) {
         attempts.push({ target, outcome: "no_json", ms, detail: content.slice(0, 120) });
@@ -188,11 +191,14 @@ async function streamCompletion(
         arm(IDLE_MS, "stalled");
       } else if (typeof delta?.reasoning_content === "string" && delta.reasoning_content) {
         // reasoning models think before answering: that's progress too
-        if (reasoning.length < 200_000) reasoning += delta.reasoning_content;
+        if (reasoning.length < MAX_REASONING_CHARS) reasoning += delta.reasoning_content;
         arm(IDLE_MS, "stalled");
       }
       if (choice?.finish_reason) finish = choice.finish_reason;
     }
+    // the SDK can end the loop quietly (instead of throwing) when a started stream is
+    // aborted: throw so the catch below handles cancels and stalls the same way
+    ctrl.signal.throwIfAborted();
     return { content, reasoning, finish };
   } catch (error) {
     if (outer.aborted) throw error;

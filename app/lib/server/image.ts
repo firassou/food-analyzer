@@ -2,8 +2,12 @@ import "server-only";
 import sharp from "sharp";
 
 export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+export const TOO_LARGE_MESSAGE = `The image is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB. Please use a smaller photo.`;
 /** longest side sent to the model: plenty for label text, small enough for every provider */
 const MAX_SIDE = 1600;
+const MAX_INPUT_PIXELS = 80_000_000;
+/** undecodable uploads are forwarded as-is only when small enough for every provider */
+const MAX_PASSTHROUGH_BYTES = 4 * 1024 * 1024;
 
 export type ImageFormat = "jpeg" | "png" | "webp" | "gif" | "heic" | "avif" | "bmp" | "tiff";
 
@@ -41,7 +45,7 @@ export class ImageError extends Error {
  */
 export async function prepareImage(bytes: Uint8Array): Promise<{ dataUrl: string; width: number; height: number }> {
   if (bytes.byteLength > MAX_UPLOAD_BYTES) {
-    throw new ImageError("The image is larger than 12 MB. Please use a smaller photo.", "too_large");
+    throw new ImageError(TOO_LARGE_MESSAGE, "too_large");
   }
   const format = sniffImage(bytes);
   if (!format) {
@@ -51,8 +55,14 @@ export async function prepareImage(bytes: Uint8Array): Promise<{ dataUrl: string
     );
   }
 
+  // the header alone says whether decoding would exceed the pixel limit
+  const { width = 0, height = 0 } = await sharp(bytes, { limitInputPixels: false }).metadata().catch(() => ({ width: 0, height: 0 }));
+  if (width * height > MAX_INPUT_PIXELS) {
+    throw new ImageError("This photo's resolution is too high. Please use a smaller photo.", "too_large");
+  }
+
   try {
-    const { data, info } = await sharp(bytes, { failOn: "none", animated: false, limitInputPixels: 80_000_000 })
+    const { data, info } = await sharp(bytes, { failOn: "none", animated: false, limitInputPixels: MAX_INPUT_PIXELS })
       .rotate()
       .resize({ width: MAX_SIDE, height: MAX_SIDE, fit: "inside", withoutEnlargement: true })
       .flatten({ background: "#ffffff" })
@@ -61,10 +71,10 @@ export async function prepareImage(bytes: Uint8Array): Promise<{ dataUrl: string
       .toBuffer({ resolveWithObject: true });
     return { dataUrl: `data:image/jpeg;base64,${data.toString("base64")}`, width: info.width, height: info.height };
   } catch (error) {
-    // e.g. HEIC without a decoder in this sharp build: send formats every provider accepts as-is
-    if (format === "jpeg" || format === "png" || format === "webp") {
+    // e.g. a slightly damaged file sharp won't decode: send formats every provider accepts as-is
+    if ((format === "jpeg" || format === "png" || format === "webp") && bytes.byteLength <= MAX_PASSTHROUGH_BYTES) {
       return {
-        dataUrl: `data:image/${format};base64,${Buffer.from(bytes).toString("base64")}`,
+        dataUrl: `data:image/${format};base64,${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64")}`,
         width: 0,
         height: 0,
       };

@@ -1,5 +1,5 @@
 import { AnalyzeError, analyzeLabel } from "@/app/lib/server/analyze";
-import { ImageError, MAX_UPLOAD_BYTES, prepareImage } from "@/app/lib/server/image";
+import { ImageError, MAX_UPLOAD_BYTES, prepareImage, TOO_LARGE_MESSAGE } from "@/app/lib/server/image";
 import { getTargets } from "@/app/lib/server/models";
 import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
@@ -9,8 +9,6 @@ export const maxDuration = 120;
 
 // light per-IP limiter so a stuck client can't burn through API credits
 const limiter: RateLimiter = new MemoryRateLimiter(12, 60_000);
-
-const TOO_LARGE = "The image is larger than 12 MB. Please use a smaller photo.";
 
 function fail(error: string, code: AnalyzeErrorCode, status: number, trace?: string[]) {
   return Response.json({ ok: false, error, code, ...(trace && { trace }) } satisfies AnalyzeResponse, { status });
@@ -23,7 +21,7 @@ export async function POST(req: Request) {
 
   // multipart overhead is small; reject obviously oversized bodies before reading them
   const declaredLength = Number(req.headers.get("content-length") ?? 0);
-  if (declaredLength > MAX_UPLOAD_BYTES + 64 * 1024) return fail(TOO_LARGE, "too_large", 413);
+  if (declaredLength > MAX_UPLOAD_BYTES + 64 * 1024) return fail(TOO_LARGE_MESSAGE, "too_large", 413);
 
   let file: FormDataEntryValue | null;
   try {
@@ -33,7 +31,7 @@ export async function POST(req: Request) {
     return fail('Send the photo as multipart/form-data in an "image" field.', "bad_request", 400);
   }
   if (!file || typeof file === "string") return fail("No image was uploaded.", "bad_request", 400);
-  if (file.size > MAX_UPLOAD_BYTES) return fail(TOO_LARGE, "too_large", 413);
+  if (file.size > MAX_UPLOAD_BYTES) return fail(TOO_LARGE_MESSAGE, "too_large", 413);
 
   try {
     const image = await prepareImage(new Uint8Array(await file.arrayBuffer()));

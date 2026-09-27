@@ -206,20 +206,22 @@ const EXCLUDES = Object.fromEntries(
   (Object.keys(ALLERGEN_RULES) as AllergenId[]).map((id) => [id, excludeAll(ALLERGEN_RULES[id])]),
 ) as Record<AllergenId, RegExp | null>;
 
-/** folded text with the rule's false friends blanked out */
-function stripFalseFriends(text: string, id: AllergenId): string {
-  const t = fold(text);
+/** already-folded text with the rule's false friends blanked out */
+function stripFalseFriends(folded: string, id: AllergenId): string {
   const ex = EXCLUDES[id];
-  return ex ? t.replace(ex, " ") : t;
+  return ex ? folded.replace(ex, " ") : folded;
 }
 
+const matchesFolded = (folded: string, id: AllergenId) =>
+  ALLERGEN_RULES[id].match.some((re) => re.test(stripFalseFriends(folded, id)));
+
 export function matchesRule(text: string, id: AllergenId): boolean {
-  const t = stripFalseFriends(text, id);
-  return ALLERGEN_RULES[id].match.some((re) => re.test(t));
+  return matchesFolded(fold(text), id);
 }
 
 export function detectAllergens(text: string): AllergenId[] {
-  return (Object.keys(ALLERGEN_RULES) as AllergenId[]).filter((id) => matchesRule(text, id));
+  const folded = fold(text);
+  return (Object.keys(ALLERGEN_RULES) as AllergenId[]).filter((id) => matchesFolded(folded, id));
 }
 
 // Oats only "likely" contain gluten (cross-contamination / avenin).
@@ -235,8 +237,9 @@ const STRONG_GLUTEN_AR = /قمح|شعير|سميد|غلوتين|جلوتين|ب�
 
 /** "strong" = wheat/barley/rye…, "oats" = only oats, null = no gluten source */
 export function glutenSignal(text: string): "strong" | "oats" | null {
-  if (!matchesRule(text, "gluten")) return null;
-  const t = stripFalseFriends(text, "gluten");
+  const folded = fold(text);
+  if (!matchesFolded(folded, "gluten")) return null;
+  const t = stripFalseFriends(folded, "gluten");
   if (STRONG_GLUTEN.test(t) || STRONG_GLUTEN_DE.test(t) || STRONG_GLUTEN_AR.test(t)) return "strong";
   return OAT_ONLY.test(t) ? "oats" : "strong";
 }
@@ -255,8 +258,12 @@ export function mentionsLactoseFree(text: string): boolean {
 
 // ---------------------------------------------------------------- drinks
 
-const DRINK =
-  /(?<![\p{L}])(drink|beverage|juice|soda|water|nectar|lemonade|cola|tea|coffee|smoothie|milk ?shake|syrup|boisson|jus|bebida|refresco|getrank|saft|bevanda|succo)s?(?![\p{L}])|مشروب|عصير/u;
+/** words that name the product itself as a drink: NOT_DRINK can't cancel them ("hot chocolate drink") */
+const EXPLICIT_DRINK =
+  /(?<![\p{L}])(drink|beverage|smoothie|milk ?shake|boisson|bebida|getrank|bevanda)s?(?![\p{L}])|مشروب/u;
+/** drink words that also name foods ("rich tea biscuits", "water crackers") */
+const AMBIGUOUS_DRINK =
+  /(?<![\p{L}])(juice|soda|water|nectar|lemonade|cola|tea|coffee|syrup|jus|refresco|saft|succo)s?(?![\p{L}])|عصير/u;
 /** foods whose names contain a drink word ("rich tea biscuits", "water crackers") */
 const NOT_DRINK =
   /(?<![\p{L}])(biscuit|cookie|cracker|cake|bar|wafer|biscotti|galette|gateau|keks|chocolate|candy|sweet|jelly|jelli|gummy|gummies)s?(?![\p{L}])/u;
@@ -264,14 +271,13 @@ const NOT_DRINK =
 /** a product category/name that is sold by volume (nutrition per 100 ml) */
 export function isDrink(text: string): boolean {
   const t = fold(text);
-  return DRINK.test(t) && !NOT_DRINK.test(t);
+  return EXPLICIT_DRINK.test(t) || (AMBIGUOUS_DRINK.test(t) && !NOT_DRINK.test(t));
 }
 
 // ---------------------------------------------------------------- E-numbers
 
 const E_NUMBER_SOURCE =
   "(?<![\\p{L}\\d])(?:e|ins)[\\s-]?(\\d{3,4})([a-j](?![\\p{L}]))?(?:\\s?\\(?\\s?(iv|v|vi|i{1,3})\\s?\\)?(?![\\p{L}]))?";
-export const E_NUMBER_RE = new RegExp(E_NUMBER_SOURCE, "giu");
 
 /** canonical form: E + digits + lowercase letter + lowercase roman, e.g. E500ii, E150d */
 export function canonicalENumber(raw: string): string | null {
@@ -470,4 +476,17 @@ const MAY_CONTAIN =
 /** the precautionary ("may contain …") sentences of a label text, folded */
 export function mayContainStatements(text: string): string[] {
   return [...fold(text).matchAll(MAY_CONTAIN)].map((m) => m[0].trim());
+}
+
+/** splits a text into its precautionary sentences and the folded rest, with the allergens of each part */
+export function splitPrecautions(text: string) {
+  const statements = mayContainStatements(text);
+  let rest = fold(text);
+  for (const p of statements) rest = rest.replace(p, " ");
+  return {
+    statements,
+    traceAllergens: new Set(statements.flatMap(detectAllergens)),
+    restAllergens: new Set(detectAllergens(rest)),
+    rest,
+  };
 }

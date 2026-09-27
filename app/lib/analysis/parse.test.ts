@@ -25,6 +25,11 @@ describe("parseModelJson", () => {
     expect(parseModelJson('Result [JSON] below, see [1]:\n{"a": 1}')?.value).toEqual({ a: 1 });
   });
 
+  it("removes trailing commas without touching commas inside strings", () => {
+    const out = parseModelJson('{"raw_text": "sugar, ] (a, b, )", "x": True, "list": [1,],}');
+    expect(out?.value).toEqual({ raw_text: "sugar, ] (a, b, )", x: true, list: [1] });
+  });
+
   it("converts Python literals, single quotes and trailing commas", () => {
     expect(parseModelJson("{'a': True, 'b': None, 'c': False, 'd': NaN, 'e': [1, 2,],}")?.value).toEqual({
       a: true,

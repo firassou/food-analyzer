@@ -1,3 +1,4 @@
+import { crc32 } from "node:zlib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { ImageError, MAX_UPLOAD_BYTES, prepareImage, sniffImage } from "./image";
@@ -46,6 +47,17 @@ describe("prepareImage", () => {
     await expect(prepareImage(new Uint8Array(MAX_UPLOAD_BYTES + 1))).rejects.toBeInstanceOf(ImageError);
   });
 
+  it("rejects a pixel bomb as too large instead of forwarding it", async () => {
+    const png = Buffer.from(
+      await sharp({ create: { width: 1, height: 1, channels: 3, background: "#fff" } }).png().toBuffer(),
+    );
+    // claim 20000 x 20000 px in the IHDR chunk and fix its CRC
+    png.writeUInt32BE(20_000, 16);
+    png.writeUInt32BE(20_000, 20);
+    png.writeUInt32BE(crc32(png.subarray(12, 29)), 29);
+    await expect(prepareImage(new Uint8Array(png))).rejects.toMatchObject({ code: "too_large" });
+  });
+
   it("falls back to the original bytes when a JPEG can't be decoded", async () => {
     const broken = pad(bytes([0xff, 0xd8, 0xff, 0xe0]));
     const out = await prepareImage(broken);
@@ -72,12 +84,13 @@ describe("MemoryRateLimiter", () => {
     expect(await limiter.hit("b")).toBe(false);
   });
 
-  it("clears the map once it holds too many keys", async () => {
+  it("evicts the least recently seen keys instead of resetting everyone", async () => {
     const limiter = new MemoryRateLimiter(1, 60_000, 2);
+    await limiter.hit("heavy");
     await limiter.hit("a");
-    await limiter.hit("a");
-    await limiter.hit("b");
-    expect(await limiter.hit("c")).toBe(false);
+    expect(await limiter.hit("heavy")).toBe(true); // over the limit, and now the most recent key
+    await limiter.hit("b"); // map full: evicts "a", not "heavy"
+    expect(await limiter.hit("heavy")).toBe(true);
     expect(await limiter.hit("a")).toBe(false);
   });
 });

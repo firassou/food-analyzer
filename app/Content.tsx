@@ -1,6 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Card, cn, Dot, Pill, Tone, toneClasses } from "./components/ui";
+import { Card, cn, Dot, dotClasses, Pill, Tone, toneClasses } from "./components/ui";
 import { LEVEL_THRESHOLDS } from "./lib/analysis/knowledge";
 import type {
   Additive,
@@ -83,8 +83,9 @@ function cellValue(
   return v === null ? null : `${fmt(v)}\u00a0${unit}`;
 }
 
-const additiveId = (a: Pick<Additive, "code" | "name">) =>
-  `additive-${(a.code ?? a.name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+/** anchor id: coded additives are linked from ingredient pills; code-less ones get their index so ids stay unique */
+const additiveId = (a: Pick<Additive, "code" | "name">, index?: number) =>
+  a.code ? `additive-${a.code.toLowerCase()}` : `additive-${index ?? 0}-${a.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -659,8 +660,8 @@ function Results({
           aside={`${additives.length} found`}
         >
           <ul className="grid gap-3 md:grid-cols-2">
-            {additives.map((a) => {
-              const id = additiveId(a);
+            {additives.map((a, i) => {
+              const id = additiveId(a, i);
               return (
                 <li
                   key={id}
@@ -1015,19 +1016,9 @@ function LevelMeter({
   threshold: { low: number; high: number };
   delay: number;
 }) {
-  const tone: Tone =
-    level === "high" ? "red"
-    : level === "medium" ? "amber"
-    : level === "low" ? "green"
-    : "zinc";
+  const tone = levelUi[level ?? "unknown"].tone;
   const pct =
     value == null ? 0 : Math.min(100, (value / (threshold.high * 1.4)) * 100);
-  const bar = {
-    red: "bg-red-500",
-    amber: "bg-amber-500",
-    green: "bg-emerald-500",
-    zinc: "bg-zinc-400",
-  }[tone];
 
   return (
     <div
@@ -1058,7 +1049,7 @@ function LevelMeter({
       </p>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
         <div
-          className={cn("animate-grow h-full origin-left rounded-full", bar)}
+          className={cn("animate-grow h-full origin-left rounded-full", dotClasses[tone])}
           style={{ width: `${pct}%`, animationDelay: `${200 + delay * 80}ms` }}
         />
       </div>

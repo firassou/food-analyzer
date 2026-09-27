@@ -13,6 +13,18 @@ const MAX_CUT_TRIES = 400;
 /** how many opening brackets to try when prose before the JSON contains brackets */
 const MAX_STARTS = 10;
 
+/**
+ * The last answer-shaped object in free text (e.g. a reasoning trace that ends with the
+ * answer after several drafts), or null. Bounded, so a huge trace is never fully parsed.
+ */
+export function lastAnswerObject(text: string, maxChars = 40_000): string | null {
+  const key = text.lastIndexOf('"label_detected"');
+  if (key < 0) return null;
+  let i = key - 1;
+  while (i >= 0 && /\s/.test(text[i])) i--;
+  return text[i] === "{" ? text.slice(i, i + maxChars) : null;
+}
+
 export function parseModelJson(text: string): ParseOutcome | null {
   if (typeof text !== "string") return null;
   const cleaned = text
@@ -190,9 +202,11 @@ function sanitize(s: string): string {
       i += word[1].length - 1;
       continue;
     }
+    // a trailing comma before a closing bracket
+    if (c === "," && /^\s*[}\]]/.test(s.slice(i + 1, i + 64))) continue;
     out += c;
   }
-  return out.replace(/,\s*([}\]])/g, "$1");
+  return out;
 }
 
 function findSingleQuoteEnd(s: string, from: number): number {

@@ -181,9 +181,6 @@ importers:
       sharp:
         specifier: 0.35.4
         version: 0.35.4(@types/node@24.19.0)
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4

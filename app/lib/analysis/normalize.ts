@@ -16,7 +16,7 @@ import {
   isNutrientFortificant,
   LEVEL_THRESHOLDS,
   levelOf,
-  mayContainStatements,
+  splitPrecautions,
   mentionsGlutenFree,
   mentionsLactoseFree,
 } from "./knowledge";
@@ -560,21 +560,14 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   // A declared allergen that only appears in a "may contain" sentence is a trace
   // warning, not an ingredient (models confuse the two on blurry photos).
-  const precautions = rawText ? mayContainStatements(rawText) : [];
-  if (rawText) {
-    let rest = fold(rawText);
-    for (const p of precautions) rest = rest.replace(p, " ");
-    const inPrecautions = new Set(precautions.flatMap(detectAllergens));
-    const elsewhere = new Set(detectAllergens(rest));
-    for (let i = declared.length - 1; i >= 0; i--) {
-      if (inPrecautions.has(declared[i]) && !elsewhere.has(declared[i])) mayContain.push(...declared.splice(i, 1));
-    }
-    mayContain.push(...inPrecautions);
-  }
-  // listed as both declared and "may contain": the precautionary reading wins; a real
-  // ingredient still raises it back to "contains" through keyword detection below
-  for (let i = declared.length - 1; i >= 0; i--) if (mayContain.includes(declared[i])) declared.splice(i, 1);
-  const declaredSet = new Set(declared);
+  // The model listing an allergen as both declared and "may contain" is the same confusion:
+  // the precautionary reading wins unless the label text shows it outside a precaution
+  // (a real ingredient still raises it back to "contains" through keyword detection below).
+  const labelText = splitPrecautions(rawText ?? "");
+  const precautions = labelText.statements;
+  const precautionary = new Set([...labelText.traceAllergens, ...mayContain]);
+  mayContain.push(...labelText.traceAllergens);
+  const declaredSet = new Set(declared.filter((a) => !precautionary.has(a) || labelText.restAllergens.has(a)));
 
   // ---- 3. ingredients
   let ingredientItems = arr(get("ingredients", "ingredient_list", "ingredients_list"));
@@ -589,6 +582,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   }
 
   const ingredients: Ingredient[] = [];
+  const glutenSignals = new Map<Ingredient, ReturnType<typeof glutenSignal>>();
   const seenIngredients = new Set<string>();
   for (const item of ingredientItems) {
     const name = str(isObj(item) ? pick(item, "name", "ingredient", "text", "label", "original") : item, 160);
@@ -599,13 +593,9 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     const both = `${name} ${nameEn ?? ""}`;
     // models sometimes glue the "may contain" sentence onto the last ingredient:
     // its allergens are traces, so detect ingredient allergens without it
-    const ownTraces = mayContainStatements(both);
-    let own = fold(both);
-    for (const p of ownTraces) own = own.replace(p, " ");
-    if (ownTraces.length) {
-      precautions.push(...ownTraces);
-      mayContain.push(...ownTraces.flatMap(detectAllergens));
-    }
+    const { statements: ownTraces, traceAllergens, rest: own } = splitPrecautions(both);
+    precautions.push(...ownTraces);
+    mayContain.push(...traceAllergens);
 
     // a percentage must actually be printed next to the ingredient
     const printedPct = num(both.match(/(\d+(?:[.,]\d+)?)\s*%/)?.[1]);
@@ -629,7 +619,6 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     // the model's per-ingredient allergens are kept when the keywords support them, or when
     // the ingredient has no listed sub-ingredients (e.g. "brioche") and the label declares it
     const keywordAllergens = detectAllergens(own);
-    const traceAllergens = new Set(ownTraces.flatMap(detectAllergens));
     const modelAllergens = (isObj(item) ? allergenIds(pick(item, "allergens", "allergen")) : []).filter(
       (a) => keywordAllergens.includes(a) || !traceAllergens.has(a),
     );
@@ -640,11 +629,12 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
         (a) => keywordAllergens.includes(a) || (trustModel && (declaredSet.size === 0 || declaredSet.has(a))),
       ),
     ]);
-    const gluten = allergens.has("gluten") || glutenSignal(own) !== null;
+    const signal = glutenSignal(own);
+    const gluten = allergens.has("gluten") || signal !== null;
     if (gluten) allergens.add("gluten");
     const dairy = allergens.has("milk") || isDairy(own);
     if (dairy) allergens.add("milk");
-    ingredients.push({
+    const ingredient: Ingredient = {
       name,
       name_en: nameEn,
       percent: pct !== null && pct > 0 && pct <= 100 ? pct : null,
@@ -652,7 +642,9 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       allergens: ALLERGEN_IDS.filter((a) => allergens.has(a)),
       gluten,
       dairy,
-    });
+    };
+    ingredients.push(ingredient);
+    glutenSignals.set(ingredient, signal);
     if (ingredients.length >= MAX_INGREDIENTS) break;
   }
   const label = (i: Ingredient) => shortName(i.name_en ?? i.name);
@@ -667,8 +659,11 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       cur.sources.push(source);
     allergenMap.set(id, cur);
   };
-  for (const ing of ingredients) for (const a of ing.allergens) addAllergen(a, "contains", label(ing));
-  for (const id of declared) addAllergen(id, "contains", null, true);
+  // oats alone only make gluten likely, so they don't put it on the "contains" list
+  for (const ing of ingredients)
+    for (const a of ing.allergens)
+      addAllergen(a, a === "gluten" && glutenSignals.get(ing) === "oats" ? "may_contain" : "contains", label(ing));
+  for (const id of declaredSet) addAllergen(id, "contains", null, true);
   for (const { id, evidence } of detectedFromList) addAllergen(id, "contains", evidence);
   for (const id of mayContain) {
     if (allergenMap.get(id)?.presence === "contains") continue;
@@ -686,11 +681,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   let glutenStatus = presence(pick(glutenRaw, "status") ?? glutenRaw) ?? "unclear";
   let glutenConfidence = confidence(pick(glutenRaw, "confidence"));
   const glutenEvidence = strList(pick(glutenRaw, "evidence"), 6, 160);
-  const strongGluten = ingredients.filter((i) => {
-    const s = glutenSignal(bothNames(i));
-    return s === "strong" || (i.gluten && s === null);
-  });
-  const oatsOnly = ingredients.filter((i) => glutenSignal(bothNames(i)) === "oats");
+  const strongGluten = ingredients.filter((i) => i.gluten && glutenSignals.get(i) !== "oats");
+  const oatsOnly = ingredients.filter((i) => glutenSignals.get(i) === "oats");
   const glutenFreeClaim = mentionsGlutenFree(packText);
   // declared on the label, not merely "contains" in the map (oats alone put it there too)
   const glutenDeclared = declaredSet.has("gluten") || detectedFromList.some((d) => d.id === "gluten");
