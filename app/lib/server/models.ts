@@ -35,8 +35,8 @@ const PROVIDERS = {
   openrouter: {
     key: "OPENROUTER_API_KEY",
     baseURL: "https://openrouter.ai/api/v1",
-    models: (env: Env) => list(env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free"),
-    headers: { "X-Title": "Food Checker" },
+    models: (env: Env) => list(env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free"),
+    headers: { "X-Title": "Food Analyzer" },
   },
 } satisfies Record<string, { key: string; baseURL: string; models: (env: Env) => string[]; headers?: Record<string, string> }>;
 
@@ -101,6 +101,8 @@ export function coolingDown(t: Target, now = Date.now()): boolean {
 /** how long to skip a target after a failure; null = don't skip it next time */
 export function cooldownMs(kind: FailureKind, error: unknown): number | null {
   if (kind === "rate_limited") return retryAfterMs(error) ?? 60_000;
+  // "overloaded, try again later": skip it for a short while instead of paying its latency every time
+  if (error instanceof OpenAI.APIError && error.status === 503) return retryAfterMs(error) ?? 30_000;
   if (kind === "quota" || kind === "auth") return 60 * 60_000;
   return null;
 }

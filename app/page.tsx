@@ -149,7 +149,7 @@ export default function Home() {
             className="flex items-center gap-2.5 font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
           >
             <Logo />
-            Food Checker
+            Food Analyzer
           </button>
           {file && (
             <button

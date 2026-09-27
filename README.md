@@ -1,4 +1,4 @@
-# Food Checker
+# Food Analyzer
 
 An AI food-label analyzer. Upload (or paste) a photo of a packaged food label in any language, and get a single-page breakdown of allergens, gluten and lactose status, nutrition with traffic-light levels, ingredients, additives (E-numbers), dates, storage, manufacturer and the raw label text.
 
@@ -38,7 +38,7 @@ Set these in `.env.local` (see `.env.example`). At least one provider key is req
 | `PROVIDER_ORDER`     | `huggingface,nvidia,gemini,groq,openrouter`            | order the providers are tried in                |
 | `GEMINI_MODEL`       | `gemini-3.8-flash,gemini-3.5-flash-lite`               | Gemini model(s), comma-separated                |
 | `GROQ_MODEL`         | `qwen/qwen3.8-27b`                                     | Groq model(s)                                   |
-| `OPENROUTER_MODEL`   | `google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free`     | OpenRouter model(s)                             |
+| `OPENROUTER_MODEL`   | `google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free`     | OpenRouter model(s)                             |
 | `HF_MODEL`           | `Qwen/Qwen3-VL-30B-A3B-Instruct`                       | primary HF model(s)                             |
 | `HF_FALLBACK_MODELS` | `Qwen/Qwen3-VL-235B-A22B-Instruct`                     | HF fallbacks (set empty to disable)             |
 | `NVIDIA_MODEL`       | `google/gemma-4-31b-it`                                | NVIDIA model(s)                                 |
@@ -49,7 +49,7 @@ Set these in `.env.local` (see `.env.example`). At least one provider key is req
 2. Put them in `.env.local` with `PROVIDER_ORDER=gemini,groq,openrouter`.
 3. `curl localhost:3000/api/analyze` should list the three providers.
 
-Free tiers are rate-limited per minute and per day, and Gemini's free tier may use requests to improve Google's products. The chain handles limits: a model that answers "rate limited", "out of quota" or "bad key" is skipped instantly (it doesn't use up one of the 4 attempts), put on a cooldown (the provider's `Retry-After`, else 1 minute; 1 hour for quota or bad keys, for the whole provider), and later requests go straight to the next model. Models on cooldown are still tried last if nothing else works. `GET /api/analyze` shows the chain in order.
+Free tiers are rate-limited per minute and per day, and Gemini's free tier may use requests to improve Google's products. The chain handles limits: a model that answers "rate limited", "out of quota" or "bad key" is skipped instantly (it doesn't use up one of the 4 attempts), put on a cooldown (the provider's `Retry-After`, else 1 minute, or 30 s for an overloaded 503; 1 hour for quota or bad keys, for the whole provider), and later requests go straight to the next model. Models on cooldown are still tried last if nothing else works. `GET /api/analyze` shows the chain in order.
 
 ## Architecture
 

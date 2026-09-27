@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Food Checker
+# Food Analyzer
 
 AI food-label analyzer. The spec lives in `PROMPT.md`. The LLM is never trusted blindly: its output is parsed leniently, normalized onto a strict schema and cross-checked by a deterministic knowledge base.
 

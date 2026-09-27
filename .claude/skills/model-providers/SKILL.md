@@ -9,10 +9,11 @@ Files: `app/lib/server/models.ts` (target chain, `FailureKind`, error classifica
 
 ## Target chain
 - Providers are a table in `models.ts` (`PROVIDERS`): env key, OpenAI-compatible base URL, default models (comma-separated env override). A provider joins the chain only when its key is set. Order: `PROVIDER_ORDER` (comma-separated), then the rest in the default order `huggingface, nvidia, gemini, groq, openrouter` (Part A behaviour when only HF/NVIDIA keys exist).
-- Free tiers: Gemini (`GEMINI_API_KEY`, `gemini-3.8-flash,gemini-3.5-flash-lite`), Groq (`GROQ_API_KEY`, `qwen/qwen3.8-27b`), OpenRouter (`OPENROUTER_API_KEY`, `google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free`).
+- Free tiers: Gemini (`GEMINI_API_KEY`, `gemini-3.8-flash,gemini-3.5-flash-lite`), Groq (`GROQ_API_KEY`, `qwen/qwen3.8-27b`), OpenRouter (`OPENROUTER_API_KEY`, `google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free`).
 - All providers go through the `openai` package with `maxRetries: 0`: retrying means moving to the next target. `buildTargets(env)` is pure and unit-tested; `getTargets()` caches it for `process.env`.
-- Limits: `auth`/`quota`/`rate_limited`/`bad_request` are instant failures and don't count towards `MAX_ATTEMPTS`. `cooldownMs` + `coolDown` skip a limited target in later requests (Retry-After, else 60 s; 1 h for quota/auth, applied to the whole provider). Cooling targets are moved to the end of the chain, never dropped, so a request always tries everything before failing. Don't add a separate "check limits" probe call: on free tiers it spends the same daily quota as a real call.
+- Limits: `auth`/`quota`/`rate_limited`/`bad_request` are instant failures and don't count towards `MAX_ATTEMPTS`. `cooldownMs` + `coolDown` skip a limited target in later requests (Retry-After, else 60 s; 503 overloads 30 s; 1 h for quota/auth, applied to the whole provider). Cooling targets are moved to the end of the chain, never dropped, so a request always tries everything before failing. Don't add a separate "check limits" probe call: on free tiers it spends the same daily quota as a real call.
 - GitHub Models was retired on 2026-07-30; don't add it.
+- Live (2026-09-27): `gemini-3.8-flash` often answers 503 "high demand"; `gemini-3.5-flash-lite` and Groq `qwen/qwen3.8-27b` (≈1–4 s) are the reliable ones. OpenRouter `:free` models intermittently 429 ("Provider returned error") when shared capacity is full; `thinkingmachines/inkling*:free` are 403 outside agent harnesses.
 
 ## Every new provider must
 - map its errors onto the existing `FailureKind`s (via `classify`)

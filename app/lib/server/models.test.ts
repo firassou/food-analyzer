@@ -51,5 +51,7 @@ describe("classify and cooldowns", () => {
     expect(cooldownMs("rate_limited", err(429, "slow"))).toBe(60_000);
     expect(cooldownMs("quota", err(402, "credits"))).toBe(3_600_000);
     expect(cooldownMs("timeout", new Error("x"))).toBeNull();
+    expect(cooldownMs("unavailable", err(503, "high demand"))).toBe(30_000);
+    expect(cooldownMs("unavailable", err(500, "boom"))).toBeNull();
   });
 });

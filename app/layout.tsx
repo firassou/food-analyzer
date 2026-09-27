@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Food Checker",
+  title: "Food Analyzer",
   description: "Decode food labels: allergens, additives and nutrition at a glance.",
 };
 
