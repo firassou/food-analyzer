@@ -72,9 +72,13 @@ export async function analyzeLabel(
 
     const t0 = Date.now();
     try {
-      const { content, finish } = await streamCompletion(target, imageDataUrl, signal, remaining);
+      const { content, reasoning, finish } = await streamCompletion(target, imageDataUrl, signal, remaining);
       const ms = Date.now() - t0;
-      const parsed = parseModelJson(content);
+      let parsed = parseModelJson(content);
+      // reasoning models occasionally put the whole answer in the reasoning channel and
+      // leave content empty: use it, but only as a fallback candidate, never as "complete"
+      const fromReasoning = !parsed && !content.trim() && reasoning.includes("{");
+      if (fromReasoning) parsed = parseModelJson(reasoning);
 
       if (!parsed) {
         attempts.push({ target, outcome: "no_json", ms, detail: content.slice(0, 120) });
@@ -84,14 +88,17 @@ export async function analyzeLabel(
 
       const truncated = parsed.repaired || finish === "length" || finish === "stalled";
       const result = normalize(parsed.value, { repaired: truncated });
-      log(target, `${truncated ? "partial" : "ok"} in ${ms}ms (finish=${finish}, ${content.length} chars)`);
+      log(
+        target,
+        `${truncated ? "partial" : fromReasoning ? "reasoning-only" : "ok"} in ${ms}ms (finish=${finish}, ${content.length} chars)`,
+      );
 
-      if (!truncated) {
+      if (!truncated && !fromReasoning) {
         attempts.push({ target, outcome: "ok", ms });
         return { result, meta: meta(target, attempts, started) };
       }
       // incomplete: keep it, and try the next model if there's time for a complete one
-      attempts.push({ target, outcome: "truncated", ms, detail: String(finish) });
+      attempts.push({ target, outcome: "truncated", ms, detail: fromReasoning ? "answer in reasoning" : String(finish) });
       if (!fallback || score(result) > score(fallback.result)) fallback = { result, target };
     } catch (error) {
       const kind = classify(error);
@@ -130,7 +137,7 @@ async function streamCompletion(
   imageDataUrl: string,
   outer: AbortSignal,
   budgetMs: number,
-): Promise<{ content: string; finish: string | null }> {
+): Promise<{ content: string; reasoning: string; finish: string | null }> {
   const ctrl = new AbortController();
   let stall: StallError | null = null;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
@@ -151,6 +158,7 @@ async function streamCompletion(
   arm(Math.min(FIRST_TOKEN_MS, budgetMs), "first_token");
 
   let content = "";
+  let reasoning = "";
   let finish: string | null = null;
   try {
     const stream = await target.client.chat.completions.create(
@@ -180,15 +188,16 @@ async function streamCompletion(
         arm(IDLE_MS, "stalled");
       } else if (typeof delta?.reasoning_content === "string" && delta.reasoning_content) {
         // reasoning models think before answering: that's progress too
+        if (reasoning.length < 200_000) reasoning += delta.reasoning_content;
         arm(IDLE_MS, "stalled");
       }
       if (choice?.finish_reason) finish = choice.finish_reason;
     }
-    return { content, finish };
+    return { content, reasoning, finish };
   } catch (error) {
     if (outer.aborted) throw error;
     if (stall) {
-      if (content.trim()) return { content, finish: "stalled" };
+      if (content.trim()) return { content, reasoning, finish: "stalled" };
       throw stall;
     }
     throw error;
