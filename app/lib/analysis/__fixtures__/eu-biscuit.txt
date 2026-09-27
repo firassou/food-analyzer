@@ -1,0 +1,37 @@
+Here is the analysis of the label:
+```json
+{
+"label_detected": true,
+"image_quality": "good",
+"language": "en",
+"product": {"name": "Choc Chip Hazelnut Cookies", "brand": "Brightbake", "category": "Biscuits", "quantity": "200 g ℮"},
+"ingredients": [
+  {"name": "Wheat flour", "name_en": null, "percent": null, "e_number": null, "allergens": ["gluten"]},
+  {"name": "Sugar", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+  {"name": "Chocolate chips (22%) (sugar, cocoa mass, cocoa butter, emulsifier: soy lecithin)", "name_en": null, "percent": 22, "e_number": null, "allergens": ["soy"]},
+  {"name": "Palm oil", "name_en": null, "percent": 12, "e_number": null, "allergens": []},
+  {"name": "Hazelnuts (5%)", "name_en": null, "percent": 5, "e_number": null, "allergens": ["tree_nuts"]},
+  {"name": "Raising agent: E 500 (ii)", "name_en": null, "percent": null, "e_number": "E500", "allergens": []},
+  {"name": "Salt", "name_en": null, "percent": null, "e_number": null, "allergens": []}
+],
+"allergens": {"declared": ["gluten", "soy", "tree_nuts", "milk"], "may_contain": ["peanuts"]},
+"gluten": {"status": "contains", "confidence": "high", "evidence": ["wheat flour"]},
+"lactose": {"status": "no_indication", "evidence": []},
+"additives": [
+  {"code": "E322", "name": "Soy lecithin", "category": "Emulsifier", "purpose": "Helps the chocolate mix smoothly.", "explanation": "A common emulsifier made from soybeans."},
+  {"code": "E500", "name": "Sodium bicarbonate", "category": "Raising agent", "purpose": "Makes the dough rise.", "explanation": "Also known as baking soda."}
+],
+"nutrition": {"basis": "100g", "per_100_printed": true, "serving_size": "1 biscuit (12.5 g)",
+  "per_100": {"energy": "2050 kJ / 490 kcal", "fat_g": 22, "saturated_fat_g": 10, "carbohydrates_g": 62, "sugars_g": 30, "fiber_g": 3, "protein_g": 6, "salt_g": 0.8, "sodium_mg": null},
+  "per_serving": {"energy_kj": 256, "energy_kcal": 61, "fat_g": 2.8, "saturated_fat_g": 1.3, "carbohydrates_g": 7.8, "sugars_g": 3.8, "fiber_g": 0.4, "protein_g": 0.8, "salt_g": 0.1, "sodium_mg": null}},
+"claims": ["No artificial colours"],
+"certifications": ["Rainforest Alliance"],
+"dates": {"best_before": "12/2026", "expiration": null, "production": null, "lot": "Lot: L2345B"},
+"storage": {"instructions": "Store in a cool, dry place.", "temperature": null},
+"manufacturer": {"name": "Brightbake Ltd", "address": "1 Mill Lane, Leeds", "country": "United Kingdom"},
+"origin": "United Kingdom",
+"summary": "Crunchy biscuits with chocolate chips and hazelnuts.",
+"highlights": [{"tone": "caution", "text": "High in sugar"}, {"tone": "neutral", "text": "Made with 22% chocolate chips"}],
+"raw_text": "Ingredients: Wheat flour, sugar, chocolate chips (22%) (sugar, cocoa mass, cocoa butter, emulsifier: soy lecithin), palm oil, hazelnuts (5%), raising agent: E 500 (ii), salt. May contain milk and peanuts."
+}
+```

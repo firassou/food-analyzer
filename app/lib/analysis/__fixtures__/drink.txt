@@ -1,0 +1,23 @@
+{"label_detected": true, "image_quality": "good", "language": "en",
+"product": {"name": "Sparkling Orange", "brand": "Fizzco", "category": "Soft drink", "quantity": "330 ml"},
+"ingredients": [
+ {"name": "Carbonated water", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Sugar", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Orange juice from concentrate (5%)", "name_en": null, "percent": 5, "e_number": null, "allergens": []},
+ {"name": "Citric acid", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Acidity regulator (E331)", "name_en": null, "percent": null, "e_number": "E331", "allergens": []},
+ {"name": "Preservative (potassium sorbate)", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Colour: E110", "name_en": null, "percent": null, "e_number": "E110", "allergens": []}
+],
+"allergens": {"declared": [], "may_contain": []},
+"gluten": {"status": "no_indication", "confidence": "high", "evidence": []},
+"lactose": {"status": "no_indication", "evidence": []},
+"additives": [{"code": "E110", "name": "Sunset yellow FCF", "category": "Colour", "purpose": "Gives an orange colour.", "explanation": "A synthetic colour; in the EU it carries a warning about activity and attention in children."}],
+"nutrition": {"per_100_printed": true, "serving_size": "1 can (330 ml)",
+ "per_100": {"energy": "180 kJ / 43 kcal", "fat": "0 g", "saturates": "0 g", "carbohydrate": "10.6 g", "sugars": "10.5 g", "protein": "0 g", "salt": "0.02 g"},
+ "per_serving": null},
+"claims": [], "certifications": [],
+"dates": {"best_before": null, "expiration": null, "production": null, "lot": null},
+"storage": {"instructions": "Serve chilled.", "temperature": null},
+"manufacturer": {"name": null, "address": null, "country": null},
+"origin": null, "summary": "An orange-flavoured sparkling soft drink.", "highlights": [], "raw_text": null}

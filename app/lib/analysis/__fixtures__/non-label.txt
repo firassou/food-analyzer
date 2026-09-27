@@ -1,0 +1,10 @@
+{"label_detected": false, "image_quality": "good", "language": null,
+"product": {"name": null, "brand": null, "category": null, "quantity": null},
+"ingredients": [], "allergens": {"declared": [], "may_contain": []},
+"gluten": {"status": "no_indication", "confidence": "low", "evidence": []},
+"lactose": {"status": "no_indication", "evidence": []},
+"additives": [], "nutrition": null, "claims": [], "certifications": [],
+"dates": {"best_before": null, "expiration": null, "production": null, "lot": null},
+"storage": {"instructions": null, "temperature": null},
+"manufacturer": {"name": null, "address": null, "country": null},
+"origin": null, "summary": "The photo shows a cat sitting on a sofa, not a food label.", "highlights": [], "raw_text": null}

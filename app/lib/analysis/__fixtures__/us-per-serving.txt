@@ -1,0 +1,27 @@
+{"label_detected": true, "image_quality": "fair", "language": "en",
+"product": {"name": "Honey Oat Clusters", "brand": "Morning Fields", "category": "Breakfast cereal", "quantity": "12 oz (340g)"},
+"ingredients": [
+ {"name": "Whole grain oats", "name_en": null, "percent": null, "e_number": null, "allergens": ["gluten"]},
+ {"name": "Sugar", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Modified corn starch", "name_en": null, "percent": null, "e_number": "E1422", "allergens": []},
+ {"name": "Honey", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Caramel color", "name_en": null, "percent": null, "e_number": "E150d", "allergens": []},
+ {"name": "Reduced iron", "name_en": null, "percent": null, "e_number": null, "allergens": []}
+],
+"allergens": {"declared": [], "may_contain": []},
+"gluten": {"status": "no_indication", "confidence": "medium", "evidence": ["No wheat listed"]},
+"lactose": {"status": "no_indication", "evidence": []},
+"additives": [
+ {"code": "E1422", "name": "Modified corn starch", "category": "Thickener", "purpose": null, "explanation": null},
+ {"code": null, "name": "Reduced iron", "category": "Mineral", "purpose": null, "explanation": null}
+],
+"nutrition": {"basis": "100g", "per_100_printed": false, "serving_size": "2/3 cup (55g)", "per_100": null,
+ "per_serving": {"energy_kcal": 230, "fat_g": 8, "saturated_fat_g": 1, "carbohydrates_g": 37, "sugars_g": 12, "fiber_g": 4, "protein_g": 3, "sodium_mg": 160}},
+"claims": [], "certifications": [],
+"dates": {"best_before": "BEST BY JAN 15 2027", "expiration": null, "production": null, "lot": null},
+"storage": {"instructions": null, "temperature": null},
+"manufacturer": {"name": "Morning Fields Inc.", "address": null, "country": "USA"},
+"origin": null,
+"summary": "A sweetened oat cereal.",
+"highlights": [{"tone": "positive", "text": "Made with whole grain oats"}],
+"raw_text": null}

@@ -1,0 +1,27 @@
+<think>The label is in French. Let me read the ingredients carefully.</think>
+{"label_detected": true, "image_quality": "good", "language": "fr",
+"product": {"name": "Sablés pur beurre", "brand": "Maison Lefèvre", "category": "Biscuits", "quantity": "150 g"},
+"ingredients": [
+ {"name": "farine de blé", "name_en": "wheat flour", "percent": null, "e_number": null, "allergens": ["gluten"]},
+ {"name": "sucre", "name_en": "sugar", "percent": null, "e_number": null, "allergens": []},
+ {"name": "beurre pâtissier 18%", "name_en": "pastry butter 18%", "percent": 18, "e_number": null, "allergens": ["milk"]},
+ {"name": "œufs frais", "name_en": "fresh eggs", "percent": null, "e_number": null, "allergens": ["eggs"]},
+ {"name": "lait écrémé en poudre", "name_en": "skimmed milk powder", "percent": null, "e_number": null, "allergens": ["milk"]},
+ {"name": "sel", "name_en": "salt", "percent": null, "e_number": null, "allergens": []},
+ {"name": "poudres à lever : diphosphates, carbonates de sodium", "name_en": "raising agents: diphosphates, sodium carbonates", "percent": null, "e_number": null, "allergens": []}
+],
+"allergens": {"declared": ["gluten", "milk", "eggs", "soy"], "may_contain": []},
+"gluten": {"status": "contains", "confidence": "high", "evidence": ["farine de blé"]},
+"lactose": {"status": "contains", "evidence": ["beurre", "lait écrémé en poudre"]},
+"additives": [],
+"nutrition": {"basis": "100g", "per_100_printed": true, "serving_size": null,
+ "per_100": {"energy_kj": 2090, "energy_kcal": 500, "fat_g": "24,5", "saturated_fat_g": "15", "carbohydrates_g": "63", "sugars_g": "21", "fiber_g": "1,8", "protein_g": "7", "salt_g": "0,62"},
+ "per_serving": null},
+"claims": [], "certifications": [],
+"dates": {"best_before": "À consommer de préférence avant le 03/2027", "expiration": null, "production": null, "lot": "LOT 24117"},
+"storage": {"instructions": "À conserver à l'abri de la chaleur et de l'humidité.", "temperature": null},
+"manufacturer": {"name": "Biscuiterie Lefèvre", "address": "Nantes", "country": "France"},
+"origin": "France",
+"summary": "Butter shortbread biscuits.",
+"highlights": [],
+"raw_text": "Ingrédients : farine de blé, sucre, beurre pâtissier 18 %, œufs frais, lait écrémé en poudre, sel, poudres à lever : diphosphates, carbonates de sodium. Peut contenir des traces de fruits à coque et de soja."}

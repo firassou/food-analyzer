@@ -1,0 +1,22 @@
+{"label_detected": true, "image_quality": "good", "language": "ar",
+"product": {"name": "بسكويت السمسم", "brand": "الأرز", "category": "Biscuits", "quantity": "250 غ"},
+"ingredients": [
+ {"name": "دقيق القمح", "name_en": "wheat flour", "percent": null, "e_number": null, "allergens": ["gluten"]},
+ {"name": "سكر أبيض", "name_en": "white sugar", "percent": null, "e_number": null, "allergens": []},
+ {"name": "زيت نخيل", "name_en": "palm oil", "percent": null, "e_number": null, "allergens": []},
+ {"name": "سمسم 8%", "name_en": "sesame 8%", "percent": 8, "e_number": null, "allergens": ["sesame"]},
+ {"name": "ملح", "name_en": "salt", "percent": null, "e_number": null, "allergens": []}
+],
+"allergens": {"declared": ["gluten", "sesame"], "may_contain": []},
+"gluten": {"status": "contains", "confidence": "high", "evidence": ["دقيق القمح"]},
+"lactose": {"status": "no_indication", "evidence": []},
+"additives": [],
+"nutrition": null,
+"claims": [], "certifications": ["Halal"],
+"dates": {"best_before": "2027/05", "expiration": null, "production": "2026/05", "lot": null},
+"storage": {"instructions": null, "temperature": null},
+"manufacturer": {"name": "شركة الأرز للأغذية", "address": null, "country": "Lebanon"},
+"origin": "Lebanon",
+"summary": "Sesame biscuits made in Lebanon.",
+"highlights": [],
+"raw_text": "المكونات: دقيق القمح، سكر أبيض، زيت نخيل، سمسم 8%، ملح. قد يحتوي على آثار من الفول السوداني. صنع في لبنان"}

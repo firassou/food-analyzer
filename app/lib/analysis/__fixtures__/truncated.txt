@@ -1,0 +1,15 @@
+{"label_detected": true, "image_quality": "good", "language": "en",
+"product": {"name": "Seeded Rye Crackers", "brand": "Nordbake", "category": "Crackers", "quantity": "180 g"},
+"ingredients": [
+ {"name": "Wholegrain rye flour (70%)", "name_en": null, "percent": 70, "e_number": null, "allergens": ["gluten"]},
+ {"name": "Sesame seeds", "name_en": null, "percent": null, "e_number": null, "allergens": ["sesame"]},
+ {"name": "Sunflower seeds", "name_en": null, "percent": null, "e_number": null, "allergens": []},
+ {"name": "Salt", "name_en": null, "percent": null, "e_number": null, "allergens": []}
+],
+"allergens": {"declared": ["gluten", "sesame"], "may_contain": []},
+"gluten": {"status": "contains", "confidence": "high", "evidence": ["rye flour"]},
+"lactose": {"status": "no_indication", "evidence": []},
+"additives": [],
+"nutrition": {"basis": "100g", "per_100_printed": true, "serving_size": null, "per_100": {"energy_kj": 1700, "energy_kcal": 405, "fat_g": 12, "saturated_fat_g": 1.4, "carbohydrates_g": 52, "sugars_g": 1.9, "fiber_g": 17, "protein_g": 12, "salt_g": 1.1, "sodium_mg": null}, "per_serving": null},
+"claims": ["High in fibre"],
+"summary": "Crispy rye crackers with sesame and sunfl

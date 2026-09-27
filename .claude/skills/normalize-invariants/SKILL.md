@@ -16,8 +16,15 @@ Files: `app/lib/analysis/types.ts` (contract), `prompt.ts` (SYSTEM_PROMPT / USER
 6. Every user-facing uncertainty becomes a deduplicated entry in `warnings`.
 
 ## Workflow
-1. Add a fixture to `app/lib/analysis/__fixtures__/`: the raw model text, plus what you expect `normalize` to produce.
-2. Write a failing test (`parse.test.ts` / `normalize.test.ts`).
+1. Add a fixture to `app/lib/analysis/__fixtures__/<case>.txt`: the raw model text, exactly as a model would send it (fences, `<think>` and truncation included).
+2. Write a failing test. Expectations live in `normalize.test.ts` (run through `analyze("<case>.txt")`, i.e. parse then normalize) or `parse.test.ts`. Add every new fixture to the "complete object for every fixture" list.
 3. Make the change. Run `pnpm test`.
 - After prompt changes, check that the prompt's JSON schema and `normalize`'s field aliases still match, field for field.
-- Parser cases that must keep working: code fences, prose around the JSON, Python literals (`True`/`None`, single quotes), trailing commas, truncated output (repaired, and flagged so a "cut short" warning is added).
+- Parser cases that must keep working: code fences, prose around the JSON (including bracketed prose like "[1]" before it), `<think>` blocks, Python literals (`True`/`None`/`NaN`), single-quoted strings, curly-quoted strings, `//` comments, trailing commas, and truncated output (repaired, and flagged so a "cut short" warning is added). Single-quoted output is converted only when complete; truncated single-quoted output isn't repaired.
+
+## Rules that are easy to get wrong
+- Gluten escalates to "contains" for a strong gluten ingredient or a **declared** gluten allergen, never for "gluten is contains in the allergen map": oats alone put it there too, and oats only mean "likely".
+- A compound ingredient (a bracketed list, or "x: a, b") gets no name-implied E-number and no untrusted model allergens. Its additives are found per part.
+- Ambiguous additives (code `null`: modified starch, caramel colour) are deduplicated by kind (`additiveKey`), not by exact wording.
+- Allergen sources are filled in ("Declared on the label" / "Listed on the label") at the very end, after the gluten rule may have added an allergen.
+- `normalize()` wraps its body in a try/catch that falls back to `normalize({})`. That is a last resort, not a licence to skip guards.
