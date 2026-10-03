@@ -434,3 +434,40 @@ describe("review regressions", () => {
     expect(r.ingredients[0].gluten).toBe(true);
   });
 });
+
+describe("locale", () => {
+  it("writes its own sentences in the requested language and keeps the rules unchanged", () => {
+    const raw = fixture("eu-biscuit.txt");
+    const en = normalize(parseModelJson(raw)!.value);
+    const fr = normalize(parseModelJson(raw)!.value, { locale: "fr" });
+    const ar = normalize(parseModelJson(raw)!.value, { locale: "ar" });
+    for (const r of [fr, ar]) {
+      expect(r.allergens.map((a) => [a.id, a.presence])).toEqual(en.allergens.map((a) => [a.id, a.presence]));
+      expect(r.gluten.status).toBe(en.gluten.status);
+      expect(r.additives.map((a) => a.code)).toEqual(en.additives.map((a) => a.code));
+      expect(r.nutrition).toEqual(en.nutrition);
+    }
+    expect(fr.highlights[0].text).toBe("Riche en matières grasses (22 g pour 100 g)");
+    expect(fr.allergens.find((a) => a.id === "milk")?.name).toBe("Lait");
+    expect(fr.sugar.explanation).toContain("au-dessus du seuil « élevé » de 22,5 g");
+    expect(ar.highlights[0].text).toContain("نسبة مرتفعة من الدهون");
+  });
+
+  it("falls back to English for an unknown locale and keeps name_local", () => {
+    const r = normalize(
+      { ingredients: [{ name: "دقيق القمح", name_en: "wheat flour", name_local: "farine de blé" }] },
+      { locale: "xx" as never },
+    );
+    expect(r.ingredients[0].name_local).toBe("farine de blé");
+    expect(r.gluten.evidence).toEqual(["Ingredient: farine de blé"]);
+    expect(r.warnings.join(" ")).toMatch(/^[\x20-\x7e’“”]+$/);
+  });
+
+  it("drops a model highlight about a computed level in French too", () => {
+    const r = normalize(
+      { nutrition: { per_100: { sugars_g: 30 } }, highlights: [{ text: "Riche en sucres" }, { text: "Sans huile de palme" }] },
+      { locale: "fr" },
+    );
+    expect(r.highlights.map((h) => h.text)).toEqual(["Riche en sucres (30 g pour 100 g)", "Sans huile de palme"]);
+  });
+});

@@ -1,4 +1,6 @@
+"use client";
 import Image from "next/image";
+import { useI18n } from "../lib/i18n/I18nProvider";
 import { cn } from "./ui";
 
 export default function Scanner({
@@ -10,13 +12,14 @@ export default function Scanner({
   file: File | null;
   scanning: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className="animate-fade-up rounded-3xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div className="relative overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-900">
         {src ? (
           <Image
             src={src}
-            alt="Food label preview"
+            alt={t.scanner.alt}
             className={cn(
               "max-h-[60vh] w-full object-contain transition duration-700",
               scanning && "scale-[1.02] saturate-50",
@@ -59,10 +62,10 @@ export default function Scanner({
 
       {file && (
         <div className="flex items-center gap-2 px-3 pt-3 pb-1 text-xs text-zinc-500 dark:text-zinc-400">
-          <span className="truncate font-medium text-zinc-700 dark:text-zinc-300">
+          <span dir="auto" className="truncate font-medium text-zinc-700 dark:text-zinc-300">
             {file.name}
           </span>
-          <span className="ml-auto shrink-0 tabular-nums">
+          <span dir="ltr" className="ms-auto shrink-0 tabular-nums">
             {formatSize(file.size)}
           </span>
         </div>

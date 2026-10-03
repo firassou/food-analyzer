@@ -1,36 +1,31 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useI18n } from "../lib/i18n/I18nProvider";
 import { cn, Spinner } from "./ui";
 
-const STEPS = [
-  "Reading the label",
-  "Extracting ingredients",
-  "Parsing nutrition facts",
-  "Checking allergens & gluten",
-  "Looking up additives",
-  "Writing the summary",
-];
-
 export default function Analyzing() {
+  const { t } = useI18n();
+  const steps = t.analyzing.steps;
+  const stepCount = steps.length;
   const [step, setStep] = useState(0);
 
   useEffect(() => {
     // the request has no real progress, so advance steadily and hold on the last step
-    const t = setInterval(
-      () => setStep((s) => Math.min(s + 1, STEPS.length - 1)),
+    const timer = setInterval(
+      () => setStep((s) => Math.min(s + 1, stepCount - 1)),
       2200,
     );
-    return () => clearInterval(t);
-  }, []);
+    return () => clearInterval(timer);
+  }, [stepCount]);
 
   return (
     <div className="flex flex-col gap-4" aria-live="polite">
       <div className="animate-fade-up rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-          Analyzing your label…
+          {t.analyzing.title}
         </p>
         <ol className="mt-4 space-y-2.5">
-          {STEPS.map((label, i) => (
+          {steps.map((label, i) => (
             <li
               key={label}
               className={cn(

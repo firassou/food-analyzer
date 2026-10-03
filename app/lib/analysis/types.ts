@@ -2,6 +2,8 @@
 // "unknown" is expressed as null / [] / "unclear", never as a missing key.
 // Shared by client and server: keep it free of runtime dependencies.
 
+import type { Locale } from "../i18n/locales";
+
 export type Presence = "contains" | "likely_contains" | "no_indication" | "unclear";
 export type Confidence = "high" | "medium" | "low";
 export type Level = "low" | "medium" | "high";
@@ -67,6 +69,8 @@ export interface Ingredient {
   name: string;
   /** English translation when the label is in another language */
   name_en: string | null;
+  /** translation into the requested interface language, when that isn't English or the label's own */
+  name_local: string | null;
   /** only a percentage literally printed next to the ingredient */
   percent: number | null;
   /** canonical code, e.g. "E322", "E150d", "E500ii" */
@@ -89,6 +93,8 @@ export interface Allergen {
 export interface Additive {
   code: string | null;
   name: string;
+  /** the name in the requested interface language, when that isn't English */
+  name_local: string | null;
   category: string | null;
   purpose: string | null;
   explanation: string | null;
@@ -155,6 +161,8 @@ export interface AnalyzeMeta {
   provider: string;
   attempts: number;
   duration_ms: number;
+  /** interface language the free-text fields were written in */
+  locale: Locale;
   /** development only: what each attempt did */
   trace?: string[];
 }

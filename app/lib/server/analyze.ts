@@ -1,8 +1,10 @@
 import "server-only";
+import { analysisMessages } from "../analysis/messages";
 import { normalize } from "../analysis/normalize";
 import { lastAnswerObject, parseModelJson } from "../analysis/parse";
-import { SYSTEM_PROMPT, USER_PROMPT } from "../analysis/prompt";
+import { systemPrompt, USER_PROMPT } from "../analysis/prompt";
 import type { AnalyzeErrorCode, AnalyzeMeta, LabelAnalysis } from "../analysis/types";
+import type { Locale } from "../i18n/locales";
 import {
   classify,
   coolDown,
@@ -57,10 +59,12 @@ const cancelled = () => new AnalyzeError("The request was cancelled.", "bad_requ
  * Runs the photo through the model chain until one returns a complete JSON answer.
  * Never gives up while a model can still answer: truncated answers are repaired and
  * kept as a fallback, non-JSON answers still produce a (flagged) result.
+ * `locale` is the language the free-text fields are written in.
  */
 export async function analyzeLabel(
   imageDataUrl: string,
   signal: AbortSignal,
+  locale: Locale = "en",
 ): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
   const targets = getTargets();
   if (targets.length === 0) {
@@ -90,7 +94,7 @@ export async function analyzeLabel(
 
     const t0 = Date.now();
     try {
-      const { content, reasoning, finish } = await streamCompletion(target, imageDataUrl, signal, remaining);
+      const { content, reasoning, finish } = await streamCompletion(target, imageDataUrl, signal, remaining, locale);
       const ms = Date.now() - t0;
       let parsed = parseModelJson(content);
       // reasoning models occasionally put the whole answer in the reasoning channel and
@@ -106,7 +110,7 @@ export async function analyzeLabel(
       }
 
       const truncated = parsed.repaired || finish === "length" || finish === "stalled";
-      const result = normalize(parsed.value, { repaired: truncated });
+      const result = normalize(parsed.value, { repaired: truncated, locale });
       log(
         target,
         `${truncated ? "partial" : fromReasoning ? "reasoning-only" : "ok"} in ${ms}ms (finish=${finish}, ${content.length} chars)`,
@@ -114,7 +118,7 @@ export async function analyzeLabel(
 
       if (!truncated && !fromReasoning) {
         attempts.push({ target, outcome: "ok", ms });
-        return { result, meta: meta(target, attempts, started) };
+        return { result, meta: meta(target, attempts, started, locale) };
       }
       // incomplete: keep it, and try the next model if there's time for a complete one
       attempts.push({ target, outcome: "truncated", ms, detail: fromReasoning ? "answer in reasoning" : String(finish) });
@@ -136,16 +140,14 @@ export async function analyzeLabel(
     }
   }
 
-  if (fallback) return { result: fallback.result, meta: meta(fallback.target, attempts, started) };
+  if (fallback) return { result: fallback.result, meta: meta(fallback.target, attempts, started, locale) };
 
   // models answered, but never in JSON (refusal or a free-text description): still answer
   const textAnswer = attempts.find((a) => a.outcome === "no_json");
   if (textAnswer) {
-    const result = normalize({ label_detected: false });
-    result.warnings = [
-      "The AI couldn't produce a structured reading of this photo. Try a sharper, well-lit photo of the ingredient list or nutrition table.",
-    ];
-    return { result, meta: meta(textAnswer.target, attempts, started) };
+    const result = normalize({ label_detected: false }, { locale });
+    result.warnings = [analysisMessages(locale).warnings.unstructured];
+    return { result, meta: meta(textAnswer.target, attempts, started, locale) };
   }
 
   const failure = summarizeFailure(attempts);
@@ -163,6 +165,7 @@ async function streamCompletion(
   imageDataUrl: string,
   outer: AbortSignal,
   budgetMs: number,
+  locale: Locale,
 ): Promise<{ content: string; reasoning: string; finish: string | null }> {
   const ctrl = new AbortController();
   let stall: StallError | null = null;
@@ -191,7 +194,7 @@ async function streamCompletion(
       {
         model: target.model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt(locale) },
           {
             role: "user",
             content: [
@@ -278,12 +281,13 @@ function traceOf(attempts: Attempt[]) {
   );
 }
 
-function meta(target: Target, attempts: Attempt[], started: number): AnalyzeMeta {
+function meta(target: Target, attempts: Attempt[], started: number, locale: Locale): AnalyzeMeta {
   return {
     model: target.model,
     provider: target.provider,
     attempts: attempts.length,
     duration_ms: Date.now() - started,
+    locale,
     ...(DEV && { trace: traceOf(attempts) }),
   };
 }

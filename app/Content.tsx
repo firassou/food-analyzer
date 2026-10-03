@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Card, cn, Dot, dotClasses, Pill, Tone, toneClasses } from "./components/ui";
 import { LEVEL_THRESHOLDS } from "./lib/analysis/knowledge";
+import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
 import type {
   Additive,
   AnalyzeMeta,
@@ -23,53 +24,51 @@ type SectionId =
   | "details"
   | "raw";
 
-const presence: Record<Presence, { label: string; tone: Tone }> = {
-  contains: { label: "Contains", tone: "red" },
-  likely_contains: { label: "Likely contains", tone: "amber" },
-  no_indication: { label: "No indication", tone: "green" },
-  unclear: { label: "Unclear", tone: "zinc" },
+const presenceTone: Record<Presence, Tone> = {
+  contains: "red",
+  likely_contains: "amber",
+  no_indication: "green",
+  unclear: "zinc",
 };
 
-const levelUi: Record<Level | "unknown", { label: string; tone: Tone }> = {
-  low: { label: "Low", tone: "green" },
-  medium: { label: "Medium", tone: "amber" },
-  high: { label: "High", tone: "red" },
-  unknown: { label: "Unknown", tone: "zinc" },
+const levelTone: Record<Level | "unknown", Tone> = {
+  low: "green",
+  medium: "amber",
+  high: "red",
+  unknown: "zinc",
 };
 
 const confidenceWidth = { low: "33%", medium: "66%", high: "100%" };
 
+// labels come from the dictionary (results.nutrition.rows / .meters)
 const tableRows: {
-  key: NutrientKey | "energy";
-  label: string;
+  key: Exclude<NutrientKey, "energy_kj" | "energy_kcal"> | "energy";
   sub?: boolean;
   unit: string;
 }[] = [
-  { key: "energy", label: "Energy", unit: "" },
-  { key: "fat_g", label: "Fat", unit: "g" },
-  { key: "saturated_fat_g", label: "of which saturates", sub: true, unit: "g" },
-  { key: "carbohydrates_g", label: "Carbohydrates", unit: "g" },
-  { key: "sugars_g", label: "of which sugars", sub: true, unit: "g" },
-  { key: "fiber_g", label: "Fibre", unit: "g" },
-  { key: "protein_g", label: "Protein", unit: "g" },
-  { key: "salt_g", label: "Salt", unit: "g" },
-  { key: "sodium_mg", label: "Sodium", unit: "mg" },
+  { key: "energy", unit: "" },
+  { key: "fat_g", unit: "g" },
+  { key: "saturated_fat_g", sub: true, unit: "g" },
+  { key: "carbohydrates_g", unit: "g" },
+  { key: "sugars_g", sub: true, unit: "g" },
+  { key: "fiber_g", unit: "g" },
+  { key: "protein_g", unit: "g" },
+  { key: "salt_g", unit: "g" },
+  { key: "sodium_mg", unit: "mg" },
 ];
 
 const meters = [
-  { key: "fat", nutrient: "fat_g", label: "Fat" },
-  { key: "saturated_fat", nutrient: "saturated_fat_g", label: "Saturates" },
-  { key: "sugars", nutrient: "sugars_g", label: "Sugars" },
-  { key: "salt", nutrient: "salt_g", label: "Salt" },
+  { key: "fat", nutrient: "fat_g" },
+  { key: "saturated_fat", nutrient: "saturated_fat_g" },
+  { key: "sugars", nutrient: "sugars_g" },
+  { key: "salt", nutrient: "salt_g" },
 ] as const;
-
-const fmt = (n: number) =>
-  n.toLocaleString("en", { maximumFractionDigits: n < 10 ? 2 : 1 });
 
 function cellValue(
   n: Nutrients | null,
   key: NutrientKey | "energy",
   unit: string,
+  fmt: (n: number) => string,
 ): string | null {
   if (!n) return null;
   if (key === "energy") {
@@ -89,21 +88,6 @@ const additiveId = (a: Pick<Additive, "code" | "name">, index?: number) =>
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const LANGUAGES: Record<string, string> = {
-  ar: "Arabic",
-  de: "German",
-  es: "Spanish",
-  fr: "French",
-  it: "Italian",
-  nl: "Dutch",
-  pt: "Portuguese",
-  tr: "Turkish",
-  pl: "Polish",
-  ru: "Russian",
-  zh: "Chinese",
-  ja: "Japanese",
-};
-
 export default function Content({
   result,
   meta,
@@ -122,6 +106,8 @@ function Results({
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
 }) {
+  const { t, fmt, languageName } = useI18n();
+  const r = t.results;
   const {
     product,
     nutrition,
@@ -144,23 +130,31 @@ function Results({
   );
   const hasNutrition = !!nutrition || !!sugar.explanation;
   const unit = sugar.basis === "100ml" ? "ml" : "g";
+  // free text is in the language the photo was analyzed in, which the interface may since have left
+  const analysisLocale = meta?.locale ?? "en";
+  const labelLanguage = result.language?.slice(0, 2) ?? null;
+  const translated = !!labelLanguage && labelLanguage !== analysisLocale;
+  const translationOf = (i: Ingredient) =>
+    analysisLocale === "en" ? i.name_en
+    : translated ? (i.name_local ?? i.name_en)
+    : (i.name_local ?? null);
 
   const details = {
     dates: [
-      ["Best before", result.dates.best_before],
-      ["Use by", result.dates.expiration],
-      ["Produced", result.dates.production],
-      ["Lot", result.dates.lot],
+      [r.details.bestBefore, result.dates.best_before],
+      [r.details.useBy, result.dates.expiration],
+      [r.details.produced, result.dates.production],
+      [r.details.lot, result.dates.lot],
     ],
     storage: [
-      ["Temperature", result.storage.temperature],
-      ["Instructions", result.storage.instructions],
+      [r.details.temperature, result.storage.temperature],
+      [r.details.instructions, result.storage.instructions],
     ],
     manufacturer: [
-      ["Name", result.manufacturer.name],
-      ["Address", result.manufacturer.address],
-      ["Country", result.manufacturer.country],
-      ["Origin", result.origin],
+      [r.details.name, result.manufacturer.name],
+      [r.details.address, result.manufacturer.address],
+      [r.details.country, result.manufacturer.country],
+      [r.details.origin, result.origin],
     ],
   } satisfies Record<string, [string, string | null][]>;
   const hasDetails =
@@ -169,18 +163,18 @@ function Results({
     Object.values(details).some((rows) => rows.some(([, v]) => v));
 
   const sections: { id: SectionId; label: string }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "allergens", label: "Allergens" },
-    { id: "dietary", label: "Gluten & lactose" },
-    ...(hasNutrition ? [{ id: "nutrition" as const, label: "Nutrition" }] : []),
+    { id: "overview", label: r.sections.overview },
+    { id: "allergens", label: r.sections.allergens },
+    { id: "dietary", label: r.sections.dietary },
+    ...(hasNutrition ? [{ id: "nutrition" as const, label: r.sections.nutrition }] : []),
     ...(ingredients.length ?
-      [{ id: "ingredients" as const, label: "Ingredients" }]
+      [{ id: "ingredients" as const, label: r.sections.ingredients }]
     : []),
     ...(additives.length ?
-      [{ id: "additives" as const, label: "Additives" }]
+      [{ id: "additives" as const, label: r.sections.additives }]
     : []),
-    ...(hasDetails ? [{ id: "details" as const, label: "Details" }] : []),
-    ...(result.raw_text ? [{ id: "raw" as const, label: "Label text" }] : []),
+    ...(hasDetails ? [{ id: "details" as const, label: r.sections.details }] : []),
+    ...(result.raw_text ? [{ id: "raw" as const, label: r.sections.raw }] : []),
   ];
   const sectionKey = sections.map((s) => s.id).join();
 
@@ -246,7 +240,7 @@ function Results({
       {/* Section nav */}
       <nav
         ref={navRef}
-        aria-label="Result sections"
+        aria-label={r.nav}
         className="animate-fade-in sticky top-14 z-20 -mx-4 flex gap-1.5 overflow-x-auto border-b border-zinc-200/70 bg-zinc-50/90 px-4 py-2.5 backdrop-blur-lg scrollbar-none sm:mx-0 sm:rounded-2xl sm:border sm:px-2 dark:border-zinc-800/70 dark:bg-black/85"
       >
         {sections.map((s) => (
@@ -289,10 +283,9 @@ function Results({
             dir="auto"
             className="mt-1.5 text-2xl leading-tight font-semibold text-balance sm:text-3xl"
           >
-            {product.name ?? product.category ?? "Food product"}
+            {product.name ?? product.category ?? r.fallbackName}
           </h2>
-          {(tags.length > 0 ||
-            (result.language && result.language !== "en")) && (
+          {(tags.length > 0 || translated) && (
             <div className="mt-4 flex flex-wrap gap-2">
               {tags.map((t) => (
                 <span
@@ -303,18 +296,18 @@ function Results({
                   {t}
                 </span>
               ))}
-              {result.language && result.language !== "en" && (
+              {translated && (
                 <span className="rounded-full bg-black/10 px-3 py-1 text-xs font-medium ring-1 ring-white/20">
-                  🌐 Label in{" "}
-                  {LANGUAGES[result.language.slice(0, 2)] ??
-                    result.language.toUpperCase()}
-                  , translated
+                  🌐 {format(r.labelIn, { language: languageName(labelLanguage) })}
                 </span>
               )}
             </div>
           )}
           {result.summary && (
-            <p className="mt-5 border-t border-white/20 pt-4 text-sm leading-6 text-emerald-50 sm:text-[15px] sm:leading-7">
+            <p
+              dir="auto"
+              className="mt-5 border-t border-white/20 pt-4 text-sm leading-6 text-emerald-50 sm:text-[15px] sm:leading-7"
+            >
               {result.summary}
             </p>
           )}
@@ -332,7 +325,7 @@ function Results({
                       "✓"
                     : "•"}
                   </span>
-                  {h.text}
+                  <span dir="auto">{h.text}</span>
                 </li>
               ))}
             </ul>
@@ -348,7 +341,9 @@ function Results({
           <span aria-hidden>ⓘ</span>
           <ul className="space-y-1">
             {result.warnings.map((w) => (
-              <li key={w}>{w}</li>
+              <li key={w} dir="auto">
+                {w}
+              </li>
             ))}
           </ul>
         </div>
@@ -358,40 +353,43 @@ function Results({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <StatusTile
           delay={1}
-          title="Gluten"
-          {...presence[gluten.status]}
+          title={r.tiles.gluten}
+          label={r.presence[gluten.status]}
+          tone={presenceTone[gluten.status]}
           hint={
             gluten.status === "unclear" ?
-              "Not enough info"
-            : `${capitalize(gluten.confidence)} confidence`
+              r.tiles.notEnoughInfo
+            : r.tiles.confidence[gluten.confidence]
           }
           onClick={() => goTo(sid("dietary"))}
         />
         <StatusTile
           delay={2}
-          title="Lactose"
-          {...presence[lactose.status]}
+          title={r.tiles.lactose}
+          label={r.presence[lactose.status]}
+          tone={presenceTone[lactose.status]}
           onClick={() => goTo(sid("dietary"))}
         />
         <StatusTile
           delay={3}
-          title="Sugar"
-          {...levelUi[sugar.level]}
+          title={r.tiles.sugar}
+          label={r.level[sugar.level]}
+          tone={levelTone[sugar.level]}
           hint={
             sugar.per_100 !== null ?
-              `${fmt(sugar.per_100)} g / 100 ${unit}`
+              ltr(`${fmt(sugar.per_100)} g / 100 ${unit}`)
             : undefined
           }
           onClick={hasNutrition ? () => goTo(sid("nutrition")) : undefined}
         />
         <StatusTile
           delay={4}
-          title="Allergens"
+          title={r.tiles.allergens}
           label={
-            contains.length ? `${contains.length} found`
+            contains.length ? format(r.tiles.found, { count: contains.length })
             : ingredients.length ?
-              "None found"
-            : "Unknown"
+              r.tiles.noneFound
+            : r.tiles.unknown
           }
           tone={
             contains.length ? "red"
@@ -402,19 +400,19 @@ function Results({
             : "zinc"
           }
           hint={
-            mayContain.length ? `+${mayContain.length} may contain` : undefined
+            mayContain.length ? format(r.tiles.mayContain, { count: mayContain.length }) : undefined
           }
           onClick={() => goTo(sid("allergens"))}
         />
         <StatusTile
           delay={5}
           className="col-span-2 sm:col-span-1"
-          title="Additives"
+          title={r.tiles.additives}
           label={
-            additives.length ? `${additives.length} found`
+            additives.length ? format(r.tiles.found, { count: additives.length })
             : ingredients.length ?
-              "None found"
-            : "Unknown"
+              r.tiles.noneFound
+            : r.tiles.unknown
           }
           tone={
             additives.length ? "amber"
@@ -435,23 +433,23 @@ function Results({
       <Card
         id={sid("allergens")}
         flash={flashFor(sid("allergens"))}
-        title="Allergens"
+        title={r.sections.allergens}
         icon="⚠️"
         delay={2}
       >
         {allergens.length === 0 ?
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             {ingredients.length ?
-              "No allergens were declared or found in the ingredients."
-            : "No allergen information was readable on this photo."}
+              r.allergens.none
+            : r.allergens.unreadable}
           </p>
         : <div className="space-y-5">
             {contains.length > 0 && (
-              <AllergenGroup title="Contains" tone="red" items={contains} />
+              <AllergenGroup title={r.allergens.contains} tone="red" items={contains} />
             )}
             {mayContain.length > 0 && (
               <AllergenGroup
-                title="May contain (traces)"
+                title={r.allergens.mayContain}
                 tone="amber"
                 items={mayContain}
               />
@@ -464,31 +462,31 @@ function Results({
       <Card
         id={sid("dietary")}
         flash={flashFor(sid("dietary"))}
-        title="Gluten & lactose"
+        title={r.sections.dietary}
         icon="🌾"
         delay={3}
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <DietaryPanel
-            title="Gluten"
+            title={r.tiles.gluten}
             status={gluten.status}
             evidence={gluten.evidence}
           >
             <div className="mt-3">
               <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>Confidence</span>
-                <span>{capitalize(gluten.confidence)}</span>
+                <span>{r.dietary.confidence}</span>
+                <span>{r.dietary.confidenceLevel[gluten.confidence]}</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 <div
-                  className="animate-grow h-full origin-left rounded-full bg-emerald-500"
+                  className="animate-grow h-full origin-left rounded-full bg-emerald-500 rtl:origin-right"
                   style={{ width: confidenceWidth[gluten.confidence] }}
                 />
               </div>
             </div>
           </DietaryPanel>
           <DietaryPanel
-            title="Lactose"
+            title={r.tiles.lactose}
             status={lactose.status}
             evidence={lactose.evidence}
           />
@@ -500,15 +498,15 @@ function Results({
         <Card
           id={sid("nutrition")}
           flash={flashFor(sid("nutrition"))}
-          title="Nutrition facts"
+          title={r.nutrition.title}
           icon="📊"
           delay={4}
           aside={
             nutrition?.serving_size && (
               <>
-                Serving
+                {r.nutrition.serving}
                 <br />
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                <span dir="auto" className="font-medium text-zinc-700 dark:text-zinc-300">
                   {nutrition.serving_size}
                 </span>
               </>
@@ -520,7 +518,7 @@ function Results({
               {meters.map((m, i) => (
                 <LevelMeter
                   key={m.key}
-                  label={m.label}
+                  label={r.nutrition.meters[m.key]}
                   value={nutrition.per_100![m.nutrient]}
                   level={nutrition.levels[m.key]}
                   threshold={LEVEL_THRESHOLDS[nutrition.basis][m.key]}
@@ -534,35 +532,36 @@ function Results({
             <div className="-mx-1 overflow-x-auto px-1">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-                    <th className="pb-2 font-medium">Nutrient</th>
+                  <tr className="text-start text-xs tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+                    <th className="pb-2 text-start font-medium">{r.nutrition.nutrient}</th>
                     {nutrition.per_100 && (
-                      <th className="pb-2 text-right font-medium">
-                        Per 100 {unit}
+                      <th className="pb-2 text-end font-medium">
+                        {format(r.nutrition.per100, { unit })}
                         {nutrition.per_100_calculated && (
                           <span
                             className="block text-[10px] font-normal normal-case"
-                            title="Calculated from the per-serving values; the label doesn't print this column."
+                            title={r.nutrition.calculatedHint}
                           >
-                            calculated
+                            {r.nutrition.calculated}
                           </span>
                         )}
                       </th>
                     )}
                     {nutrition.per_serving && (
-                      <th className="pb-2 pl-4 text-right font-medium">
-                        Per serving
+                      <th className="pb-2 ps-4 text-end font-medium">
+                        {r.nutrition.perServing}
                       </th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
                   {tableRows.map((row) => {
-                    const a = cellValue(nutrition.per_100, row.key, row.unit);
+                    const a = cellValue(nutrition.per_100, row.key, row.unit, fmt);
                     const b = cellValue(
                       nutrition.per_serving,
                       row.key,
                       row.unit,
+                      fmt,
                     );
                     if (!a && !b) return null;
                     return (
@@ -574,20 +573,20 @@ function Results({
                           className={cn(
                             "py-2.5",
                             row.sub ?
-                              "pl-4 text-zinc-500 dark:text-zinc-400"
+                              "ps-4 text-zinc-500 dark:text-zinc-400"
                             : "font-medium text-zinc-900 dark:text-zinc-100",
                           )}
                         >
-                          {row.label}
+                          {r.nutrition.rows[row.key]}
                         </td>
                         {nutrition.per_100 && (
-                          <td className="py-2.5 text-right tabular-nums">
-                            {a ?? "—"}
+                          <td className="py-2.5 text-end tabular-nums">
+                            {a ? ltr(a) : "—"}
                           </td>
                         )}
                         {nutrition.per_serving && (
-                          <td className="py-2.5 pl-4 text-right tabular-nums">
-                            {b ?? "—"}
+                          <td className="py-2.5 ps-4 text-end tabular-nums">
+                            {b ? ltr(b) : "—"}
                           </td>
                         )}
                       </tr>
@@ -602,17 +601,17 @@ function Results({
             <div
               className={cn(
                 "mt-5 flex gap-3 rounded-2xl p-4 text-sm ring-1 ring-inset",
-                toneClasses[levelUi[sugar.level].tone],
+                toneClasses[levelTone[sugar.level]],
               )}
             >
               <span aria-hidden>🍬</span>
               <p>
                 {sugar.level !== "unknown" && (
                   <span className="font-semibold">
-                    {levelUi[sugar.level].label} sugar.{" "}
+                    {r.nutrition.sugarLevel[sugar.level]}{" "}
                   </span>
                 )}
-                {sugar.explanation}
+                <span dir="auto">{sugar.explanation}</span>
               </p>
             </div>
           )}
@@ -624,16 +623,17 @@ function Results({
         <Card
           id={sid("ingredients")}
           flash={flashFor(sid("ingredients"))}
-          title="Ingredients"
+          title={r.sections.ingredients}
           icon="🥣"
           delay={5}
-          aside={`${ingredients.length} items`}
+          aside={format(r.ingredients.count, { count: ingredients.length })}
         >
           <ol className="flex flex-wrap gap-2">
             {ingredients.map((ing, i) => (
               <IngredientPill
                 key={`${i}-${ing.name}`}
                 ingredient={ing}
+                translation={translationOf(ing)}
                 index={i}
                 additive={
                   ing.e_number ? additiveByCode.get(ing.e_number) : undefined
@@ -643,8 +643,8 @@ function Results({
             ))}
           </ol>
           <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            <Legend tone="red">Allergen / gluten source</Legend>
-            <Legend tone="amber">Additive (tap for details)</Legend>
+            <Legend tone="red">{r.ingredients.legendAllergen}</Legend>
+            <Legend tone="amber">{r.ingredients.legendAdditive}</Legend>
           </div>
         </Card>
       )}
@@ -654,10 +654,10 @@ function Results({
         <Card
           id={sid("additives")}
           flash={flashFor(sid("additives"))}
-          title="Additives"
+          title={r.sections.additives}
           icon="🧪"
           delay={6}
-          aside={`${additives.length} found`}
+          aside={format(r.tiles.found, { count: additives.length })}
         >
           <ul className="grid gap-3 md:grid-cols-2">
             {additives.map((a, i) => {
@@ -679,22 +679,22 @@ function Results({
                         {a.code}
                       </span>
                     )}
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                      {capitalize(a.name)}
+                    <span dir="auto" className="font-medium text-zinc-900 dark:text-zinc-100">
+                      {capitalize(a.name_local ?? a.name)}
                     </span>
                   </div>
                   {a.category && (
-                    <p className="mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+                    <p dir="auto" className="mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
                       {a.category}
                     </p>
                   )}
                   {a.purpose && (
-                    <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      <span className="font-medium">Purpose:</span> {a.purpose}
+                    <p dir="auto" className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <span className="font-medium">{r.additives.purpose}</span> {a.purpose}
                     </p>
                   )}
                   {a.explanation && (
-                    <p className="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+                    <p dir="auto" className="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
                       {a.explanation}
                     </p>
                   )}
@@ -711,23 +711,23 @@ function Results({
           id={sid("details")}
           className="grid scroll-mt-32 gap-5 sm:grid-cols-2"
         >
-          <InfoCard title="Dates" icon="📅" rows={details.dates} delay={7} flash={flashFor(sid("details"))} />
+          <InfoCard title={r.details.dates} icon="📅" rows={details.dates} delay={7} flash={flashFor(sid("details"))} />
           <InfoCard
-            title="Storage"
+            title={r.details.storage}
             icon="❄️"
             rows={details.storage}
             delay={7}
             flash={flashFor(sid("details"))}
           />
           <InfoCard
-            title="Manufacturer"
+            title={r.details.manufacturer}
             icon="🏭"
             rows={details.manufacturer}
             delay={8}
             flash={flashFor(sid("details"))}
           />
           {(result.certifications.length > 0 || result.claims.length > 0) && (
-            <Card title="Claims & certifications" icon="🏅" delay={8} flash={flashFor(sid("details"))}>
+            <Card title={r.details.claims} icon="🏅" delay={8} flash={flashFor(sid("details"))}>
               <div className="flex flex-wrap gap-2">
                 {result.certifications.map((c) => (
                   <Pill key={`cert-${c}`} tone="green">
@@ -749,11 +749,10 @@ function Results({
       {result.raw_text && <RawText id={sid("raw")} text={result.raw_text} flash={flashFor(sid("raw"))} />}
 
       <p className="px-4 pt-2 text-center text-xs leading-5 text-zinc-400 dark:text-zinc-600">
-        AI-extracted from the label image and may contain mistakes. Always check
-        the packaging if you have allergies or dietary restrictions.
+        {r.disclaimer}
         {meta && (
-          <span className="mt-1 block">
-            Analyzed in {(meta.duration_ms / 1000).toFixed(1)} s
+          <span className="mt-1 block tabular-nums">
+            {format(r.duration, { seconds: fmt(Math.round(meta.duration_ms / 100) / 10) })}
           </span>
         )}
       </p>
@@ -761,37 +760,39 @@ function Results({
   );
 }
 
+/** in the order of `results.notALabel.tips` in the dictionaries */
+const TIP_ICONS = ["📦", "💡", "🔍"];
+
 function NotALabel({ result }: { result: LabelAnalysis }) {
+  const { t } = useI18n();
+  const n = t.results.notALabel;
   return (
     <div className="animate-fade-up flex flex-col items-center rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <span className="animate-float text-5xl" aria-hidden>
         🔎
       </span>
       <h2 className="mt-4 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-        We couldn&apos;t find a food label
+        {n.title}
       </h2>
       {result.product.name && (
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          It looks like <b>{result.product.name}</b>, but no ingredients or
-          nutrition table are visible.
+          {rich(format(n.looksLike, { name: result.product.name }), (name) => (
+            <b dir="auto">{name}</b>
+          ))}
         </p>
       )}
       {result.summary && (
-        <p className="mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
+        <p dir="auto" className="mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
           {result.summary}
         </p>
       )}
-      <ul className="mt-6 grid w-full max-w-md gap-2 text-left text-sm text-zinc-600 dark:text-zinc-400">
-        {[
-          ["📦", "Photograph the back of the pack, where the ingredients are."],
-          ["💡", "Use good light and avoid glare on shiny packaging."],
-          ["🔍", "Get close enough that the small print is sharp."],
-        ].map(([icon, tip]) => (
+      <ul className="mt-6 grid w-full max-w-md gap-2 text-start text-sm text-zinc-600 dark:text-zinc-400">
+        {n.tips.map((tip, i) => (
           <li
             key={tip}
             className="flex gap-3 rounded-xl bg-zinc-50 px-4 py-2.5 dark:bg-zinc-900"
           >
-            <span aria-hidden>{icon}</span>
+            <span aria-hidden>{TIP_ICONS[i]}</span>
             {tip}
           </li>
         ))}
@@ -809,6 +810,7 @@ function AllergenGroup({
   tone: Tone;
   items: LabelAnalysis["allergens"];
 }) {
+  const { t } = useI18n();
   return (
     <div>
       <SubLabel>{title}</SubLabel>
@@ -820,11 +822,11 @@ function AllergenGroup({
           >
             <span className="flex shrink-0 items-center gap-2 sm:w-40">
               <Pill tone={tone} className="font-medium">
-                {a.name}
+                {t.results.allergenNames[a.id] ?? a.name}
               </Pill>
               {a.declared && (
                 <span className="text-[11px] font-medium text-zinc-400 uppercase">
-                  declared
+                  {t.results.allergens.declared}
                 </span>
               )}
             </span>
@@ -843,15 +845,19 @@ function AllergenGroup({
 
 function IngredientPill({
   ingredient: ing,
+  translation,
   index,
   additive,
   onAdditive,
 }: {
   ingredient: Ingredient;
+  /** the name in the reader's language, when the label is in another one */
+  translation: string | null;
   index: number;
   additive?: Additive;
   onAdditive: (a: Additive) => void;
 }) {
+  const { t } = useI18n();
   const flagged = ing.allergens.length > 0 || ing.gluten;
   const tone: Tone =
     flagged ? "red"
@@ -859,21 +865,25 @@ function IngredientPill({
     : "zinc";
   const title = [
     ing.allergens.length ?
-      `Allergens: ${ing.allergens.join(", ").replace(/_/g, " ")}`
+      format(t.results.ingredients.allergensTitle, {
+        list: ing.allergens.map((a) => t.results.allergenNames[a]).join(", "),
+      })
     : null,
-    additive ? `${additive.code} · ${additive.name}` : null,
+    additive ? `${additive.code} · ${additive.name_local ?? additive.name}` : null,
   ]
     .filter(Boolean)
     .join("\n");
   const content = (
     <>
-      <span className="mr-1.5 text-xs tabular-nums opacity-50">
+      <span className="me-1.5 text-xs tabular-nums opacity-50">
         {index + 1}
       </span>
-      <span className="flex flex-col text-left leading-tight">
+      <span className="flex flex-col text-start leading-tight">
         <span dir="auto">{ing.name}</span>
-        {ing.name_en && (
-          <span className="text-xs opacity-60">{ing.name_en}</span>
+        {translation && (
+          <span dir="auto" className="text-xs opacity-60">
+            {translation}
+          </span>
         )}
       </span>
     </>
@@ -893,7 +903,7 @@ function IngredientPill({
           )}
         >
           {content}
-          <span aria-hidden className="ml-1.5 opacity-60">
+          <span aria-hidden className="ms-1.5 inline-block opacity-60 rtl:-scale-x-100">
             ↗
           </span>
         </button>
@@ -934,7 +944,7 @@ function StatusTile({
       onClick={onClick}
       style={{ animationDelay: `${delay * 60}ms` }}
       className={cn(
-        "group animate-fade-up relative flex flex-col items-start justify-start rounded-2xl p-4 text-left ring-1 ring-inset transition-all duration-300",
+        "group animate-fade-up relative flex flex-col items-start justify-start rounded-2xl p-4 text-start ring-1 ring-inset transition-all duration-300",
         toneClasses[tone],
         onClick &&
           "cursor-pointer hover:-translate-y-1 hover:shadow-lg focus-visible:ring-2 focus-visible:outline-none active:translate-y-0 active:scale-[0.98]",
@@ -952,7 +962,7 @@ function StatusTile({
       {onClick && (
         <span
           aria-hidden
-          className="absolute top-3.5 right-3.5 text-sm opacity-0 transition-all duration-300 group-hover:translate-y-0.5 group-hover:opacity-60"
+          className="absolute end-3.5 top-3.5 text-sm opacity-0 transition-all duration-300 group-hover:translate-y-0.5 group-hover:opacity-60"
         >
           ↓
         </span>
@@ -972,21 +982,22 @@ function DietaryPanel({
   evidence: string[];
   children?: React.ReactNode;
 }) {
-  const p = presence[status];
+  const { t } = useI18n();
+  const tone = presenceTone[status];
   return (
     <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-zinc-900 dark:text-zinc-100">
           {title}
         </span>
-        <Pill tone={p.tone} className="text-xs font-medium">
-          <Dot tone={p.tone} />
-          <span className="ml-1.5">{p.label}</span>
+        <Pill tone={tone} className="text-xs font-medium">
+          <Dot tone={tone} />
+          <span className="ms-1.5">{t.results.presence[status]}</span>
         </Pill>
       </div>
       {children}
       {evidence.length > 0 ?
-        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-400">
+        <ul className="mt-3 list-disc space-y-1 ps-5 text-sm text-zinc-600 dark:text-zinc-400">
           {evidence.map((e, i) => (
             <li key={i} dir="auto">
               {e}
@@ -995,8 +1006,8 @@ function DietaryPanel({
         </ul>
       : <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-500">
           {status === "unclear" ?
-            "The ingredient list wasn't readable, so this can't be determined."
-          : "No specific evidence noted."}
+            t.results.dietary.unclear
+          : t.results.dietary.noEvidence}
         </p>
       }
     </div>
@@ -1016,7 +1027,8 @@ function LevelMeter({
   threshold: { low: number; high: number };
   delay: number;
 }) {
-  const tone = levelUi[level ?? "unknown"].tone;
+  const { t, fmt } = useI18n();
+  const tone = levelTone[level ?? "unknown"];
   const pct =
     value == null ? 0 : Math.min(100, (value / (threshold.high * 1.4)) * 100);
 
@@ -1024,7 +1036,7 @@ function LevelMeter({
     <div
       className="animate-fade-up rounded-2xl bg-zinc-50 p-3.5 dark:bg-zinc-900/60"
       style={{ animationDelay: `${delay * 80}ms` }}
-      title={`Low ≤ ${threshold.low} g · High > ${threshold.high} g (UK front-of-pack guidance)`}
+      title={format(t.results.nutrition.thresholds, { low: fmt(threshold.low), high: fmt(threshold.high) })}
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -1041,15 +1053,15 @@ function LevelMeter({
             }[tone],
           )}
         >
-          {level ?? "n/a"}
+          {level ? t.results.level[level] : t.results.nutrition.notAvailable}
         </span>
       </div>
       <p className="mt-1 text-lg font-semibold text-zinc-900 tabular-nums dark:text-zinc-100">
-        {value !== null ? `${fmt(value)} g` : "—"}
+        {value !== null ? ltr(`${fmt(value)} g`) : "—"}
       </p>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
         <div
-          className={cn("animate-grow h-full origin-left rounded-full", dotClasses[tone])}
+          className={cn("animate-grow h-full origin-left rounded-full rtl:origin-right", dotClasses[tone])}
           style={{ width: `${pct}%`, animationDelay: `${200 + delay * 80}ms` }}
         />
       </div>
@@ -1077,7 +1089,7 @@ function InfoCard({
       <dl className="space-y-2.5 text-sm">
         {filled.map(([label, value]) => (
           <div key={label} className="flex gap-3">
-            <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">
+            <dt className="w-28 shrink-0 text-zinc-500 dark:text-zinc-400">
               {label}
             </dt>
             <dd
@@ -1094,6 +1106,7 @@ function InfoCard({
 }
 
 function RawText({ id, text, flash }: { id: string; text: string; flash?: number }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const long = text.length > 280 || text.split("\n").length > 4;
@@ -1112,7 +1125,7 @@ function RawText({ id, text, flash }: { id: string; text: string; flash?: number
     <Card
       id={id}
       flash={flash}
-      title="Raw label text"
+      title={t.results.raw.title}
       icon="📝"
       delay={9}
       aside={
@@ -1120,7 +1133,7 @@ function RawText({ id, text, flash }: { id: string; text: string; flash?: number
           onClick={copy}
           className="rounded-lg px-2.5 py-1 font-medium text-zinc-600 transition hover:bg-zinc-100 active:scale-95 dark:text-zinc-400 dark:hover:bg-zinc-900"
         >
-          {copied ? "✓ Copied" : "Copy"}
+          {copied ? t.results.raw.copied : t.results.raw.copy}
         </button>
       }
     >
@@ -1143,7 +1156,7 @@ function RawText({ id, text, flash }: { id: string; text: string; flash?: number
           onClick={() => setOpen((o) => !o)}
           className="mt-3 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
         >
-          {open ? "Show less" : "Show full text"}
+          {open ? t.results.raw.showLess : t.results.raw.showAll}
         </button>
       )}
     </Card>

@@ -10,17 +10,24 @@ export interface PreparedImage {
   previewUrl: string;
 }
 
-export class ImagePrepError extends Error {}
+export type ImagePrepErrorCode = "notImage" | "inputTooLarge" | "heic" | "damaged";
+
+/** carries a code, not a sentence: the page shows it in the reader's language */
+export class ImagePrepError extends Error {
+  constructor(public code: ImagePrepErrorCode) {
+    super(code);
+  }
+}
 
 const looksLikeImage = (file: File) =>
   file.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|heic|heif|avif|bmp|tiff?)$/i.test(file.name);
 
 export async function prepareImage(file: File): Promise<PreparedImage> {
   if (!looksLikeImage(file)) {
-    throw new ImagePrepError("That file isn't an image. Please choose a photo of a food label.");
+    throw new ImagePrepError("notImage");
   }
   if (file.size > MAX_INPUT_BYTES) {
-    throw new ImagePrepError("That photo is too large (over 40 MB). Please choose a smaller one.");
+    throw new ImagePrepError("inputTooLarge");
   }
 
   try {
@@ -42,10 +49,6 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
     return { blob, previewUrl: URL.createObjectURL(blob) };
   } catch {
     // every browser decodes JPEG/PNG/WebP/GIF, so a failure means a damaged file or an unsupported format
-    throw new ImagePrepError(
-      /\.(heic|heif)$/i.test(file.name) || /hei[cf]/i.test(file.type)
-        ? "This browser can't open HEIC photos. Please export it as JPEG (or take a screenshot) and try again."
-        : "This image couldn't be opened. It may be damaged. Please try another photo.",
-    );
+    throw new ImagePrepError(/\.(heic|heif)$/i.test(file.name) || /hei[cf]/i.test(file.type) ? "heic" : "damaged");
   }
 }

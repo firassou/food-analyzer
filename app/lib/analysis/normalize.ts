@@ -20,9 +20,10 @@ import {
   mentionsGlutenFree,
   mentionsLactoseFree,
 } from "./knowledge";
+import type { Locale } from "../i18n/locales";
+import { analysisMessages, localCategory, type AnalysisMessages } from "./messages";
 import {
   ALLERGEN_IDS,
-  ALLERGEN_NAMES,
   NUTRIENT_KEYS,
   type Additive,
   type Allergen,
@@ -297,7 +298,7 @@ function energy(o: Obj): { kj: number | null; kcal: number | null } {
   return { kj, kcal };
 }
 
-function nutrients(v: unknown, per100: boolean, warn: (w: string) => void): Nutrients | null {
+function nutrients(v: unknown, per100: boolean, warn: (w: string) => void, m: AnalysisMessages): Nutrients | null {
   if (!isObj(v)) return null;
   const out = Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, null])) as Nutrients;
   ({ kj: out.energy_kj, kcal: out.energy_kcal } = energy(v));
@@ -331,7 +332,7 @@ function nutrients(v: unknown, per100: boolean, warn: (w: string) => void): Nutr
   cap("sodium_mg", limits.sodium_mg);
   cap("energy_kcal", limits.energy_kcal);
   cap("energy_kj", limits.energy_kj);
-  if (dropped) warn("Some nutrition values were unreadable or impossible and were left out.");
+  if (dropped) warn(m.warnings.nutritionDropped);
 
   // salt ⇄ sodium (salt = sodium × 2.5)
   if (out.salt_g === null && out.sodium_mg !== null) out.salt_g = (out.sodium_mg / 1000) * 2.5;
@@ -353,17 +354,15 @@ function energyMismatch(n: Nutrients): boolean {
   return Math.abs(est - energy) > Math.max(40, energy * 0.35);
 }
 
-function consistencyWarnings(n: Nutrients, basis: Basis): string[] {
+function consistencyWarnings(n: Nutrients, basis: Basis, m: AnalysisMessages): string[] {
   const issues: string[] = [];
   const { fat_g: fat, saturated_fat_g: sat, carbohydrates_g: carbs, sugars_g: sugars, protein_g: protein, fiber_g: fiber } = n;
-  if (sugars !== null && carbs !== null && sugars > carbs + 0.5) issues.push("sugars exceed carbohydrates");
-  if (sat !== null && fat !== null && sat > fat + 0.5) issues.push("saturates exceed total fat");
+  if (sugars !== null && carbs !== null && sugars > carbs + 0.5) issues.push(m.issues.sugarsOverCarbs);
+  if (sat !== null && fat !== null && sat > fat + 0.5) issues.push(m.issues.saturatesOverFat);
   if (basis === "100g" && (fat ?? 0) + (carbs ?? 0) + (protein ?? 0) + (fiber ?? 0) > 105)
-    issues.push("macronutrients add up to more than 100 g");
-  if (energyMismatch(n)) issues.push("energy doesn't match the macronutrients");
-  return issues.length
-    ? [`Some nutrition values look inconsistent (${issues.join("; ")}). Double-check them on the pack.`]
-    : [];
+    issues.push(m.issues.macrosOver100);
+  if (energyMismatch(n)) issues.push(m.issues.energyMismatch);
+  return issues.length ? [m.warnings.nutritionInconsistent(issues)] : [];
 }
 
 /** per-serving values scaled to 100 g/ml */
@@ -384,7 +383,7 @@ function servingAmountOf(servingSize: string | null): number | null {
   return n !== null && n > 0 ? n : null;
 }
 
-function buildNutrition(raw: unknown, productText: string, warn: (w: string) => void): Nutrition | null {
+function buildNutrition(raw: unknown, productText: string, warn: (w: string) => void, m: AnalysisMessages): Nutrition | null {
   if (!isObj(raw)) return null;
   const basisRaw = fold(str(pick(raw, "basis", "per", "unit")) ?? "");
   const per100Raw = pick(raw, "per_100", "per_100g", "per_100ml", "per_100g_or_ml", "per100", "per_100_g", "per_100_ml");
@@ -399,8 +398,8 @@ function buildNutrition(raw: unknown, productText: string, warn: (w: string) => 
   // a flat nutrition object (no per_100 wrapper) is treated as per 100
   const looksFlat =
     per100Raw === undefined && pick(raw, "fat", "fat_g", "sugars", "sugars_g", "energy", "energy_kcal") !== undefined;
-  let per100 = nutrients(looksFlat ? raw : per100Raw, true, warn);
-  const perServing = nutrients(pick(raw, "per_serving", "per_portion", "serving", "portion"), false, warn);
+  let per100 = nutrients(looksFlat ? raw : per100Raw, true, warn, m);
+  const perServing = nutrients(pick(raw, "per_serving", "per_portion", "serving", "portion"), false, warn, m);
   const servingSize = str(pick(raw, "serving_size", "portion_size"), 60)?.replace(/^per\s+/i, "") ?? null;
   const servingAmount = servingAmountOf(servingSize);
   const printed = bool(pick(raw, "per_100_printed"));
@@ -421,7 +420,7 @@ function buildNutrition(raw: unknown, productText: string, warn: (w: string) => 
   if (!per100 && !perServing) return null;
 
   const t = LEVEL_THRESHOLDS[basis];
-  if (per100) consistencyWarnings(per100, basis).forEach(warn);
+  if (per100) consistencyWarnings(per100, basis, m).forEach(warn);
   return {
     basis,
     serving_size: servingSize,
@@ -486,11 +485,17 @@ function additiveKey(code: string | null, name: string): string {
   return t;
 }
 
+/** a model highlight about a fat/sugar/salt level, written in French or Arabic (those levels are computed) */
+const LOCAL_LEVEL_CLAIM =
+  /(riche|pauvre|faible|eleve|elevee|forte|teneur|beaucoup|peu)\b[^.]{0,30}(sucres?|gras|graisses?|sel|sodium|satur)|(sucres?|gras|graisses?|sel|sodium|satures)\b[^.]{0,20}(eleve|faible|modere)|(مرتفع|عالي|عالية|منخفض|قليل|غني|نسبة)[^.]{0,30}(سكر|دهون|ملح|صوديوم)/u;
+
 // ------------------------------------------------------------------ main
 
 export interface NormalizeOptions {
   /** output was truncated and repaired by parseModelJson */
   repaired?: boolean;
+  /** language of the sentences normalize writes itself (default "en") */
+  locale?: Locale;
 }
 
 export function normalize(input: unknown, opts: NormalizeOptions = {}): LabelAnalysis {
@@ -498,11 +503,13 @@ export function normalize(input: unknown, opts: NormalizeOptions = {}): LabelAna
     return normalizeUnsafe(input, opts);
   } catch {
     // Last line of defence for invariant 1: a bug in a rule must not become a 500.
-    return normalizeUnsafe({}, { repaired: opts?.repaired });
+    return normalizeUnsafe({}, { repaired: opts?.repaired, locale: opts?.locale });
   }
 }
 
 function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis {
+  const m = analysisMessages(opts.locale);
+  const category = (code: string) => localCategory(m, additiveCategory(code));
   const warnings: string[] = [];
   const warn = (w: string) => {
     if (!warnings.includes(w)) warnings.push(w);
@@ -573,7 +580,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   let ingredientItems = arr(get("ingredients", "ingredient_list", "ingredients_list"));
   if (ingredientItems.length === 0 && rawText) {
     ingredientItems = ingredientsFromText(rawText);
-    if (ingredientItems.length) warn("The ingredient list was reconstructed from the label text.");
+    if (ingredientItems.length) warn(m.warnings.reconstructed);
   }
   if (ingredientItems.length > 0 && ingredientItems.every((x) => isObj(x) && num(pick(x, "order", "position")) !== null)) {
     ingredientItems = [...ingredientItems].sort(
@@ -590,6 +597,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     seenIngredients.add(fold(name));
     let nameEn = isObj(item) ? str(pick(item, "name_en", "english", "translation", "en"), 160) : null;
     if (nameEn && fold(nameEn) === fold(name)) nameEn = null;
+    let nameLocal = isObj(item) ? str(pick(item, "name_local", "local_name", "name_translated"), 160) : null;
+    if (nameLocal && fold(nameLocal) === fold(name)) nameLocal = null;
     const both = `${name} ${nameEn ?? ""}`;
     // models sometimes glue the "may contain" sentence onto the last ingredient:
     // its allergens are traces, so detect ingredient allergens without it
@@ -637,6 +646,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     const ingredient: Ingredient = {
       name,
       name_en: nameEn,
+      name_local: nameLocal,
       percent: pct !== null && pct > 0 && pct <= 100 ? pct : null,
       e_number: eNumber,
       allergens: ALLERGEN_IDS.filter((a) => allergens.has(a)),
@@ -647,12 +657,12 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     glutenSignals.set(ingredient, signal);
     if (ingredients.length >= MAX_INGREDIENTS) break;
   }
-  const label = (i: Ingredient) => shortName(i.name_en ?? i.name);
+  const label = (i: Ingredient) => shortName(i.name_local ?? i.name_en ?? i.name);
 
   // ---- 4. allergen list
   const allergenMap = new Map<AllergenId, Allergen>();
   const addAllergen = (id: AllergenId, p: Allergen["presence"], source: string | null, isDeclared = false) => {
-    const cur = allergenMap.get(id) ?? { id, name: ALLERGEN_NAMES[id], presence: p, declared: false, sources: [] };
+    const cur = allergenMap.get(id) ?? { id, name: m.allergenNames[id], presence: p, declared: false, sources: [] };
     if (p === "contains") cur.presence = "contains";
     cur.declared ||= isDeclared;
     if (source && !cur.sources.some((s) => fold(s) === fold(source)) && cur.sources.length < MAX_SOURCES)
@@ -671,7 +681,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     addAllergen(
       id,
       "may_contain",
-      statement ? `“${statement.replace(/^./, (c) => c.toUpperCase()).slice(0, 80)}”` : "“May contain” statement",
+      statement ? `“${statement.replace(/^./, (c) => c.toUpperCase()).slice(0, 80)}”` : m.sources.mayContain,
     );
   }
   const allergenPresence = (id: AllergenId) => allergenMap.get(id)?.presence;
@@ -681,6 +691,13 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   let glutenStatus = presence(pick(glutenRaw, "status") ?? glutenRaw) ?? "unclear";
   let glutenConfidence = confidence(pick(glutenRaw, "confidence"));
   const glutenEvidence = strList(pick(glutenRaw, "evidence"), 6, 160);
+  // evidence written by the rules below, as opposed to quotes from the model
+  const ownEvidence = new Set<string>();
+  const ingredientEvidence = (i: Ingredient) => {
+    const ev = m.evidence.ingredient(label(i));
+    ownEvidence.add(ev);
+    return ev;
+  };
   const strongGluten = ingredients.filter((i) => i.gluten && glutenSignals.get(i) !== "oats");
   const oatsOnly = ingredients.filter((i) => glutenSignals.get(i) === "oats");
   const glutenFreeClaim = mentionsGlutenFree(packText);
@@ -696,12 +713,12 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     // the model's evidence argued for a different status
     glutenEvidence.length = 0;
     for (const i of [...strongGluten, ...oatsOnly].slice(0, 3)) {
-      const ev = `Ingredient: ${label(i)}`;
+      const ev = ingredientEvidence(i);
       if (!glutenEvidence.includes(ev)) glutenEvidence.push(ev);
     }
     if (!glutenEvidence.length)
       glutenEvidence.push(
-        glutenDeclared ? "Gluten declared as an allergen" : "“May contain” gluten statement",
+        glutenDeclared ? m.evidence.glutenDeclared : m.evidence.glutenMayContain,
       );
   }
   if (glutenStatus === "no_indication" && ingredients.length === 0 && !glutenFreeClaim) {
@@ -709,8 +726,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     glutenConfidence = "low";
   }
   if (glutenStatus === "contains" && !allergenMap.has("gluten")) addAllergen("gluten", "contains", glutenEvidence[0] ?? null);
-  if (glutenFreeClaim && !glutenEvidence.some((e) => !e.startsWith("Ingredient:") && /gluten[\s-]?free/i.test(e)))
-    glutenEvidence.push("Labelled gluten-free");
+  if (glutenFreeClaim && !glutenEvidence.some((e) => !ownEvidence.has(e) && mentionsGlutenFree(e)))
+    glutenEvidence.push(m.evidence.glutenFree);
 
   // ---- 6. lactose (same approach; butter/ghee alone is only "likely")
   const lactoseRaw = get("lactose", "dairy");
@@ -730,16 +747,16 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       lactoseStatus = signal;
       lactoseEvidence.length = 0;
       for (const i of dairyIngredients.slice(0, 3)) {
-        const ev = `Ingredient: ${label(i)}`;
+        const ev = ingredientEvidence(i);
         if (!lactoseEvidence.includes(ev)) lactoseEvidence.push(ev);
       }
       if (!dairyIngredients.length)
         lactoseEvidence.push(
-          allergenPresence("milk") === "contains" ? "Milk declared as an allergen" : "“May contain” milk statement",
+          allergenPresence("milk") === "contains" ? m.evidence.milkDeclared : m.evidence.milkMayContain,
         );
     }
-  } else if (!lactoseEvidence.some((e) => !e.startsWith("Ingredient:") && /lactose[\s-]?free/i.test(e))) {
-    lactoseEvidence.push("Labelled lactose-free");
+  } else if (!lactoseEvidence.some((e) => !ownEvidence.has(e) && mentionsLactoseFree(e))) {
+    lactoseEvidence.push(m.evidence.lactoseFree);
   }
   if (lactoseStatus === "no_indication" && ingredients.length === 0 && !lactoseFreeClaim) lactoseStatus = "unclear";
 
@@ -772,14 +789,16 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     addAdditive({
       code,
       name: finalName,
-      category: (isObj(item) ? str(pick(item, "category", "class", "type"), 60) : null) ?? (code ? additiveCategory(code) : null),
+      name_local: isObj(item) ? str(pick(item, "name_local", "local_name", "name_translated"), 80) : null,
+      category:
+        localCategory(m, isObj(item) ? str(pick(item, "category", "class", "type"), 60) : null) ?? (code ? category(code) : null),
       purpose: isObj(item) ? str(pick(item, "purpose", "function", "role"), 200) : null,
       explanation: isObj(item) ? str(pick(item, "explanation", "description", "info", "note"), 400) : null,
     });
   }
   // what the model missed: printed codes, then well-known additive names in the ingredients
   for (const code of printedCodes) {
-    addAdditive({ code, name: additiveName(code) ?? code, category: additiveCategory(code), purpose: null, explanation: null });
+    addAdditive({ code, name: additiveName(code) ?? code, name_local: null, category: category(code), purpose: null, explanation: null });
   }
   for (const ing of ingredients) {
     for (const part of ingredientParts(ing.name_en ?? ing.name)) {
@@ -793,7 +812,14 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       addAdditive({
         code,
         name: code ? (additiveName(code) ?? part) : part.charAt(0).toUpperCase() + part.slice(1),
-        category: code ? additiveCategory(code) : /starch|amidon/.test(fp) ? "Modified starch" : /caramel/.test(fp) ? "Colour" : null,
+        name_local: null,
+        category: code
+          ? category(code)
+          : /starch|amidon/.test(fp)
+            ? (m.categories["Modified starch"] ?? "Modified starch")
+            : /caramel/.test(fp)
+              ? (m.categories.Colour ?? "Colour")
+              : null,
         purpose: null,
         explanation: null,
       });
@@ -805,7 +831,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   }
 
   // ---- 8. nutrition
-  const nutrition = buildNutrition(get("nutrition", "nutrition_facts", "nutritional_information"), productText, warn);
+  const nutrition = buildNutrition(get("nutrition", "nutrition_facts", "nutritional_information"), productText, warn, m);
 
   // ---- 9. sugar (computed from per-100 sugars; the model's opinion is only a fallback)
   const basis: Basis = nutrition?.basis ?? (isDrink(productText) ? "100ml" : "100g");
@@ -817,42 +843,35 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   if (sugarPer100 !== null) {
     const t = LEVEL_THRESHOLDS[basis].sugars;
     sugarLevelValue = levelOf(sugarPer100, t) ?? "unknown";
-    const lead = `${sugarPer100} g of sugars per 100 ${unit}`;
-    sugarExplanation =
-      sugarLevelValue === "high"
-        ? `${lead}, above the ${t.high} g “high” threshold used on UK front-of-pack labels.`
-        : sugarLevelValue === "low"
-          ? `${lead}, at or below the ${t.low} g “low” threshold used on UK front-of-pack labels.`
-          : `${lead}, between the ${t.low} g “low” and ${t.high} g “high” thresholds used on UK front-of-pack labels.`;
+    sugarExplanation = m.sugar[sugarLevelValue === "unknown" ? "medium" : sugarLevelValue](sugarPer100, unit, t);
   } else {
     sugarExplanation =
       str(pick(oldSugar, "explanation"), 300) ??
-      (ingredients.length || nutrition ? "No sugar value per 100 g/ml is printed on the visible label." : null);
+      (ingredients.length || nutrition ? m.sugar.notPrinted : null);
   }
 
   // ---- 10. highlights (computed levels first; model claims about levels are replaced)
   const highlights: LabelAnalysis["highlights"] = [];
   if (nutrition?.per_100) {
     const p = nutrition.per_100;
-    const levelNames: Record<LevelKey, [string, number | null]> = {
-      fat: ["fat", p.fat_g],
-      saturated_fat: ["saturated fat", p.saturated_fat_g],
-      sugars: ["sugars", p.sugars_g],
-      salt: ["salt", p.salt_g],
+    const levelValues: Record<LevelKey, number | null> = {
+      fat: p.fat_g,
+      saturated_fat: p.saturated_fat_g,
+      sugars: p.sugars_g,
+      salt: p.salt_g,
     };
     for (const [k, lvl] of Object.entries(nutrition.levels) as [LevelKey, Level | null][]) {
-      const [nameOf, value] = levelNames[k];
-      if (lvl === "high") highlights.push({ tone: "caution", text: `High in ${nameOf} (${value} g per 100 ${unit})` });
+      if (lvl === "high") highlights.push({ tone: "caution", text: m.highlights.high(k, levelValues[k], unit) });
     }
     if (nutrition.levels.sugars === "low")
-      highlights.push({ tone: "positive", text: `Low in sugars (${p.sugars_g} g per 100 ${unit})` });
+      highlights.push({ tone: "positive", text: m.highlights.lowSugars(p.sugars_g, unit) });
   }
   const levelClaim =
     /(high|low|rich|medium|moderate)\b[^.]{0,25}\b(sugars?|fat|salt|sodium|saturate)|(sugars?|fat|salt|sodium|saturates?)\b[^.]{0,15}\b(is |are )?(high|low|moderate)\b/;
   for (const h of arr(get("highlights", "key_points"))) {
     if (highlights.length >= MAX_HIGHLIGHTS) break;
     const t = str(isObj(h) ? pick(h, "text", "point", "message") : h, 140);
-    if (!t || (nutrition && levelClaim.test(fold(t)))) continue;
+    if (!t || (nutrition && (levelClaim.test(fold(t)) || LOCAL_LEVEL_CLAIM.test(fold(t))))) continue;
     if (!highlights.some((x) => fold(x.text) === fold(t)))
       highlights.push({ tone: isObj(h) ? tone(pick(h, "tone", "type", "sentiment")) : "neutral", text: t });
   }
@@ -863,19 +882,19 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   const quality = imageQuality(get("image_quality", "quality", "readability")) ?? (substantive ? "fair" : "poor");
 
   if (!labelDetected) {
-    warn("This photo doesn't look like a food label. For best results, photograph the ingredient list or nutrition table up close.");
+    warn(m.warnings.notALabel);
   } else {
     if (quality === "poor")
-      warn("The label was hard to read, so some details may be missing or inaccurate. A sharper, closer photo will help.");
+      warn(m.warnings.poorQuality);
     else if (quality === "fair" && (nutrition || ingredients.length))
-      warn("Parts of the label were hard to read. Double-check key numbers against the pack.");
-    if (ingredients.length === 0) warn("No ingredient list was readable, so allergen, gluten and additive checks are incomplete.");
+      warn(m.warnings.fairQuality);
+    if (ingredients.length === 0) warn(m.warnings.noIngredients);
   }
-  if (opts.repaired) warn("The analysis was cut short; some sections may be incomplete.");
+  if (opts.repaired) warn(m.warnings.cutShort);
 
   // every allergen needs at least one source, including ones added by the gluten rule
   for (const a of allergenMap.values())
-    if (a.sources.length === 0) a.sources.push(a.declared ? "Declared on the label" : "Listed on the label");
+    if (a.sources.length === 0) a.sources.push(a.declared ? m.sources.declared : m.sources.listed);
 
   // ---- 12. dates, storage, manufacturer, origin
   const dates = get("dates");

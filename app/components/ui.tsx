@@ -73,7 +73,7 @@ export function Card({
             {title}
           </h3>
           {aside && (
-            <div className="ml-auto text-right text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="ms-auto text-end text-xs text-zinc-500 dark:text-zinc-400">
               {aside}
             </div>
           )}

@@ -3,6 +3,7 @@ import { ImageError, MAX_UPLOAD_BYTES, prepareImage, TOO_LARGE_MESSAGE } from "@
 import { getTargets } from "@/app/lib/server/models";
 import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 
 // the fallback chain can take a while on slow providers; must stay above DEADLINE_MS in analyze.ts
 export const maxDuration = 120;
@@ -24,9 +25,13 @@ export async function POST(req: Request) {
   if (declaredLength > MAX_UPLOAD_BYTES + 64 * 1024) return fail(TOO_LARGE_MESSAGE, "too_large", 413);
 
   let file: FormDataEntryValue | null;
+  // language of the analysis text; anything unsupported falls back to English
+  let locale: Locale = DEFAULT_LOCALE;
   try {
     const form = await req.formData();
     file = form.get("image") ?? form.get("file");
+    const lang = form.get("lang");
+    if (isLocale(lang)) locale = lang;
   } catch {
     return fail('Send the photo as multipart/form-data in an "image" field.', "bad_request", 400);
   }
@@ -35,7 +40,7 @@ export async function POST(req: Request) {
 
   try {
     const image = await prepareImage(new Uint8Array(await file.arrayBuffer()));
-    const { result, meta } = await analyzeLabel(image.dataUrl, req.signal);
+    const { result, meta } = await analyzeLabel(image.dataUrl, req.signal, locale);
     return Response.json({ ok: true, result, meta } satisfies AnalyzeResponse);
   } catch (error) {
     if (error instanceof ImageError) {
