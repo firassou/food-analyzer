@@ -631,14 +631,15 @@ export function mentionsCaffeine(text: string): boolean {
 // ---------------------------------------------------------------- gluten likelihood
 
 /**
- * How likely the product is to contain gluten, from 0 to 1: the verdict sets the range
- * and the confidence moves it within that range. A confident "no indication" is an empty
- * bar and a confident "contains" a full one. Null when nothing could be read.
+ * How likely the product is to contain gluten, from 0 to 1. "No indication" is always an
+ * empty bar: a number next to it would contradict the verdict, so how sure that reading is
+ * stays in the confidence line. For "likely" and "contains" the verdict sets the range and
+ * the confidence moves it within that range. Null when nothing could be read.
  */
 export function glutenLikelihood(status: Presence, confidence: Confidence): number | null {
   const sure = { low: 0, medium: 1, high: 2 }[confidence];
   if (status === "contains") return 0.8 + sure * 0.1;
   if (status === "likely_contains") return 0.5 + sure * 0.1;
-  if (status === "no_indication") return 0.2 - sure * 0.1;
+  if (status === "no_indication") return 0;
   return null;
 }

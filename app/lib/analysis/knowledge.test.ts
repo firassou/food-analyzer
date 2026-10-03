@@ -353,8 +353,10 @@ describe("drink helpers", () => {
 describe("glutenLikelihood", () => {
   it("fills the bar with how likely gluten is, not with how sure the reading is", () => {
     expect(glutenLikelihood("contains", "high")).toBe(1);
-    expect(glutenLikelihood("no_indication", "high")).toBe(0); // a confident "none" is an empty bar
-    expect(glutenLikelihood("no_indication", "low")).toBeCloseTo(0.2);
+    // "no indication" is an empty bar whatever the confidence: 10 % next to it reads as a contradiction
+    expect(glutenLikelihood("no_indication", "high")).toBe(0);
+    expect(glutenLikelihood("no_indication", "medium")).toBe(0);
+    expect(glutenLikelihood("no_indication", "low")).toBe(0);
     expect(glutenLikelihood("likely_contains", "medium")).toBeCloseTo(0.6);
     expect(glutenLikelihood("unclear", "high")).toBeNull();
   });
