@@ -4,7 +4,7 @@
 // Shared by client and server: keep it free of runtime dependencies.
 
 import type { Locale } from "../i18n/locales";
-import type { AllergenId, LevelKey, MineralKey, WaterFactId } from "./types";
+import type { AllergenId, ExcipientId, LevelKey, MineralKey, WaterFactId } from "./types";
 import { ALLERGEN_NAMES } from "./types";
 
 /** values a water remark may quote */
@@ -42,6 +42,13 @@ export interface AnalysisMessages {
     databaseScan: (product: string) => string;
     /** calories and nutrients guessed for a dish */
     estimatedNutrition: string;
+    /** a medicine's uses, dose and cautions come from the model's general knowledge */
+    medicineGeneral: string;
+    medicineNoActive: string;
+    medicineNoExcipients: string;
+    /** the pharmacist's pen marks are a reading, not the prescription itself */
+    medicineMarks: string;
+    medicineMarksUnclear: string;
   };
   issues: { sugarsOverCarbs: string; saturatesOverFat: string; macrosOver100: string; energyMismatch: string };
   evidence: {
@@ -62,6 +69,12 @@ export interface AnalysisMessages {
   waterTips: Record<WaterFactId, (v: WaterValues) => string>;
   /** where each tip comes from, shown under it */
   waterSources: Record<WaterFactId, string>;
+  /**
+   * What a medicine's excipient means for the patient. The wording follows the EMA annex
+   * on excipients (see excipients.ts); don't add or soften a statement from memory.
+   */
+  excipients: Record<ExcipientId, string>;
+  excipientSources: { ema: string; pack: string };
   /** keyed by English class names: those of knowledge.ts `additiveCategory`, plus the ones models write anyway */
   categories: Record<string, string>;
   sugar: {
@@ -189,6 +202,16 @@ const en: AnalysisMessages = {
       `This comes from the Open Food Facts entry “${product}”, a community database, not from a photo of your pack: check it against the label.`,
     estimatedNutrition:
       "The calories and nutrients are a rough estimate for a typical recipe and portion of this dish. The real figures can differ a lot.",
+    medicineGeneral:
+      "The uses, usual dose and cautions below are general information about the active substance, written by an AI. They can be wrong and may not apply to you. Your dose is the one your doctor or pharmacist gave you: follow it, and read the leaflet.",
+    medicineNoActive:
+      "The active substance couldn't be read, so no general information is shown. Photograph the side of the box that names the substance and its strength.",
+    medicineNoExcipients:
+      "The excipients aren't listed on this photo, so gluten and other sensitive ingredients can't be checked. Photograph the composition on the box or on the leaflet.",
+    medicineMarks:
+      "The pen marks on the box were read by an AI. If this reading doesn't match what your doctor or pharmacist told you, follow what they told you and ask them to confirm.",
+    medicineMarksUnclear:
+      "The pen marks on the box were hard to read: don't rely on this reading, ask your pharmacist.",
   },
   issues: {
     sugarsOverCarbs: "sugars exceed carbohydrates",
@@ -268,6 +291,43 @@ const en: AnalysisMessages = {
     nitrate_high: () => "Too much nitrate. Never use it for baby bottles: in bottle-fed infants nitrate can reduce the blood's ability to carry oxygen.",
   },
   waterSources: SOURCES_EN,
+  excipients: {
+    wheat_starch:
+      "Wheat starch: this medicine contains only very low levels of gluten and is regarded as gluten-free, so it is very unlikely to cause problems if you have coeliac disease. If you have a wheat allergy (which is different from coeliac disease), you should not take it.",
+    starch_unspecified:
+      "Starch, with no source named. It is usually maize or potato starch, which contain no gluten, but the pack doesn't say. If you have coeliac disease or a wheat allergy, ask the pharmacist which starch it is.",
+    lactose:
+      "Contains lactose. If your doctor has told you that you have an intolerance to some sugars, contact them before taking this medicine.",
+    sugars:
+      "Contains sugar (sucrose or glucose). If your doctor has told you that you have an intolerance to some sugars, contact them before taking it. In syrups the amount can matter if you have diabetes.",
+    fructose_sorbitol:
+      "Contains sorbitol or fructose. If you (or your child) have hereditary fructose intolerance or an intolerance to some sugars, talk to your doctor before taking it.",
+    aspartame:
+      "Contains aspartame, a source of phenylalanine. It may be harmful if you have phenylketonuria (PKU).",
+    peanut_oil:
+      "Contains arachis (peanut) oil. Do not use it if you are allergic to peanut or soya.",
+    soya:
+      "Contains soya. Do not use it if you are allergic to peanut or soya.",
+    sesame_oil:
+      "Contains sesame oil, which may rarely cause severe allergic reactions.",
+    sulphites:
+      "Contains sulphites, which may rarely cause severe allergic reactions and difficulty breathing.",
+    azo_colours:
+      "Contains an azo colouring agent, which may cause allergic reactions.",
+    parabens:
+      "Contains parabens (parahydroxybenzoates), which may cause allergic reactions, possibly delayed.",
+    benzoates:
+      "Contains benzoic acid or a benzoate. It may increase jaundice (yellowing of the skin and eyes) in newborn babies up to 4 weeks old.",
+    benzyl_alcohol:
+      "Contains benzyl alcohol. It must not be given to newborn babies, and shouldn't be used for more than a week in children under 3 unless a doctor advises it. Ask your doctor or pharmacist if you are pregnant or breast-feeding, or have liver or kidney disease.",
+    alcohol:
+      "Contains alcohol (ethanol). The amount is usually small, but mention it to your doctor or pharmacist for a child, during pregnancy or breast-feeding, or if you have liver disease, epilepsy or alcohol dependence.",
+    propylene_glycol:
+      "Contains propylene glycol. For a baby under 4 weeks, a child under 5, during pregnancy or breast-feeding, or with liver or kidney disease, check with a doctor or pharmacist first.",
+    effervescent_sodium:
+      "Effervescent tablets usually contain a lot of sodium. Take it into account if you are on a low-salt diet or have high blood pressure, heart or kidney disease.",
+  },
+  excipientSources: { ema: "EMA, excipients in the labelling and package leaflet", pack: "The composition as printed on the pack" },
   categories: {},
   sugar: {
     high: (v, unit, t) =>
@@ -334,6 +394,16 @@ const fr: AnalysisMessages = {
       `Ces informations viennent de la fiche Open Food Facts « ${product} », une base communautaire, et non d'une photo de votre produit : comparez-les avec l'étiquette.`,
     estimatedNutrition:
       "Les calories et les nutriments sont une estimation approximative pour une recette et une portion typiques de ce plat. Les valeurs réelles peuvent être très différentes.",
+    medicineGeneral:
+      "Les indications, la dose habituelle et les précautions ci-dessous sont des informations générales sur la substance active, rédigées par une IA. Elles peuvent être fausses et ne pas s'appliquer à vous. Votre dose est celle que votre médecin ou votre pharmacien vous a donnée : suivez-la, et lisez la notice.",
+    medicineNoActive:
+      "La substance active n'a pas pu être lue : aucune information générale n'est affichée. Photographiez le côté de la boîte qui indique la substance et son dosage.",
+    medicineNoExcipients:
+      "Les excipients ne figurent pas sur cette photo : le gluten et les autres ingrédients sensibles ne peuvent pas être vérifiés. Photographiez la composition sur la boîte ou sur la notice.",
+    medicineMarks:
+      "Les traits au stylo sur la boîte ont été lus par une IA. Si cette lecture ne correspond pas à ce que votre médecin ou votre pharmacien vous a dit, suivez ce qu'ils vous ont dit et demandez-leur de confirmer.",
+    medicineMarksUnclear:
+      "Les traits au stylo sur la boîte étaient difficiles à lire : ne vous fiez pas à cette lecture, demandez à votre pharmacien.",
   },
   issues: {
     sugarsOverCarbs: "les sucres dépassent les glucides",
@@ -414,6 +484,43 @@ const fr: AnalysisMessages = {
     nitrate_high: () => "Trop de nitrates. Ne l'utilisez jamais pour les biberons : chez le nourrisson, les nitrates peuvent réduire la capacité du sang à transporter l'oxygène.",
   },
   waterSources: SOURCES_FR,
+  excipients: {
+    wheat_starch:
+      "Amidon de blé : ce médicament ne contient qu'une très faible teneur en gluten et est considéré comme « sans gluten » ; il est donc très peu susceptible de poser problème en cas de maladie cœliaque. Si vous êtes allergique au blé (ce qui est différent de la maladie cœliaque), vous ne devez pas le prendre.",
+    starch_unspecified:
+      "Amidon, sans origine précisée. Il s'agit le plus souvent d'amidon de maïs ou de pomme de terre, sans gluten, mais l'emballage ne le dit pas. En cas de maladie cœliaque ou d'allergie au blé, demandez au pharmacien de quel amidon il s'agit.",
+    lactose:
+      "Contient du lactose. Si votre médecin vous a informé d'une intolérance à certains sucres, contactez-le avant de prendre ce médicament.",
+    sugars:
+      "Contient du sucre (saccharose ou glucose). Si votre médecin vous a informé d'une intolérance à certains sucres, contactez-le avant de le prendre. Dans les sirops, la quantité peut compter en cas de diabète.",
+    fructose_sorbitol:
+      "Contient du sorbitol ou du fructose. Si vous (ou votre enfant) présentez une intolérance héréditaire au fructose ou une intolérance à certains sucres, parlez-en à votre médecin avant de le prendre.",
+    aspartame:
+      "Contient de l'aspartam, source de phénylalanine. Peut être dangereux en cas de phénylcétonurie.",
+    peanut_oil:
+      "Contient de l'huile d'arachide. Ne l'utilisez pas si vous êtes allergique à l'arachide ou au soja.",
+    soya:
+      "Contient du soja. Ne l'utilisez pas si vous êtes allergique à l'arachide ou au soja.",
+    sesame_oil:
+      "Contient de l'huile de sésame, qui peut dans de rares cas provoquer des réactions allergiques sévères.",
+    sulphites:
+      "Contient des sulfites, qui peuvent dans de rares cas provoquer des réactions allergiques sévères et une gêne respiratoire.",
+    azo_colours:
+      "Contient un colorant azoïque, qui peut provoquer des réactions allergiques.",
+    parabens:
+      "Contient des parabènes (parahydroxybenzoates), qui peuvent provoquer des réactions allergiques, éventuellement retardées.",
+    benzoates:
+      "Contient de l'acide benzoïque ou un benzoate. Peut accentuer la jaunisse (jaunissement de la peau et des yeux) chez les nouveau-nés jusqu'à 4 semaines.",
+    benzyl_alcohol:
+      "Contient de l'alcool benzylique. Il ne doit pas être donné aux nouveau-nés, ni utilisé plus d'une semaine chez l'enfant de moins de 3 ans sans avis médical. Demandez conseil à votre médecin ou à votre pharmacien si vous êtes enceinte, si vous allaitez ou en cas de maladie du foie ou des reins.",
+    alcohol:
+      "Contient de l'alcool (éthanol). La quantité est en général faible, mais signalez-le à votre médecin ou à votre pharmacien pour un enfant, pendant la grossesse ou l'allaitement, ou en cas de maladie du foie, d'épilepsie ou de dépendance à l'alcool.",
+    propylene_glycol:
+      "Contient du propylène glycol. Pour un bébé de moins de 4 semaines, un enfant de moins de 5 ans, pendant la grossesse ou l'allaitement, ou en cas de maladie du foie ou des reins, demandez d'abord l'avis d'un médecin ou d'un pharmacien.",
+    effervescent_sodium:
+      "Les comprimés effervescents contiennent en général beaucoup de sodium. Tenez-en compte en cas de régime pauvre en sel, d'hypertension ou de maladie du cœur ou des reins.",
+  },
+  excipientSources: { ema: "EMA, excipients dans l'étiquetage et la notice", pack: "La composition telle qu'imprimée sur l'emballage" },
   categories: {
     Colour: "Colorant",
     Preservative: "Conservateur",
@@ -505,6 +612,16 @@ const ar: AnalysisMessages = {
       `هذه المعلومات من صفحة «${product}» في Open Food Facts، وهي قاعدة بيانات تشاركية، وليست من صورة لمنتجك: قارنها بالملصق.`,
     estimatedNutrition:
       "السعرات والعناصر الغذائية تقدير تقريبي لوصفة وحصة نموذجيتين من هذا الطبق، وقد تختلف القيم الحقيقية كثيرًا.",
+    medicineGeneral:
+      "دواعي الاستعمال والجرعة المعتادة والتحذيرات أدناه معلومات عامة عن المادة الفعّالة كتبها ذكاء اصطناعي. قد تكون خاطئة وقد لا تنطبق عليك. جرعتك هي التي حدّدها لك طبيبك أو الصيدلي: التزم بها واقرأ النشرة.",
+    medicineNoActive:
+      "تعذّرت قراءة المادة الفعّالة، لذا لا تُعرض أي معلومات عامة. صوّر جانب العلبة الذي يذكر المادة وتركيزها.",
+    medicineNoExcipients:
+      "السواغات غير مذكورة في هذه الصورة، لذا يتعذّر التحقق من الغلوتين والمكوّنات الحساسة الأخرى. صوّر التركيبة على العلبة أو في النشرة.",
+    medicineMarks:
+      "الخطوط المرسومة بالقلم على العلبة قرأها ذكاء اصطناعي. إذا لم تطابق هذه القراءة ما قاله لك طبيبك أو الصيدلي فاتبع ما قالاه واطلب منهما التأكيد.",
+    medicineMarksUnclear:
+      "الخطوط المرسومة بالقلم على العلبة كانت صعبة القراءة: لا تعتمد على هذه القراءة واسأل الصيدلي.",
   },
   issues: {
     sugarsOverCarbs: "السكريات تتجاوز الكربوهيدرات",
@@ -584,6 +701,43 @@ const ar: AnalysisMessages = {
     nitrate_high: () => "نترات أكثر من اللازم. لا تستعمله أبدًا لرضّاعات الأطفال: عند الرضّع قد تُضعف النترات قدرة الدم على حمل الأكسجين.",
   },
   waterSources: SOURCES_AR,
+  excipients: {
+    wheat_starch:
+      "نشا القمح: هذا الدواء يحتوي على كمية ضئيلة جدًّا من الغلوتين ويُعدّ «خاليًا من الغلوتين»، لذا يُستبعد جدًّا أن يسبّب مشكلة إذا كنت مصابًا بالداء البطني (السيلياك). إذا كانت لديك حساسية من القمح (وهي تختلف عن الداء البطني) فلا يجوز أن تتناوله.",
+    starch_unspecified:
+      "نشا دون ذكر مصدره. يكون غالبًا نشا الذرة أو البطاطا وهما خاليان من الغلوتين، لكن العلبة لا تذكر ذلك. إذا كنت مصابًا بالداء البطني أو بحساسية القمح فاسأل الصيدلي عن نوع النشا.",
+    lactose:
+      "يحتوي على اللاكتوز. إذا أخبرك طبيبك بأن لديك عدم تحمّل لبعض السكريات فاتصل به قبل تناول هذا الدواء.",
+    sugars:
+      "يحتوي على سكر (سكروز أو غلوكوز). إذا أخبرك طبيبك بأن لديك عدم تحمّل لبعض السكريات فاتصل به قبل تناوله. في الأشربة قد تكون الكمية مهمة إذا كنت مصابًا بالسكري.",
+    fructose_sorbitol:
+      "يحتوي على السوربيتول أو الفركتوز. إذا كان لديك (أو لدى طفلك) عدم تحمّل وراثي للفركتوز أو عدم تحمّل لبعض السكريات فتحدّث إلى طبيبك قبل تناوله.",
+    aspartame:
+      "يحتوي على الأسبارتام، وهو مصدر للفينيل ألانين. قد يكون ضارًّا إذا كنت مصابًا ببيلة الفينيل كيتون.",
+    peanut_oil:
+      "يحتوي على زيت الفول السوداني. لا تستعمله إذا كانت لديك حساسية من الفول السوداني أو الصويا.",
+    soya:
+      "يحتوي على الصويا. لا تستعمله إذا كانت لديك حساسية من الفول السوداني أو الصويا.",
+    sesame_oil:
+      "يحتوي على زيت السمسم، وقد يسبّب في حالات نادرة تفاعلات تحسسية شديدة.",
+    sulphites:
+      "يحتوي على الكبريتيت، وقد يسبّب في حالات نادرة تفاعلات تحسسية شديدة وصعوبة في التنفس.",
+    azo_colours:
+      "يحتوي على ملوّن آزوي قد يسبّب تفاعلات تحسسية.",
+    parabens:
+      "يحتوي على البارابين (باراهيدروكسي بنزوات)، وقد يسبّب تفاعلات تحسسية ربما تكون متأخرة.",
+    benzoates:
+      "يحتوي على حمض البنزويك أو أحد أملاحه. قد يزيد اليرقان (اصفرار الجلد والعينين) عند حديثي الولادة حتى عمر 4 أسابيع.",
+    benzyl_alcohol:
+      "يحتوي على الكحول البنزيلي. لا يجوز إعطاؤه لحديثي الولادة، ولا يُستعمل أكثر من أسبوع للأطفال دون 3 سنوات إلا بمشورة الطبيب. استشر طبيبك أو الصيدلي إذا كنتِ حاملًا أو مرضعًا أو كان لديك مرض في الكبد أو الكلى.",
+    alcohol:
+      "يحتوي على الكحول (الإيثانول). الكمية صغيرة في العادة، لكن أخبر طبيبك أو الصيدلي إذا كان الدواء لطفل، أو أثناء الحمل أو الرضاعة، أو إذا كان لديك مرض في الكبد أو صرع أو إدمان على الكحول.",
+    propylene_glycol:
+      "يحتوي على البروبيلين غليكول. للرضيع دون 4 أسابيع، أو الطفل دون 5 سنوات، أو أثناء الحمل أو الرضاعة، أو عند وجود مرض في الكبد أو الكلى، استشر الطبيب أو الصيدلي أولًا.",
+    effervescent_sodium:
+      "الأقراص الفوّارة تحتوي عادةً على كمية كبيرة من الصوديوم. خذ ذلك في الحسبان إذا كنت تتبع حمية قليلة الملح أو كان لديك ارتفاع في ضغط الدم أو مرض في القلب أو الكلى.",
+  },
+  excipientSources: { ema: "وكالة الأدوية الأوروبية، السواغات في الملصق والنشرة", pack: "التركيبة كما هي مطبوعة على العلبة" },
   categories: {
     Colour: "ملوّن",
     Preservative: "مادة حافظة",

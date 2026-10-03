@@ -30,6 +30,7 @@ import {
   mentionsLactoseFree,
 } from "./knowledge";
 import type { Locale } from "../i18n/locales";
+import { findExcipients } from "./excipients";
 import { analysisMessages, localCategory, type AnalysisMessages } from "./messages";
 import {
   ALLERGEN_IDS,
@@ -48,6 +49,7 @@ import {
   type LabelAnalysis,
   type Level,
   type LevelKey,
+  type Medicine,
   type MineralKey,
   type NutrientKey,
   type Nutrients,
@@ -506,8 +508,70 @@ function buildWater(raw: unknown, sparkling: boolean, m: AnalysisMessages): Wate
   return { ...base, facts: waterFacts(base).map((f) => ({ ...f, text: m.water[f.id](values), tip: m.waterTips[f.id](values), source: m.waterSources[f.id] })) };
 }
 
+/** units at one time of day, as the pharmacist marked them: 0 to 6, in halves */
+function units(v: unknown): number {
+  const n = num(v);
+  return n !== null && n >= 0 && n <= 6 ? Math.round(n * 2) / 2 : 0;
+}
+
+/**
+ * A medicine's substance, pen marks and general information. The excipient notes are
+ * computed here from the printed composition; the general fields are the model's, and
+ * are dropped unless an active substance was identified.
+ */
+function buildMedicine(raw: unknown, compositionText: string, m: AnalysisMessages): Medicine {
+  const active: Medicine["active"] = [];
+  const seen = new Set<string>();
+  for (const item of arr(pick(raw, "active", "active_ingredients", "active_substances", "substances"))) {
+    const name = str(isObj(item) ? pick(item, "name", "substance", "inn") : item, 80);
+    if (!name || seen.has(fold(name)) || active.length >= 6) continue;
+    seen.add(fold(name));
+    active.push({
+      name,
+      name_local: isObj(item) ? str(pick(item, "name_local", "local_name", "name_translated"), 80) : null,
+      strength: isObj(item) ? str(pick(item, "strength", "dose", "amount", "dosage"), 40) : null,
+    });
+  }
+
+  const marksRaw = pick(raw, "marks", "dose_marks", "pharmacist_marks", "handwritten");
+  let marks: Medicine["marks"] = null;
+  if (isObj(marksRaw)) {
+    const morning = units(pick(marksRaw, "morning", "matin", "am"));
+    const midday = units(pick(marksRaw, "midday", "noon", "afternoon", "midi", "lunch"));
+    const evening = units(pick(marksRaw, "evening", "night", "soir", "pm", "bedtime"));
+    const note = str(pick(marksRaw, "note", "text", "raw"), 120);
+    const duration = str(pick(marksRaw, "duration", "days"), 40);
+    // nothing readable is "no marks", not "take nothing"
+    if (morning + midday + evening > 0 || note) {
+      marks = { morning, midday, evening, duration, note, confidence: confidence(pick(marksRaw, "confidence", "certainty")) };
+    }
+  }
+
+  // general information only stands on an identified substance
+  const known = active.length > 0;
+  const list = (max: number, ...aliases: string[]) => (known ? strList(pick(raw, ...aliases), max, 160) : []);
+  return {
+    form: str(pick(raw, "form", "pharmaceutical_form", "dosage_form"), 60),
+    active,
+    marks,
+    uses: list(4, "uses", "indications", "used_for"),
+    typical_dose: known ? str(pick(raw, "typical_dose", "usual_dose", "dose", "dosage"), 320) : null,
+    how_to_take: known ? str(pick(raw, "how_to_take", "administration", "instructions"), 240) : null,
+    not_for: list(6, "not_for", "contraindications", "do_not_use"),
+    warnings: list(5, "warnings", "precautions", "cautions"),
+    side_effects: list(5, "side_effects", "adverse_effects", "undesirable_effects"),
+    excipients: findExcipients(compositionText).map(({ id, matched }) => ({
+      id,
+      matched,
+      note: m.excipients[id],
+      source: id === "starch_unspecified" ? m.excipientSources.pack : m.excipientSources.ema,
+    })),
+  };
+}
+
 function subjectKind(v: unknown): SubjectKind | null {
   const s = fold(str(v) ?? "");
+  if (/medic|drug|pharma|supplement|دواء/.test(s)) return "medicine";
   if (/water|eau|ماء|مياه/.test(s)) return "water";
   if (/drink|beverage|boisson|juice|مشروب/.test(s)) return "drink";
   if (/dish|meal|food|plat|prepared|طبق/.test(s)) return "dish";
@@ -951,8 +1015,13 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       ? buildWater(waterRaw, isSparkling(`${productText} ${packText}`), m)
       : null;
   const substantive = readIngredients > 0 || nutrition !== null || !!rawText || water !== null;
+  // a medicine is the model's call: nothing printed on a food label looks like one
+  const medicineRaw = get("medicine", "medication", "drug");
+  const isMedicine = modelKind === "medicine" || (modelKind === null && arr(pick(medicineRaw, "active", "active_ingredients")).length > 0);
+  if (isMedicine) water = null;
   let kind: SubjectKind;
-  if (water || (plain && (namedWater || modelKind === "water"))) kind = "water";
+  if (isMedicine) kind = "medicine";
+  else if (water || (plain && (namedWater || modelKind === "water"))) kind = "water";
   else if (modelKind === "dish" && !substantive) kind = "dish";
   else if (modelKind === "drink" || nutrition?.basis === "100ml" || isDrink(productText)) kind = "drink";
   else if (substantive || modelKind === "label") kind = "label";
@@ -985,6 +1054,16 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     }
   }
 
+  // ---- 8c. medicine: the excipients are the "ingredients"; what to know about them is computed
+  const medicine =
+    kind === "medicine"
+      ? buildMedicine(
+          medicineRaw,
+          `${ingredients.map(bothNames).join(" , ")} \n ${rawText ?? ""} \n ${productText} ${str(pick(medicineRaw, "form"), 60) ?? ""}`,
+          m,
+        )
+      : null;
+
   // ---- 9. sugar (computed from per-100 sugars; the model's opinion is only a fallback)
   const basis: Basis = nutrition?.basis ?? (kind === "water" || kind === "drink" || isDrink(productText) ? "100ml" : "100g");
   const unit = basis === "100ml" ? "ml" : "g";
@@ -1001,7 +1080,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   } else {
     sugarExplanation =
       str(pick(oldSugar, "explanation"), 300) ??
-      (readIngredients || nutrition ? m.sugar.notPrinted : null);
+      ((readIngredients || nutrition) && kind !== "medicine" ? m.sugar.notPrinted : null);
   }
 
   // ---- 10. highlights (computed levels first; model claims about levels are replaced)
@@ -1049,10 +1128,20 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   // ---- 11. detection & quality
   const labelDetected =
-    kind !== "dish" && kind !== "other" && (substantive || (bool(get("label_detected", "is_food_label", "is_label")) ?? false));
+    kind !== "dish" &&
+    kind !== "other" &&
+    (substantive || !!medicine?.active.length || (bool(get("label_detected", "is_food_label", "is_label")) ?? false));
   const quality = imageQuality(get("image_quality", "quality", "readability")) ?? (substantive ? "fair" : "poor");
 
-  if (kind === "dish") {
+  if (medicine) {
+    if (quality === "poor") warn(m.warnings.poorQuality);
+    if (medicine.marks) warn(medicine.marks.confidence === "low" ? m.warnings.medicineMarksUnclear : m.warnings.medicineMarks);
+    if (medicine.active.length === 0) warn(m.warnings.medicineNoActive);
+    else if (medicine.uses.length || medicine.typical_dose || medicine.not_for.length || medicine.warnings.length)
+      warn(m.warnings.medicineGeneral);
+    if (estimated) warn(m.warnings.estimatedProduct);
+    else if (ingredients.length === 0) warn(m.warnings.medicineNoExcipients);
+  } else if (kind === "dish") {
     if (estimated) warn(m.warnings.estimatedDish);
     if (nutrition?.estimated) warn(m.warnings.estimatedNutrition);
   } else if (!labelDetected) {
@@ -1115,6 +1204,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     nutrition,
     water,
     drink,
+    medicine,
     sugar: { level: sugarLevelValue, per_100: sugarPer100, basis, explanation: sugarExplanation },
     claims,
     certifications,

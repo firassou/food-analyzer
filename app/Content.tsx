@@ -12,6 +12,7 @@ import type {
   Ingredient,
   LabelAnalysis,
   Level,
+  Medicine,
   NutrientKey,
   Nutrients,
   Presence,
@@ -21,6 +22,9 @@ import type {
 
 type SectionId =
   | "overview"
+  | "dose"
+  | "medicine"
+  | "cautions"
   | "water"
   | "drink"
   | "allergens"
@@ -114,7 +118,8 @@ export default function Content({
 }) {
   // nothing about a food: neither a label, a product, nor an estimate
   const empty =
-    result.kind === "other" || (!result.label_detected && result.ingredients.length === 0 && !result.product.name);
+    result.kind === "other" ||
+    (!result.label_detected && result.ingredients.length === 0 && !result.product.name && !result.medicine);
   if (empty) return <NotALabel result={result} />;
   return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} />;
 }
@@ -130,7 +135,8 @@ function Results({
 }) {
   const { t, fmt, languageName } = useI18n();
   const r = t.results;
-  const { kind, product, nutrition, ingredients, allergens, additives, gluten, sugar, water, drink } = result;
+  const { kind, product, nutrition, ingredients, allergens, additives, gluten, sugar, water, drink, medicine } = result;
+  const med = t.results.medicine;
 
   // ---- derived data ----
   const additiveByCode = new Map(additives.filter((a) => a.code).map((a) => [a.code!, a]));
@@ -175,12 +181,16 @@ function Results({
 
   // what the sheet contains depends on what was photographed; the order is the reading order
   const shown: Record<Exclude<SectionId, "overview">, boolean> = {
+    dose: !!medicine && (!!medicine.marks || !!medicine.typical_dose || !!medicine.how_to_take),
+    medicine: !!medicine && (medicine.active.length > 0 || medicine.uses.length > 0 || !!medicine.form),
+    cautions: !!medicine && (medicine.not_for.length > 0 || medicine.warnings.length > 0 || medicine.side_effects.length > 0),
     water: isWater,
     drink: kind === "drink",
-    allergens: !isWater,
+    // a medicine's excipients get their own notes; the food-allergen list would only repeat them
+    allergens: !isWater && !medicine,
     dietary: !isWater,
     nutrition: hasNutrition,
-    ingredients: ingredients.length > 0,
+    ingredients: ingredients.length > 0 || (medicine?.excipients.length ?? 0) > 0,
     additives: additives.length > 0,
     details: hasDetails,
     raw: !!result.raw_text,
@@ -188,17 +198,21 @@ function Results({
   const order: Exclude<SectionId, "overview">[] =
     kind === "dish" ? ["ingredients", "allergens", "dietary", "nutrition", "additives", "details", "raw"]
     : kind === "drink" ? ["drink", "nutrition", "additives", "ingredients", "allergens", "dietary", "details", "raw"]
+    : kind === "medicine" ? ["dose", "medicine", "cautions", "ingredients", "dietary", "nutrition", "additives", "details", "raw"]
     : ["water", "allergens", "dietary", "nutrition", "ingredients", "additives", "details", "raw"];
   const visible = order.filter((id) => shown[id]);
   const numberOf = (id: SectionId) => visible.indexOf(id as (typeof visible)[number]) + 1;
   const titles: Record<SectionId, string> = {
     overview: r.sections.overview,
+    dose: med.dose,
+    medicine: med.about,
+    cautions: med.cautions,
     water: r.water.title,
     drink: r.drink.title,
     allergens: estimated && kind === "dish" ? r.dish.allergens : r.sections.allergens,
     dietary: r.sections.dietary,
     nutrition: r.sections.nutrition,
-    ingredients: estimated ? r.dish.ingredients : r.sections.ingredients,
+    ingredients: medicine ? med.excipients : estimated ? r.dish.ingredients : r.sections.ingredients,
     additives: r.sections.additives,
     details: r.sections.details,
     raw: r.sections.raw,
@@ -354,9 +368,97 @@ function Results({
         glutenTile,
       ]
     : kind === "dish" ? [allergenTile, glutenTile, caloriesTile]
+    : medicine ?
+      [
+        {
+          title: med.active,
+          label: medicine.active.length ? medicine.active.map((a) => capitalize(a.name_local ?? a.name)).join(" + ") : med.notRead,
+          tone: "zinc",
+          hint: medicine.active.map((a) => a.strength).filter(Boolean).join(" + ") || undefined,
+          target: jump("medicine"),
+        },
+        ...(medicine.marks ?
+          [
+            {
+              title: med.marked,
+              label: ltr([medicine.marks.morning, medicine.marks.midday, medicine.marks.evening].map(fmt).join(" · ")),
+              tone: "zinc" as const,
+              hint: `${med.morning} · ${med.midday} · ${med.evening}`,
+              target: jump("dose"),
+            },
+          ]
+        : []),
+        glutenTile,
+        { ...countTile(med.toNote, medicine.excipients.length, "ingredients"), target: jump("ingredients") },
+      ]
     : [glutenTile, sugarTile, allergenTile, additiveTile];
 
   const blocks: Record<Exclude<SectionId, "overview">, React.ReactNode> = {
+    dose: medicine && (
+      <Section {...head("dose")}>
+        <div className="space-y-6">
+          {medicine.marks && <DoseMarksPanel marks={medicine.marks} />}
+          {(medicine.typical_dose || medicine.how_to_take) && (
+            <div>
+              <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                <p className="eyebrow text-ink-soft">{med.typicalDose}</p>
+                <Stamp tone="amber">{med.general}</Stamp>
+              </div>
+              {medicine.typical_dose && (
+                <p dir="auto" className="text-[15px] leading-7">
+                  {medicine.typical_dose}
+                </p>
+              )}
+              {medicine.how_to_take && (
+                <p dir="auto" className="mt-2 text-sm leading-6 text-ink-soft">
+                  <span className="font-medium text-ink">{med.howToTake}: </span>
+                  {medicine.how_to_take}
+                </p>
+              )}
+              <p className="mt-3 text-sm font-medium">{med.yourDose}</p>
+            </div>
+          )}
+        </div>
+      </Section>
+    ),
+
+    medicine: medicine && (
+      <Section {...head("medicine")}>
+        <dl>
+          {medicine.active.map((a) => (
+            <div key={a.name} className="flex items-baseline gap-4 border-b border-rule py-3 first:pt-0">
+              <dt className="eyebrow w-28 shrink-0 text-ink-soft">{med.active}</dt>
+              <dd className="min-w-0 flex-1">
+                <span dir="auto" className="font-display block text-lg leading-tight font-semibold">
+                  {capitalize(a.name_local ?? a.name)}
+                </span>
+                {a.strength && <span className="mt-0.5 block font-mono text-sm text-ink-soft tabular-nums">{ltr(a.strength)}</span>}
+              </dd>
+            </div>
+          ))}
+          {medicine.form && (
+            <div className="flex items-baseline gap-4 border-b border-rule py-3 first:pt-0">
+              <dt className="eyebrow w-28 shrink-0 text-ink-soft">{med.form}</dt>
+              <dd dir="auto" className="text-sm">
+                {medicine.form}
+              </dd>
+            </div>
+          )}
+        </dl>
+        {medicine.uses.length > 0 && <GeneralList title={med.uses} items={medicine.uses} className="mt-5" />}
+      </Section>
+    ),
+
+    cautions: medicine && (
+      <Section {...head("cautions")} aside={<Stamp tone="amber">{med.general}</Stamp>}>
+        <div className="space-y-6">
+          <GeneralList title={med.notFor} items={medicine.not_for} mark="!" tone="red" />
+          <GeneralList title={med.warnings} items={medicine.warnings} mark="!" tone="amber" />
+          <GeneralList title={med.sideEffects} items={medicine.side_effects} />
+        </div>
+      </Section>
+    ),
+
     water: (
       <Section {...head("water")}>
         {water ?
@@ -456,6 +558,19 @@ function Results({
     dietary: (
       <Section {...head("dietary")}>
         <GlutenPanel status={gluten.status} confidence={gluten.confidence} evidence={gluten.evidence} />
+        {/* in a medicine, wheat starch means gluten is present but at a very low level: say so next to the verdict */}
+        {medicine?.excipients
+          .filter((e) => e.id === "wheat_starch" || e.id === "starch_unspecified")
+          .map((e) => (
+            <Notice key={e.id} tone="amber" className="mt-4">
+              <span dir="auto" className="block">
+                {e.note}
+              </span>
+              <span dir="auto" className="mt-1 block text-xs text-ink-soft/80">
+                {med.source} {e.source}
+              </span>
+            </Notice>
+          ))}
       </Section>
     ),
 
@@ -539,7 +654,29 @@ function Results({
     ),
 
     ingredients: (
-      <Section {...head("ingredients")} aside={format(r.ingredients.count, { count: ingredients.length })}>
+      <Section {...head("ingredients")} aside={ingredients.length > 0 && format(r.ingredients.count, { count: ingredients.length })}>
+        {medicine && medicine.excipients.length > 0 && (
+          <div className="mb-6">
+            <SubLabel>{med.toKnow}</SubLabel>
+            <ul className="space-y-2">
+              {medicine.excipients.map((e) => (
+                <li key={e.id}>
+                  <Notice tone={e.id === "wheat_starch" || e.id === "starch_unspecified" ? "amber" : "zinc"}>
+                    <span dir="auto" className="block font-medium">
+                      {capitalize(e.matched)}
+                    </span>
+                    <span dir="auto" className="block text-ink-soft">
+                      {e.note}
+                    </span>
+                    <span dir="auto" className="mt-1 block text-xs text-ink-soft/80">
+                      {med.source} {e.source}
+                    </span>
+                  </Notice>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {estimated ?
           <ol>
             {ingredients.map((ing, i) => (
@@ -828,6 +965,87 @@ function NotALabel({ result }: { result: LabelAnalysis }) {
         </ol>
       </div>
     </article>
+  );
+}
+
+/** the pharmacist's pen marks, redrawn: strokes and a number for each time of day */
+function DoseMarksPanel({ marks }: { marks: NonNullable<Medicine["marks"]> }) {
+  const { t, fmt } = useI18n();
+  const med = t.results.medicine;
+  const times: [string, number][] = [
+    [med.morning, marks.morning],
+    [med.midday, marks.midday],
+    [med.evening, marks.evening],
+  ];
+  const total = marks.morning + marks.midday + marks.evening;
+  return (
+    <div>
+      <p className="font-display text-base font-semibold">{med.marksTitle}</p>
+      <p className="mt-1 text-sm leading-6 text-ink-soft">{med.marksText}</p>
+      <dl className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
+        {times.map(([label, count]) => (
+          <div key={label} className={cn("flex flex-col items-center bg-sheet px-2 py-4", count === 0 && "text-ink-soft/60")}>
+            <dt className="eyebrow">{label}</dt>
+            {/* the strokes as drawn on the box; a half unit is a short stroke */}
+            <dd className="mt-3 flex flex-col items-center">
+              <span aria-hidden dir="ltr" className="flex h-9 items-end gap-1.5">
+                {Array.from({ length: Math.floor(count) }, (_, i) => (
+                  <span key={i} className="h-9 w-1 rounded-full bg-accent" />
+                ))}
+                {count % 1 !== 0 && <span className="h-4 w-1 rounded-full bg-accent" />}
+                {count === 0 && <span className="mb-4 h-0.5 w-4 rounded-full bg-rule" />}
+              </span>
+              <span className="font-display mt-2 text-3xl leading-none font-bold tabular-nums">{ltr(fmt(count))}</span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        {total > 0 && <span className="font-medium">{format(med.perDay, { count: ltr(fmt(total)) })}</span>}
+        {marks.duration && (
+          <span className="text-ink-soft">
+            {med.duration} <span dir="auto">{marks.duration}</span>
+          </span>
+        )}
+        {marks.note && (
+          <span className="text-ink-soft">
+            {med.written}: <span dir="auto">“{marks.note}”</span>
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** a titled list of the model's general statements about a medicine; renders nothing when empty */
+function GeneralList({
+  title,
+  items,
+  mark = "–",
+  tone = "zinc",
+  className,
+}: {
+  title: string;
+  items: string[];
+  mark?: string;
+  tone?: Tone;
+  className?: string;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className={className}>
+      <SubLabel>{title}</SubLabel>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2.5 text-sm leading-6">
+            <span aria-hidden className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-md text-xs font-bold", toneClasses[tone])}>
+              {mark}
+            </span>
+            <span dir="auto">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

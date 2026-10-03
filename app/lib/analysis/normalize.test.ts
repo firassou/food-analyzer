@@ -17,7 +17,7 @@ const EXPECTED_KEYS = [
   "label_detected", "image_quality", "language", "product", "summary", "highlights", "ingredients",
   "allergens", "gluten", "lactose", "additives", "nutrition", "sugar", "claims", "certifications",
   "dates", "storage", "manufacturer", "origin", "raw_text", "warnings",
-  "kind", "ingredient_source", "database", "water", "drink",
+  "kind", "ingredient_source", "database", "water", "drink", "medicine",
 ].sort();
 
 /** invariant 2: every field present, nothing undefined anywhere */
@@ -56,7 +56,7 @@ describe("invariants", () => {
   });
 
   it("returns a complete object for every fixture", () => {
-    for (const f of ["eu-biscuit", "us-per-serving", "fr-peut-contenir", "arabic", "drink", "non-label", "truncated", "python-literals", "fr-yogurt-traces"])
+    for (const f of ["eu-biscuit", "us-per-serving", "fr-peut-contenir", "arabic", "drink", "non-label", "truncated", "python-literals", "fr-yogurt-traces", "water", "dish", "medicine"])
       expectComplete(analyze(`${f}.txt`));
   });
 
@@ -66,7 +66,7 @@ describe("invariants", () => {
     expect(r.product).toEqual({ name: null, brand: null, category: null, quantity: null, barcode: null });
     expect(r.kind).toBe("other");
     expect(r.ingredient_source).toBe("label");
-    expect([r.water, r.drink, r.database]).toEqual([null, null, null]);
+    expect([r.water, r.drink, r.database, r.medicine]).toEqual([null, null, null, null]);
     expect(r.ingredients).toEqual([]);
     expect(r.gluten).toEqual({ status: "unclear", confidence: "medium", evidence: [] });
     expect(r.lactose).toEqual({ status: "unclear", evidence: [] });
@@ -653,5 +653,64 @@ describe("drinks and unreadable products", () => {
     expect(r.warnings).toEqual([
       "The ingredient list wasn't readable on the photo. It was completed from the Open Food Facts entry “Choco Pops – Acme”: check that it matches your pack.",
     ]);
+  });
+});
+
+describe("fixture: a medicine with pen marks", () => {
+  const r = analyze("medicine.txt");
+
+  it("reads the substance and the pharmacist's marks", () => {
+    expect(r.kind).toBe("medicine");
+    expect(r.label_detected).toBe(true);
+    expect(r.medicine?.active).toEqual([{ name: "paracetamol", name_local: null, strength: "500 mg" }]);
+    expect(r.medicine?.marks).toEqual({ morning: 1, midday: 0, evening: 1, duration: "5 jours", note: null, confidence: "high" });
+    expect(r.medicine?.typical_dose).toMatch(/no more than 3 g a day/);
+    expect([r.water, r.drink, r.nutrition]).toEqual([null, null, null]);
+    expect(r.sugar.explanation).toBeNull();
+  });
+
+  it("computes the excipient notes itself, with their source", () => {
+    expect(r.medicine?.excipients.map((e) => [e.id, e.matched])).toEqual([
+      ["wheat_starch", "amidon de ble"],
+      ["lactose", "lactose"],
+    ]);
+    expect(r.medicine?.excipients[0].note).toMatch(/very low levels of gluten .* wheat allergy/);
+    expect(r.medicine?.excipients[0].source).toBe("EMA, excipients in the labelling and package leaflet");
+    expect(r.gluten.status).toBe("contains");
+  });
+
+  it("says what is general information and what is a reading", () => {
+    expect(r.warnings).toEqual([
+      "The pen marks on the box were read by an AI. If this reading doesn't match what your doctor or pharmacist told you, follow what they told you and ask them to confirm.",
+      "The uses, usual dose and cautions below are general information about the active substance, written by an AI. They can be wrong and may not apply to you. Your dose is the one your doctor or pharmacist gave you: follow it, and read the leaflet.",
+    ]);
+  });
+
+  it("gives no general information when the substance wasn't identified", () => {
+    const blind = normalize({
+      kind: "medicine",
+      product: { name: "Mystery caps" },
+      medicine: { active: [], uses: ["Pain"], typical_dose: "2 a day", not_for: ["Children"], marks: null },
+    });
+    expect(blind.medicine).toMatchObject({ uses: [], typical_dose: null, not_for: [], marks: null });
+    expect(blind.warnings).toEqual([
+      "The label was hard to read, so some details may be missing or inaccurate. A sharper, closer photo will help.",
+      "The active substance couldn't be read, so no general information is shown. Photograph the side of the box that names the substance and its strength.",
+      "The excipients aren't listed on this photo, so gluten and other sensitive ingredients can't be checked. Photograph the composition on the box or on the leaflet.",
+    ]);
+    expect(blind.gluten.status).toBe("unclear");
+  });
+
+  it("keeps the marks sane: halves allowed, nonsense dropped, low confidence flagged", () => {
+    const marks = (v: object) =>
+      normalize({ kind: "medicine", image_quality: "good", medicine: { active: ["ibuprofen"], marks: v } });
+    expect(marks({ morning: "2", midday: 0.5, evening: 40 }).medicine?.marks).toMatchObject({ morning: 2, midday: 0.5, evening: 0 });
+    expect(marks({ morning: 0, midday: 0, evening: 0 }).medicine?.marks).toBeNull();
+    expect(marks({ note: "1-0-1" }).medicine?.marks).toMatchObject({ morning: 0, note: "1-0-1" });
+    expect(marks({ morning: 1, confidence: "low" }).warnings[0]).toMatch(/hard to read: don't rely on this reading/);
+  });
+
+  it("never sends a medicine to the food database", () => {
+    expect(normalize({ kind: "medicine", product: { name: "Paracalm", barcode: "3017620422003" } }).kind).toBe("medicine");
   });
 });

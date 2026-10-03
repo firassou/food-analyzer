@@ -53,16 +53,36 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={cn("relative scroll-mt-28 border-t-[3px] border-ink px-5 pt-4 pb-7 sm:px-7", className)}>
-      {flash ? <span key={flash} aria-hidden className="animate-flash pointer-events-none absolute inset-0" /> : null}
+    <section
+      id={id}
+      className={cn(
+        "relative scroll-mt-28 border-t-[3px] border-ink px-5 pt-4 pb-7 sm:px-7",
+        className,
+      )}
+    >
+      {flash ?
+        <span
+          key={flash}
+          aria-hidden
+          className="animate-flash pointer-events-none absolute inset-0"
+        />
+      : null}
       <div className="relative mb-4 flex items-baseline gap-3">
         {index !== undefined && (
-          <span aria-hidden dir="ltr" className="eyebrow text-accent tabular-nums">
+          <span
+            aria-hidden
+            dir="ltr"
+            className="eyebrow text-accent tabular-nums"
+          >
             {String(index).padStart(2, "0")}
           </span>
         )}
-        <h3 className="font-display text-lg leading-tight font-semibold">{title}</h3>
-        {aside && <div className="eyebrow ms-auto text-end text-ink-soft">{aside}</div>}
+        <h3 className="font-display text-lg leading-tight font-semibold">
+          {title}
+        </h3>
+        {aside && (
+          <div className="eyebrow ms-auto text-end text-ink-soft">{aside}</div>
+        )}
       </div>
       <div className="relative">{children}</div>
     </section>
@@ -95,7 +115,16 @@ export function Tag({
 }
 
 export function Dot({ tone, className }: { tone: Tone; className?: string }) {
-  return <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dotClasses[tone], className)} />;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        dotClasses[tone],
+        className,
+      )}
+    />
+  );
 }
 
 /** a note set off by a coloured bar on its leading edge */
@@ -111,20 +140,47 @@ export function Notice({
   children: React.ReactNode;
 }) {
   return (
-    <div role={role} className={cn("flex gap-3 rounded-xl px-4 py-3 text-sm leading-6", toneClasses[tone], className)}>
-      <span aria-hidden className={cn("mt-1 w-[3px] shrink-0 self-stretch rounded-full", dotClasses[tone])} />
+    <div
+      role={role}
+      className={cn(
+        "flex gap-3 rounded-xl px-4 py-3 text-sm leading-6",
+        toneClasses[tone],
+        className,
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "mt-1 w-0.75 shrink-0 self-stretch rounded-full",
+          dotClasses[tone],
+        )}
+      />
       <div className="min-w-0 flex-1 text-ink">{children}</div>
     </div>
   );
 }
 
 /** a horizontal meter: `value` from 0 to 1 */
-export function Bar({ value, tone, delay = 0 }: { value: number; tone: Tone; delay?: number }) {
+export function Bar({
+  value,
+  tone,
+  delay = 0,
+}: {
+  value: number;
+  tone: Tone;
+  delay?: number;
+}) {
   return (
     <div className="h-1.5 overflow-hidden rounded-full bg-mute-soft">
       <div
-        className={cn("animate-grow h-full origin-left rounded-full rtl:origin-right", dotClasses[tone])}
-        style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, animationDelay: `${delay}ms` }}
+        className={cn(
+          "animate-grow h-full origin-left rounded-full rtl:origin-right",
+          dotClasses[tone],
+        )}
+        style={{
+          width: `${Math.max(0, Math.min(1, value)) * 100}%`,
+          animationDelay: `${delay}ms`,
+        }}
       />
     </div>
   );
@@ -132,9 +188,26 @@ export function Bar({ value, tone, delay = 0 }: { value: number; tone: Tone; del
 
 export function Spinner({ className }: { className?: string }) {
   return (
-    <svg className={cn("size-4 animate-spin", className)} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
-      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+    <svg
+      className={cn("size-4 animate-spin", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeOpacity="0.25"
+        strokeWidth="4"
+      />
+      <path
+        d="M22 12a10 10 0 0 0-10-10"
+        stroke="currentColor"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

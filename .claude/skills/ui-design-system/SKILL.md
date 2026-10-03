@@ -38,6 +38,10 @@ Mobile first. The result reads like a printed spec sheet: warm paper, ink, heavy
 - Theme animations only: `animate-fade-up`, `animate-fade-in`, `animate-grow`, `animate-flash`, `animate-scan`. Everything must work with reduced motion; no content may depend on an animation finishing.
 - Anything `fixed` that opens from inside the page (the camera) is portalled to `<body>`: an animated ancestor would trap it.
 
+## Medicines
+- Anything from the model's general knowledge carries the amber "General information" stamp; what was read on the pack and what was computed don't. Keep that distinction visible in any new medicine UI.
+- The pen marks are redrawn as strokes with a number under each time of day; never present them as the prescription itself.
+
 ## New results section
 - Add it to `shown`, `order`, `titles` and `blocks` in `Content.tsx`; it is numbered and listed in the nav automatically, and shown only when it has data.
 - Tiles carry a `target` section, not a closure (the React compiler lint rejects render-time closures over refs).

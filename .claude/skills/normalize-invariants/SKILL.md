@@ -32,6 +32,13 @@ Files: `app/lib/analysis/types.ts` (contract), `prompt.ts` (SYSTEM_PROMPT / USER
 - `drink` (sugar per container, colours, sweeteners, caffeine) is derived from the additive list and the net quantity.
 - A barcode is kept only if its GS1 check digit holds: models misread digits, and a wrong code could match another product.
 
+## Medicines
+- `kind: "medicine"` is the model's call (`kind`, or a `medicine` object naming an active substance). Excipients are the `ingredients`; they are only ever read, never recalled.
+- `medicine.excipients` (notes) are computed by `excipients.ts` from the composition text; wording and source live in `messages.ts` and follow the EMA annex. Add a rule only for an excipient that annex lists, with a false-friend test (cetyl "alcohol" isn't ethanol, a sulphate isn't a sulphite, maize starch isn't "starch, source not stated").
+- The model's general fields (uses, typical dose, not for, warnings, side effects) are dropped when no active substance was identified, and always come with the `medicineGeneral` warning.
+- `medicine.marks` (pen marks) are clamped to 0–6 units in halves; all zeros with no note is `null` ("no marks"), never "take nothing". They always add a warning; low confidence adds the stronger one.
+- A medicine gets no sugar note, no drink or water block, and is never looked up in Open Food Facts.
+
 ## Rules that are easy to get wrong
 - Gluten escalates to "contains" for a strong gluten ingredient or a **declared** gluten allergen, never for "gluten is contains in the allergen map": oats alone put it there too, and oats only mean "likely".
 - A compound ingredient (a bracketed list, or "x: a, b") gets no name-implied E-number and no untrusted model allergens. Its additives are found per part.

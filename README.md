@@ -6,6 +6,7 @@ An AI food-label analyzer, built for phones. Take (or choose, drop, paste) a pho
 - **A drink**: sugar per 100 ml and in the whole container, colourants, sweeteners, caffeine, then the rest.
 - **A bottled water**: the printed mineral composition, pH on its scale, dry residue, computed hardness, and what the values mean against EU reference levels. No gluten or allergen sections.
 - **A dish with no label** (a slice of cake): an estimate of its ingredients with a confidence for each, and the allergens that are therefore likely. Always marked as an estimate.
+- **A medicine** (box, blister, bottle or leaflet): the active substance and strength, the excipients with the official patient notes for the ones that matter (wheat starch, lactose, aspartame, sulphites…), gluten, general information about the substance (what it's for, usual dose, who shouldn't take it, cautions, side effects), and the dose a pharmacist marked on the box by hand, when there is one.
 - **A barcode**: scanned with the camera (Chrome on Android and desktop) or typed, it is looked up in Open Food Facts without any photo.
 - **A product whose ingredient list can't be read**: it is looked up in [Open Food Facts](https://world.openfoodfacts.org) by barcode or name, and the result says so. If that fails, the app asks for a photo of the whole product.
 
@@ -104,6 +105,7 @@ Free tiers are rate-limited per minute and per day, and Gemini's free tier may u
 - **Gluten likelihood.** The gluten bar shows how likely gluten is (`glutenLikelihood` in `knowledge.ts`: "no indication" is always 0 %; for "likely" and "contains" the verdict sets the range and the confidence moves it within it), not how confident the reading is. It is a reading of the evidence, not a measured amount.
 - **Dish nutrition** is the model's rough figure for a typical recipe (`nutrition.estimated: true`), with a warning; it is never turned into "high in…" statements.
 - **Water tips.** Each water remark has a `text` (the fact, with figures), a `tip` (what it means for the person drinking it) and a `source`. Tips rest on published guidance listed at the top of the water block in `messages.ts` (WHO drinking-water guidelines and sodium guideline, EFSA reference intakes, EAU urolithiasis guidelines, EU mineral-water rules) and work out what a litre gives against the daily reference. They correct common myths rather than repeat them: calcium in water is not presented as a cause of kidney stones, because the guidance says the opposite.
+- **Medicines.** Three kinds of information are kept apart. *Read on the pack*: name, active substance, form, excipients, dates. *Computed*: gluten and the "excipients with known effect" (`app/lib/analysis/excipients.ts`), whose patient wording follows the EMA annex on excipients (EMA/CHMP/302620/2017). *General, from the model*: uses, usual dose, who shouldn't take it, cautions and side effects; these are dropped unless an active substance was identified, are labelled "general information" on screen, and come with a warning that the prescribed dose is the one to follow. The pharmacist's pen marks (strokes for morning / midday / evening, as drawn on boxes in Tunisia) are read into `medicine.marks`, limited to 0–6 units in halves, never deduced from the usual dose, and always shown with a warning that it is a reading to confirm. A medicine is never sent to the food database.
 - **Product lookup** sends only the barcode or the product's name and brand to Open Food Facts, never the photo. A barcode is used only if its check digit holds, and a name match must be the same product, not merely a similar one.
 
 - `app/lib/analysis/` is pure and shared by client and server. `app/lib/server/` is server-only.
@@ -145,7 +147,7 @@ interface AnalyzeMeta { model: string; provider: string; attempts: number; durat
 ```ts
 interface LabelAnalysis {
   label_detected: boolean; image_quality: "good" | "fair" | "poor"; language: string | null;
-  kind: "label" | "water" | "drink" | "dish" | "other";
+  kind: "label" | "water" | "drink" | "dish" | "medicine" | "other";
   product: { name; brand; category; quantity; barcode: string | null };
   summary: string | null; highlights: { tone: "positive" | "neutral" | "caution"; text: string }[];
   ingredients: { name; name_en; name_local; percent; confidence; e_number; allergens: AllergenId[]; gluten; dairy }[];
@@ -161,6 +163,10 @@ interface LabelAnalysis {
   water: { minerals: Record<MineralKey, number | null>; dry_residue_mg_l; ph; sparkling; hardness_mg_l;
            facts: { id; tone; text; tip; source }[] } | null;                       // bottled water only
   drink: { volume_ml; sugar_per_container_g; colours: string[]; sweeteners: string[]; caffeine } | null;
+  medicine: { form; active: { name; name_local; strength }[];
+              marks: { morning; midday; evening; duration; note; confidence } | null;   // pharmacist's pen marks
+              uses: string[]; typical_dose; how_to_take; not_for: string[]; warnings: string[]; side_effects: string[];  // general
+              excipients: { id; matched; note; source }[] } | null;   // computed; the excipient list itself is in `ingredients`
   sugar: { level: "low" | "medium" | "high" | "unknown"; per_100; basis; explanation };
   claims: string[]; certifications: string[];
   dates: { best_before; expiration; production; lot };
@@ -194,4 +200,4 @@ Barcode lookup, no model involved. Returns the same `AnalyzeResponse`, built fro
 
 ## Disclaimer
 
-Results are AI-extracted from a photo and may contain mistakes. They are informational, not medical or dietary advice. Always check the packaging if you have allergies or dietary restrictions.
+Results are AI-extracted from a photo and may contain mistakes. They are informational, not medical or dietary advice. For a medicine, the dose to follow is the one your doctor or pharmacist gave you, and the package leaflet is the reference. Always check the packaging if you have allergies or dietary restrictions.

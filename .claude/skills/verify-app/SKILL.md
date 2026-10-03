@@ -21,7 +21,7 @@ description: Use after any change, and before saying a step is done: build, lint
    - a drink per 100 ml
    - a blurry photo
    - a non-label photo
-   - still missing: a bottled water, a dish with no label, a front-of-pack shot (for the product lookup)
+   - still missing: a bottled water, a dish with no label, a front-of-pack shot (for the product lookup), a medicine box with a pharmacist's pen marks
 4. In the browser, walk through: landing → take / choose / drop / paste (analysis starts by itself) → cancel → results nav, scroll-spy, tile jumps and additive links → error state → not-a-label → each kind (label, drink, water, dish, unreadable product) → language switch (English, French, Arabic right-to-left) → dark mode → mobile width (360 px).
    - No browser tool is needed: drive `/usr/bin/google-chrome` with `playwright-core` installed in a scratch folder, and stub `**/api/analyze` with results made by `normalize()` from the fixtures to see every kind without spending model quota. Check the console for errors and `scrollWidth > clientWidth` for horizontal overflow.
    - Language: `curl -H "Accept-Language: ar" localhost:3000 | grep -o '<html[^>]*>'` should show `lang="ar" dir="rtl"`; a `lang` cookie wins. `-F lang=fr` on the analyze call returns French text.

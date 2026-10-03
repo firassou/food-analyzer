@@ -10,8 +10,8 @@ export type Level = "low" | "medium" | "high";
 export type Basis = "100g" | "100ml";
 export type ImageQuality = "good" | "fair" | "poor";
 export type HighlightTone = "positive" | "neutral" | "caution";
-/** what the photo shows: a packaged food label, bottled water, another drink, a prepared dish, or none of these */
-export type SubjectKind = "label" | "water" | "drink" | "dish" | "other";
+/** what the photo shows: a packaged food label, bottled water, another drink, a prepared dish, a medicine, or none of these */
+export type SubjectKind = "label" | "water" | "drink" | "dish" | "medicine" | "other";
 /** where the ingredient list comes from: read on the label, a product database, or an estimate */
 export type IngredientSource = "label" | "database" | "estimated";
 
@@ -78,6 +78,69 @@ export interface Water {
   hardness_mg_l: number | null;
   /** computed from the values above, never taken from the model */
   facts: WaterFact[];
+}
+
+/** excipients a patient may need to know about (see excipients.ts) */
+export const EXCIPIENT_IDS = [
+  "wheat_starch",
+  "starch_unspecified",
+  "lactose",
+  "sugars",
+  "fructose_sorbitol",
+  "aspartame",
+  "peanut_oil",
+  "soya",
+  "sesame_oil",
+  "sulphites",
+  "azo_colours",
+  "parabens",
+  "benzoates",
+  "benzyl_alcohol",
+  "alcohol",
+  "propylene_glycol",
+  "effervescent_sodium",
+] as const;
+export type ExcipientId = (typeof EXCIPIENT_IDS)[number];
+
+export interface ExcipientNote {
+  id: ExcipientId;
+  /** the excipient as printed, e.g. "amidon de blé" */
+  matched: string;
+  /** what it means for the patient, in the standard wording */
+  note: string;
+  source: string;
+}
+
+/** the pharmacist's pen marks on the box: how many units at each time of day */
+export interface DoseMarks {
+  morning: number;
+  midday: number;
+  evening: number;
+  /** written next to the marks, e.g. "7 jours" */
+  duration: string | null;
+  /** any other handwritten note, as read */
+  note: string | null;
+  /** how clearly the marks could be read */
+  confidence: Confidence;
+}
+
+export interface Medicine {
+  /** "film-coated tablets", "syrup"… */
+  form: string | null;
+  /** read on the pack */
+  active: { name: string; name_local: string | null; strength: string | null }[];
+  /** read on the box; null when nothing is handwritten on it */
+  marks: DoseMarks | null;
+  // General information about the active substance, from the model's knowledge.
+  // It is NOT read on the pack and is not the patient's prescription.
+  uses: string[];
+  typical_dose: string | null;
+  how_to_take: string | null;
+  not_for: string[];
+  warnings: string[];
+  side_effects: string[];
+  /** computed from the printed excipients, never taken from the model */
+  excipients: ExcipientNote[];
 }
 
 export interface Drink {
@@ -226,6 +289,8 @@ export interface LabelAnalysis {
   water: Water | null;
   /** what matters in a drink; null for anything else */
   drink: Drink | null;
+  /** a medicine's substance, cautions and dose marks; null for anything else. Its excipients are in `ingredients`. */
+  medicine: Medicine | null;
   sugar: {
     level: Level | "unknown";
     per_100: number | null;
