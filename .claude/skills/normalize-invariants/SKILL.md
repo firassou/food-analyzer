@@ -27,6 +27,8 @@ Files: `app/lib/analysis/types.ts` (contract), `prompt.ts` (SYSTEM_PROMPT / USER
 ## Kind, water, drink
 - `kind` is the model's word checked against what was read: water only if it is plain (at most 2 read ingredients, sugars ≤ 0.5 g) and named or declared water; a dish only when nothing label-like was read; a drink by model, a 100 ml basis or `isDrink`.
 - `water` is built only from printed values (pH 2–12, minerals 0–20 000 mg/L, else `null`); hardness and `facts` are computed (`knowledge.ts` `waterFacts`), never taken from the model. Water has no "no ingredient list" warning and no "unclear" gluten/lactose.
+- Water `facts` carry a `text` (the fact), a `tip` and its `source` (`messages.ts` `waterTips` / `waterSources`). A tip must rest on a reference listed in the comment block there (WHO, EFSA, EAU, EU directives); add the reference before adding a claim, and never write one from memory or hearsay. Percentages of daily intake are computed from `DAILY`.
+- A dish's nutrition comes from the model's `estimated_nutrition` only when `kind` is `dish` and no nutrition was read. It is flagged `estimated`, gets its own warning, skips the consistency checks and never produces "High in …" highlights. It is applied after `kind` is decided, so a guess can't make a photo count as a label.
 - `drink` (sugar per container, colours, sweeteners, caffeine) is derived from the additive list and the net quantity.
 - A barcode is kept only if its GS1 check digit holds: models misread digits, and a wrong code could match another product.
 

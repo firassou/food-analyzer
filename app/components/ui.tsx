@@ -175,3 +175,12 @@ export function CloseIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function BarcodeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} {...iconProps}>
+      <path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17" />
+      <path d="M8 8.5v7M11 8.5v7M13.5 8.5v7M16 8.5v7" />
+    </svg>
+  );
+}

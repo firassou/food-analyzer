@@ -5,6 +5,7 @@
 import {
   additiveCategory,
   additiveName,
+  barcodeDigits,
   canonicalENumber,
   codeForName,
   detectAllergens,
@@ -391,6 +392,16 @@ function scaleTo100(n: Nutrients, servingAmount: number): Nutrients {
 }
 
 /** grams/ml in one serving: "2/3 cup (55g)" → 55, "1 can (330 ml)" → 330 */
+/** per-100 values scaled to a portion of `grams` */
+function scaleFrom100(n: Nutrients, grams: number): Nutrients {
+  const out = { ...n };
+  for (const k of NUTRIENT_KEYS) {
+    const v = n[k];
+    if (v !== null) out[k] = round((v * grams) / 100, decimalsFor(k));
+  }
+  return out;
+}
+
 function servingAmountOf(servingSize: string | null): number | null {
   const matches = [...(servingSize ?? "").matchAll(/(\d+(?:[.,]\d+)?)\s*(g|gr|grams?|ml)\b/gi)];
   const n = num(matches.at(-1)?.[1]);
@@ -440,6 +451,7 @@ function buildNutrition(raw: unknown, productText: string, warn: (w: string) => 
     serving_size: servingSize,
     per_100: per100,
     per_100_calculated: per100Calculated,
+    estimated: false,
     per_serving: perServing,
     levels: {
       fat: levelOf(per100?.fat_g ?? null, t.fat),
@@ -491,7 +503,7 @@ function buildWater(raw: unknown, sparkling: boolean, m: AnalysisMessages): Wate
     hardness_mg_l: waterHardness(minerals.calcium, minerals.magnesium),
   };
   const values = { ph, residue, hardness: base.hardness_mg_l, minerals };
-  return { ...base, facts: waterFacts(base).map((f) => ({ ...f, text: m.water[f.id](values) })) };
+  return { ...base, facts: waterFacts(base).map((f) => ({ ...f, text: m.water[f.id](values), tip: m.waterTips[f.id](values), source: m.waterSources[f.id] })) };
 }
 
 function subjectKind(v: unknown): SubjectKind | null {
@@ -544,16 +556,9 @@ function ingredientsFromText(raw: string): string[] {
 
 const bothNames = (i: { name: string; name_en: string | null }) => `${i.name} ${i.name_en ?? ""}`;
 
-/**
- * The digits under a barcode: EAN-8, UPC-A, EAN-13 or ITF-14. Models misread small
- * digits, and a wrong code could match another product, so the GS1 check digit must hold.
- */
+/** the digits under a barcode, when the model read them right (see `barcodeDigits`) */
 function barcode(v: unknown): string | null {
-  const digits = (typeof v === "number" ? String(v) : (str(v, 40) ?? "")).replace(/[\s-]/g, "");
-  if (!/^(\d{8}|\d{12,14})$/.test(digits)) return null;
-  // from the right, skipping the check digit: weights 3, 1, 3, …
-  const sum = [...digits.slice(0, -1)].reverse().reduce((total, d, i) => total + Number(d) * (i % 2 === 0 ? 3 : 1), 0);
-  return (10 - (sum % 10)) % 10 === Number(digits.at(-1)) ? digits : null;
+  return barcodeDigits(typeof v === "number" ? String(v) : (str(v, 40) ?? ""));
 }
 
 /** ambiguous additives (code null) are deduplicated by kind, not by exact wording */
@@ -577,7 +582,7 @@ export interface NormalizeOptions {
   /** language of the sentences normalize writes itself (default "en") */
   locale?: Locale;
   /** the input was completed from a product database entry: its ingredients weren't read on the photo */
-  database?: { name: string; product: string; url: string };
+  database?: { name: string; product: string; url: string; /** found by scanning a barcode: there was no photo to read */ scanned?: boolean };
 }
 
 export function normalize(input: unknown, opts: NormalizeOptions = {}): LabelAnalysis {
@@ -932,7 +937,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   }
 
   // ---- 8. nutrition
-  const nutrition = buildNutrition(get("nutrition", "nutrition_facts", "nutritional_information"), productText, warn, m);
+  let nutrition = buildNutrition(get("nutrition", "nutrition_facts", "nutritional_information"), productText, warn, m);
 
   // ---- 8b. what the photo shows (the model's word, checked against what was actually read)
   const readIngredients = estimated ? 0 : ingredients.length;
@@ -955,6 +960,31 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   else kind = modelKind ?? (bool(get("label_detected", "is_food_label", "is_label")) ? "label" : "other");
   if (kind !== "water") water = null;
 
+  // a dish has no label to read nutrition from: take the model's rough figures, flagged as such
+  // (after `kind`, so a guess can never make a photo count as a label)
+  if (kind === "dish" && !nutrition) {
+    const guess = get("estimated_nutrition", "nutrition_estimate");
+    const portionG = num(pick(guess, "portion_g", "portion_grams", "weight_g"));
+    const portion = str(pick(guess, "portion", "serving"), 40);
+    const built = buildNutrition(
+      {
+        basis: "100g",
+        per_100_printed: true,
+        per_100: pick(guess, "per_100", "per_100g"),
+        serving_size:
+          portionG !== null && portionG > 0 && portionG <= 2000 ? `${portion ?? ""} (≈ ${Math.round(portionG)} g)`.trim() : null,
+      },
+      productText,
+      // consistency checks are for printed tables; a guess gets one warning of its own instead
+      () => {},
+      m,
+    );
+    if (built?.per_100) {
+      const grams = servingAmountOf(built.serving_size);
+      nutrition = { ...built, estimated: true, per_serving: grams ? scaleFrom100(built.per_100, grams) : null };
+    }
+  }
+
   // ---- 9. sugar (computed from per-100 sugars; the model's opinion is only a fallback)
   const basis: Basis = nutrition?.basis ?? (kind === "water" || kind === "drink" || isDrink(productText) ? "100ml" : "100g");
   const unit = basis === "100ml" ? "ml" : "g";
@@ -965,7 +995,9 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   if (sugarPer100 !== null) {
     const t = LEVEL_THRESHOLDS[basis].sugars;
     sugarLevelValue = levelOf(sugarPer100, t) ?? "unknown";
-    sugarExplanation = m.sugar[sugarLevelValue === "unknown" ? "medium" : sugarLevelValue](sugarPer100, unit, t);
+    sugarExplanation = nutrition?.estimated
+      ? m.sugar.estimated
+      : m.sugar[sugarLevelValue === "unknown" ? "medium" : sugarLevelValue](sugarPer100, unit, t);
   } else {
     sugarExplanation =
       str(pick(oldSugar, "explanation"), 300) ??
@@ -974,7 +1006,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   // ---- 10. highlights (computed levels first; model claims about levels are replaced)
   const highlights: LabelAnalysis["highlights"] = [];
-  if (nutrition?.per_100) {
+  // a guessed figure is not stated as a fact
+  if (nutrition?.per_100 && !nutrition.estimated) {
     const p = nutrition.per_100;
     const levelValues: Record<LevelKey, number | null> = {
       fat: p.fat_g,
@@ -1021,6 +1054,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   if (kind === "dish") {
     if (estimated) warn(m.warnings.estimatedDish);
+    if (nutrition?.estimated) warn(m.warnings.estimatedNutrition);
   } else if (!labelDetected) {
     // a pack shot from the front: the product is known, its label isn't in view
     if (product.name && kind !== "other") warn(estimated ? m.warnings.estimatedProduct : m.warnings.needProductPhoto);
@@ -1034,7 +1068,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       warn(m.warnings.poorQuality);
     else if (quality === "fair" && (nutrition || ingredients.length))
       warn(m.warnings.fairQuality);
-    if (opts.database) warn(m.warnings.database(opts.database.product));
+    if (opts.database) warn(m.warnings[opts.database.scanned ? "databaseScan" : "database"](opts.database.product));
     else if (estimated) warn(m.warnings.estimatedProduct);
     else if (ingredients.length === 0) warn(product.name || product.barcode ? m.warnings.needProductPhoto : m.warnings.noIngredients);
   }
@@ -1066,7 +1100,10 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     highlights: highlights.slice(0, MAX_HIGHLIGHTS),
     ingredients,
     ingredient_source: ingredients.length ? ingredientSource : "label",
-    database: opts.database && ingredientSource === "database" ? opts.database : null,
+    database:
+      opts.database && ingredientSource === "database"
+        ? { name: opts.database.name, product: opts.database.product, url: opts.database.url }
+        : null,
     allergens: [...allergenMap.values()].sort(
       (a, b) =>
         (a.presence === b.presence ? 0 : a.presence === "contains" ? -1 : 1) ||

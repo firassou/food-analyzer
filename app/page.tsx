@@ -2,10 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Content from "./Content";
 import Analyzing from "./components/Analyzing";
+import BarcodeScanner from "./components/BarcodeScanner";
+import Compare from "./components/Compare";
+import History from "./components/History";
+import InstallButton from "./components/InstallButton";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import { usePhotoPicker } from "./components/PhotoPicker";
 import Scanner from "./components/Scanner";
-import { CameraIcon, ImageIcon, Notice, Spinner } from "./components/ui";
+import { BarcodeIcon, CameraIcon, cn, ImageIcon, Notice, Spinner } from "./components/ui";
+import { makeThumb, newScanId, saveScan, type HistoryEntry } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
 import { format, rich, useI18n } from "./lib/i18n/I18nProvider";
@@ -34,20 +39,27 @@ function errorText(error: AppError, t: Messages, locale: Locale): string {
   return locale === "en" ? error.message : (t.errors.server[error.code] ?? error.message);
 }
 
+/** what a result came from, so it can be fetched again (in another language, or after an error) */
+type Source = { type: "photo"; image: Blob } | { type: "barcode"; code: string };
+
 /** the browser gives up a little after the server's own time budget */
 const CLIENT_TIMEOUT_MS = 150_000;
 
 export default function Home() {
   const { t, locale, languageName } = useI18n();
-  const [file, setFile] = useState<File | null>(null);
-  const [upload, setUpload] = useState<Blob | null>(null);
+  // a scan is on screen: being made, shown, or failed
+  const [open, setOpen] = useState(false);
+  const [source, setSource] = useState<Source | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [comparing, setComparing] = useState<[HistoryEntry, HistoryEntry] | null>(null);
   const [status, setStatus] = useState<Status>("preparing");
   const [result, setResult] = useState<{ result: LabelAnalysis; meta: AnalyzeMeta } | null>(null);
   const [failure, setFailure] = useState<AppError | null>(null);
   const [dragging, setDragging] = useState(false);
   // bumps on every new file/reset so stale async work is ignored
   const requestId = useRef(0);
+  const scanId = useRef("");
   const inFlight = useRef<AbortController | null>(null);
 
   const cancelInFlight = () => {
@@ -58,12 +70,13 @@ export default function Home() {
   // free the preview's object URL when it's replaced or the page unmounts
   useEffect(() => {
     return () => {
-      if (imageSrc) URL.revokeObjectURL(imageSrc);
+      if (imageSrc?.startsWith("blob:")) URL.revokeObjectURL(imageSrc);
     };
   }, [imageSrc]);
   useEffect(() => () => inFlight.current?.abort(), []);
 
-  const run = useCallback(async (image: Blob, lang: Locale) => {
+  // `scanId` names the scan in the history: analyzing the same photo again replaces its entry
+  const run = useCallback(async (from: Source, lang: Locale, scanId: string) => {
     const id = ++requestId.current;
     cancelInFlight();
     const controller = new AbortController();
@@ -72,11 +85,16 @@ export default function Home() {
     setFailure(null);
     setResult(null);
     try {
-      const r = await analyzeImage(image, controller.signal, lang);
+      const r = from.type === "photo" ? await analyzeImage(from.image, controller.signal, lang) : await lookupBarcode(from.code, controller.signal, lang);
       if (id !== requestId.current) return;
       setResult(r);
       setStatus("done");
       window.scrollTo({ top: 0, behavior: "smooth" });
+      // remember anything that is about a food; a photo of something else isn't worth keeping
+      if (r.result.kind !== "other") {
+        const thumb = from.type === "photo" ? await makeThumb(from.image) : null;
+        saveScan({ id: scanId, at: Date.now(), thumb, result: r.result, meta: r.meta });
+      }
     } catch (e) {
       if (id !== requestId.current) return;
       setFailure(e instanceof AnalysisFailure ? e.detail : { kind: "client", key: "network" });
@@ -93,8 +111,9 @@ export default function Home() {
       cancelInFlight();
       setFailure(null);
       setResult(null);
-      setFile(f);
-      setUpload(null);
+      setComparing(null);
+      setOpen(true);
+      setSource(null);
       setImageSrc(null);
       setStatus("preparing");
       window.scrollTo({ top: 0 });
@@ -104,12 +123,14 @@ export default function Home() {
           URL.revokeObjectURL(prepared.previewUrl);
           return;
         }
-        setUpload(prepared.blob);
+        const from: Source = { type: "photo", image: prepared.blob };
+        scanId.current = newScanId();
+        setSource(from);
         setImageSrc(prepared.previewUrl);
-        void run(prepared.blob, locale);
+        void run(from, locale, scanId.current);
       } catch (e) {
         if (id !== requestId.current) return;
-        setFile(null);
+        setOpen(false);
         setFailure({ kind: "client", key: e instanceof ImagePrepError ? e.code : "damaged" });
       }
     },
@@ -118,11 +139,42 @@ export default function Home() {
 
   const picker = usePhotoPicker(selectFile);
 
+  // a scanned (or typed) barcode: no photo, the product comes straight from the database
+  const selectBarcode = useCallback(
+    (code: string) => {
+      setScanning(false);
+      setComparing(null);
+      setOpen(true);
+      setImageSrc(null);
+      const from: Source = { type: "barcode", code };
+      scanId.current = newScanId();
+      setSource(from);
+      window.scrollTo({ top: 0 });
+      void run(from, locale, scanId.current);
+    },
+    [locale, run],
+  );
+  const closeScanner = useCallback(() => setScanning(false), []);
+
+  const openSaved = (entry: HistoryEntry) => {
+    requestId.current++;
+    cancelInFlight();
+    scanId.current = entry.id;
+    setFailure(null);
+    setSource(null);
+    setImageSrc(entry.thumb);
+    setResult({ result: entry.result, meta: entry.meta });
+    setStatus("done");
+    setOpen(true);
+    window.scrollTo({ top: 0 });
+  };
+
   const reset = () => {
     requestId.current++;
     cancelInFlight();
-    setFile(null);
-    setUpload(null);
+    setOpen(false);
+    setComparing(null);
+    setSource(null);
     setImageSrc(null);
     setResult(null);
     setFailure(null);
@@ -130,7 +182,7 @@ export default function Home() {
   };
 
   const analyze = () => {
-    if (upload) void run(upload, locale);
+    if (source) void run(source, locale, scanId.current);
   };
 
   // paste an image from the clipboard anywhere on the page
@@ -146,8 +198,11 @@ export default function Home() {
     return () => window.removeEventListener("paste", onPaste);
   }, [selectFile]);
 
-  const busy = !!file && (status === "preparing" || status === "analyzing");
+  const busy = open && (status === "preparing" || status === "analyzing");
+  // a saved scan has no photo to send again
+  const canRedo = !!source;
   const error = failure && errorText(failure, t, locale);
+  const hasPhoto = !!imageSrc || source?.type === "photo" || status === "preparing";
   // the result's text stays in the language it was analyzed in
   const resultLocale = status === "done" && result ? (result.meta.locale ?? "en") : locale;
 
@@ -171,6 +226,7 @@ export default function Home() {
       }}
     >
       {picker.elements}
+      {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} />}
 
       <header className="sticky top-0 z-30 border-b border-rule bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
@@ -187,7 +243,11 @@ export default function Home() {
       </header>
 
       <main className="pb-dock mx-auto w-full max-w-5xl flex-1 px-4 pt-7 sm:px-6 sm:pt-12">
-        {!file ? (
+        {comparing ? (
+          <div className="mx-auto max-w-2xl">
+            <Compare a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
+          </div>
+        ) : !open ? (
           <section className="mx-auto max-w-xl">
             <p className="animate-fade-up eyebrow text-accent">{t.hero.badge}</p>
             <h1 className="animate-fade-up font-display mt-3 text-[2.6rem] leading-[1.02] font-bold tracking-tight text-balance sm:text-6xl">
@@ -230,12 +290,15 @@ export default function Home() {
                 Ctrl V
               </kbd>
             </p>
+
+            <History onOpen={openSaved} onCompare={(a, b) => setComparing([a, b])} />
+            <InstallButton />
           </section>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10">
+          <div className={cn("grid gap-4", hasPhoto ? "lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10" : "mx-auto max-w-2xl")}>
             <aside className="lg:sticky lg:top-20 lg:self-start">
-              <Scanner src={imageSrc} scanning={busy} compact={!busy} />
-              {status === "done" && (
+              {hasPhoto && <Scanner src={imageSrc} scanning={busy} compact={!busy} />}
+              {status === "done" && canRedo && (
                 <button
                   onClick={analyze}
                   className="mt-2 inline-flex h-10 items-center rounded-full px-1 text-sm font-medium text-accent underline underline-offset-4"
@@ -246,13 +309,26 @@ export default function Home() {
             </aside>
 
             <div className="min-w-0">
-              {busy && <Analyzing />}
+              {busy &&
+                (source?.type === "barcode" ? (
+                  <p aria-live="polite" className="animate-fade-up flex items-center gap-3 rounded-[28px] border border-rule bg-sheet px-5 py-6 text-sm font-medium">
+                    <Spinner className="text-accent" />
+                    {t.barcode.looking}
+                    <span dir="ltr" className="eyebrow ms-auto text-ink-soft">
+                      {source.code}
+                    </span>
+                  </p>
+                ) : (
+                  <Analyzing />
+                ))}
               {status === "done" && result && resultLocale !== locale && (
                 <Notice tone="zinc" className="animate-fade-up mb-3">
                   {format(t.status.otherLanguage, { language: languageName(resultLocale) })}{" "}
-                  <button onClick={analyze} className="font-medium text-accent underline underline-offset-4">
-                    {t.status.translate}
-                  </button>
+                  {canRedo && (
+                    <button onClick={analyze} className="font-medium text-accent underline underline-offset-4">
+                      {t.status.translate}
+                    </button>
+                  )}
                 </Notice>
               )}
               {status === "done" && result && (
@@ -263,12 +339,15 @@ export default function Home() {
                   <div className="border-t-[3px] border-bad px-5 pt-5 pb-6 sm:px-7">
                     <p className="font-display text-xl font-bold">{t.status.failed}</p>
                     <p className="mt-2 text-sm leading-6 wrap-break-word text-ink-soft">{error}</p>
-                    <button
-                      onClick={analyze}
-                      className="mt-4 inline-flex h-11 items-center rounded-full bg-ink px-5 text-sm font-semibold text-paper transition active:scale-[0.98]"
-                    >
-                      {t.actions.tryAgain}
-                    </button>
+                    {/* an unknown barcode won't be found by asking again */}
+                    {canRedo && !(failure?.kind === "server" && failure.code === "not_found") && (
+                      <button
+                        onClick={analyze}
+                        className="mt-4 inline-flex h-11 items-center rounded-full bg-ink px-5 text-sm font-semibold text-paper transition active:scale-[0.98]"
+                      >
+                        {t.actions.tryAgain}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -297,18 +376,26 @@ export default function Home() {
             <>
               <button
                 onClick={picker.takePhoto}
-                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-full bg-accent px-4 text-base font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-3 text-[15px] font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
               >
                 <CameraIcon className="size-6 shrink-0" />
-                <span className="truncate">{file ? t.uploader.retake : t.uploader.takePhoto}</span>
+                <span className="truncate">{open ? t.uploader.retake : t.uploader.takePhoto}</span>
               </button>
               <button
                 onClick={picker.choosePhoto}
-                aria-label={file ? t.uploader.replace : t.uploader.choosePhoto}
-                title={file ? t.uploader.replace : t.uploader.choosePhoto}
-                className="grid size-14 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink active:scale-[0.98]"
+                aria-label={open ? t.uploader.replace : t.uploader.choosePhoto}
+                title={open ? t.uploader.replace : t.uploader.choosePhoto}
+                className="grid size-12 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink active:scale-[0.98]"
               >
-                <ImageIcon className="size-6" />
+                <ImageIcon className="size-5" />
+              </button>
+              <button
+                onClick={() => setScanning(true)}
+                aria-label={t.dock.scan}
+                title={t.dock.scan}
+                className="grid size-12 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink active:scale-[0.98]"
+              >
+                <BarcodeIcon className="size-5" />
               </button>
             </>
           )}
@@ -333,6 +420,25 @@ function Logo() {
       </svg>
     </span>
   );
+}
+
+async function lookupBarcode(
+  code: string,
+  signal: AbortSignal,
+  locale: Locale,
+): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/product?code=${code}&lang=${locale}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") throw new AnalysisFailure({ kind: "client", key: "timeout" });
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new AnalysisFailure({ kind: "client", key: "network" });
+  }
+  const data = (await response.json().catch(() => null)) as AnalyzeResponse | null;
+  if (data?.ok) return { result: data.result, meta: data.meta };
+  if (data && !data.ok) throw new AnalysisFailure({ kind: "server", code: data.code, message: data.error });
+  throw new AnalysisFailure({ kind: "status", status: response.status });
 }
 
 async function analyzeImage(

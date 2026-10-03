@@ -6,6 +6,7 @@ An AI food-label analyzer, built for phones. Take (or choose, drop, paste) a pho
 - **A drink**: sugar per 100 ml and in the whole container, colourants, sweeteners, caffeine, then the rest.
 - **A bottled water**: the printed mineral composition, pH on its scale, dry residue, computed hardness, and what the values mean against EU reference levels. No gluten or allergen sections.
 - **A dish with no label** (a slice of cake): an estimate of its ingredients with a confidence for each, and the allergens that are therefore likely. Always marked as an estimate.
+- **A barcode**: scanned with the camera (Chrome on Android and desktop) or typed, it is looked up in Open Food Facts without any photo.
 - **A product whose ingredient list can't be read**: it is looked up in [Open Food Facts](https://world.openfoodfacts.org) by barcode or name, and the result says so. If that fails, the app asks for a photo of the whole product.
 
 **The LLM is never trusted blindly.** A vision model reads the label. Its reply is parsed leniently and mapped onto a strict schema, then a deterministic, multilingual knowledge base (EN, FR, ES, IT, DE, AR) cross-checks and corrects it. The API always returns a complete, well-typed object.
@@ -98,6 +99,11 @@ Free tiers are rate-limited per minute and per day, and Gemini's free tier may u
 - **Languages.** `app/lib/i18n/`: the interface follows the device (`Accept-Language`) until a language is picked in the header (cookie `lang`). Arabic is right-to-left. The request carries `lang`; the model writes its free text in it and `normalize()` writes its own sentences from `app/lib/analysis/messages.ts`. Everything the rules match on stays English, so the checks behave the same in every language.
 - **Photo.** "Take a photo" opens the native camera on phones and an in-page viewfinder elsewhere; the photo is analyzed as soon as it is picked.
 - **Estimates and lookups are never passed off as a reading.** `ingredient_source` says whether the list was read on the `label`, came from the `database`, or is `estimated`. Estimated ingredients can make an allergen "may contain" and gluten or lactose "likely" at most, and a warning always says where the list came from.
+- **History and comparison.** Scans are saved in the browser (`localStorage`, newest 30, with a small thumbnail) through `app/lib/client/history.ts`, which guards every storage access. Nothing is stored on the server. Two saved scans can be compared side by side.
+- **Installable.** `app/manifest.ts` and the icons in `public/icons/` let the app be added to a phone's home screen. There is no service worker, so it still needs a connection.
+- **Gluten likelihood.** The gluten bar shows how likely gluten is (`glutenLikelihood` in `knowledge.ts`: the verdict sets the range, the confidence moves it within it), not how confident the reading is. It is a reading of the evidence, not a measured amount.
+- **Dish nutrition** is the model's rough figure for a typical recipe (`nutrition.estimated: true`), with a warning; it is never turned into "high in…" statements.
+- **Water tips.** Each water remark has a `text` (the fact, with figures), a `tip` (what it means for the person drinking it) and a `source`. Tips rest on published guidance listed at the top of the water block in `messages.ts` (WHO drinking-water guidelines and sodium guideline, EFSA reference intakes, EAU urolithiasis guidelines, EU mineral-water rules) and work out what a litre gives against the daily reference. They correct common myths rather than repeat them: calcium in water is not presented as a cause of kidney stones, because the guidance says the opposite.
 - **Product lookup** sends only the barcode or the product's name and brand to Open Food Facts, never the photo. A barcode is used only if its check digit holds, and a name match must be the same product, not merely a similar one.
 
 - `app/lib/analysis/` is pure and shared by client and server. `app/lib/server/` is server-only.
@@ -150,9 +156,10 @@ interface LabelAnalysis {
   lactose: { status: Presence; evidence: string[] };
   additives: { code; name; name_local; category; purpose; explanation }[];
   nutrition: { basis: "100g" | "100ml"; serving_size; per_100; per_100_calculated; per_serving;
+               estimated: boolean;   // true for a dish: a rough figure, not read from a label
                levels: Record<"fat" | "saturated_fat" | "sugars" | "salt", "low" | "medium" | "high" | null> } | null;
   water: { minerals: Record<MineralKey, number | null>; dry_residue_mg_l; ph; sparkling; hardness_mg_l;
-           facts: { id; tone; text }[] } | null;                       // bottled water only
+           facts: { id; tone; text; tip; source }[] } | null;                       // bottled water only
   drink: { volume_ml; sugar_per_container_g; colours: string[]; sweeteners: string[]; caffeine } | null;
   sugar: { level: "low" | "medium" | "high" | "unknown"; per_100; basis; explanation };
   claims: string[]; certifications: string[];
@@ -175,6 +182,10 @@ curl -F image=@samples/fr-yogurt-peut-contenir.jpg localhost:3000/api/analyze | 
 ### `GET /api/analyze`
 
 Health check: `{ ok, providers, models }`.
+
+### `GET /api/product?code=<barcode>&lang=<en|fr|ar>`
+
+Barcode lookup, no model involved. Returns the same `AnalyzeResponse`, built from the Open Food Facts entry and run through the same checks (`ingredient_source: "database"`). `400 bad_request` for digits that aren't a valid barcode (the check digit is verified), `404 not_found` for an unknown product, `502 upstream_unavailable` if the database can't be reached, `503 not_configured` when `PRODUCT_LOOKUP=off`.
 
 ## Tests and samples
 

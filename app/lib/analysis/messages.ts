@@ -38,6 +38,10 @@ export interface AnalysisMessages {
     /** the usual ingredients of a recognised product, recalled by the model */
     estimatedProduct: string;
     database: (product: string) => string;
+    /** the whole result comes from the database (barcode scan) */
+    databaseScan: (product: string) => string;
+    /** calories and nutrients guessed for a dish */
+    estimatedNutrition: string;
   };
   issues: { sugarsOverCarbs: string; saturatesOverFat: string; macrosOver100: string; energyMismatch: string };
   evidence: {
@@ -51,6 +55,13 @@ export interface AnalysisMessages {
   };
   sources: { mayContain: string; declared: string; listed: string };
   water: Record<WaterFactId, (v: WaterValues) => string>;
+  /**
+   * What each remark means for the person drinking the water, in plain words. Every tip
+   * rests on the published guidance named in `waterSources`; don't add one from memory.
+   */
+  waterTips: Record<WaterFactId, (v: WaterValues) => string>;
+  /** where each tip comes from, shown under it */
+  waterSources: Record<WaterFactId, string>;
   /** keyed by English class names: those of knowledge.ts `additiveCategory`, plus the ones models write anyway */
   categories: Record<string, string>;
   sugar: {
@@ -58,12 +69,97 @@ export interface AnalysisMessages {
     low: (value: number, unit: Unit, t: Threshold) => string;
     medium: (value: number, unit: Unit, t: Threshold) => string;
     notPrinted: string;
+    /** in place of the threshold sentence when the sugar figure is itself a guess */
+    estimated: string;
   };
   highlights: {
     high: (nutrient: LevelKey, value: number | null, unit: Unit) => string;
     lowSugars: (value: number | null, unit: Unit) => string;
   };
 }
+
+// ---------------------------------------------------------------- water: reference values and sources
+//
+// The tips below are tied to published guidance, not general knowledge:
+// - WHO, Guidelines for drinking-water quality (4th ed.): nitrate 50 mg/L to protect bottle-fed
+//   infants from methaemoglobinaemia; fluoride 1.5 mg/L (dental fluorosis above it); no health-based
+//   value for pH, hardness, chloride or sulphate (sulphate: laxative effect at high levels).
+// - WHO, Calcium and magnesium in drinking-water: public health significance (2009): no convincing
+//   evidence that hard water harms health; it contributes to calcium and magnesium intake.
+// - WHO, Guideline: sodium intake for adults and children (2012): under 2 g of sodium a day.
+// - EFSA dietary reference values: calcium 950 mg/day (adults from 25), magnesium 350 mg/day (men;
+//   300 for women). EU Scientific Committee on Food: upper level of 250 mg/day for magnesium from
+//   supplements, water and fortified foods (mild diarrhoea above it).
+// - European Association of Urology, Urolithiasis guidelines: people who form stones should drink
+//   2.5–3 L a day and keep a normal calcium intake of 1–1.2 g a day; restricting calcium isn't advised.
+// - Directive 2009/54/EC (mineral-water mentions) and 2003/40/EC (fluoride notice above 1.5 mg/L).
+// - Enamel begins to demineralise below a pH of about 5.5 (the "critical pH" of dental erosion).
+const DAILY = { calcium: 950, magnesium: 350, sodium: 2000 } as const;
+
+/** what a litre gives, as a share of the daily reference, in whole percent */
+const share = (mgPerLitre: number | null, daily: number) => Math.round(((mgPerLitre ?? 0) / daily) * 100);
+
+const sources = (
+  who: string,
+  hardness: string,
+  sodium: string,
+  efsa: string,
+  stones: string,
+  eu: string,
+  dental: string,
+): Record<WaterFactId, string> => ({
+  ph_neutral: eu,
+  ph_acidic: dental,
+  ph_alkaline: who,
+  ph_sparkling: dental,
+  mineral_very_low: eu,
+  mineral_low: eu,
+  mineral_medium: eu,
+  mineral_high: eu,
+  hardness_soft: hardness,
+  hardness_medium: hardness,
+  hardness_hard: hardness,
+  hardness_very_hard: hardness,
+  low_sodium: sodium,
+  sodium_rich: sodium,
+  calcium_rich: `${efsa} · ${stones}`,
+  magnesium_rich: efsa,
+  bicarbonate_rich: eu,
+  sulphate_rich: who,
+  chloride_rich: who,
+  fluoride_present: who,
+  fluoride_high: who,
+  nitrate_low: who,
+  nitrate_high: who,
+});
+
+const SOURCES_EN = sources(
+  "WHO, Guidelines for drinking-water quality",
+  "WHO, Calcium and magnesium in drinking-water",
+  "WHO, sodium intake guideline",
+  "EFSA, dietary reference values",
+  "European Association of Urology, urolithiasis guidelines",
+  "EU rules on drinking and mineral waters",
+  "Dental erosion research (critical pH of enamel)",
+);
+const SOURCES_FR = sources(
+  "OMS, Directives de qualité pour l'eau de boisson",
+  "OMS, Calcium et magnésium dans l'eau de boisson",
+  "OMS, recommandation sur l'apport en sodium",
+  "EFSA, valeurs nutritionnelles de référence",
+  "Association européenne d'urologie, recommandations sur la lithiase",
+  "Règles européennes sur les eaux de boisson et les eaux minérales",
+  "Recherche sur l'érosion dentaire (pH critique de l'émail)",
+);
+const SOURCES_AR = sources(
+  "منظمة الصحة العالمية، دلائل جودة مياه الشرب",
+  "منظمة الصحة العالمية، الكالسيوم والمغنيسيوم في مياه الشرب",
+  "منظمة الصحة العالمية، إرشادات مدخول الصوديوم",
+  "الهيئة الأوروبية لسلامة الأغذية، القيم الغذائية المرجعية",
+  "الجمعية الأوروبية لجراحة المسالك البولية، إرشادات حصى الكلى",
+  "القواعد الأوروبية لمياه الشرب والمياه المعدنية",
+  "أبحاث تآكل الأسنان (الرقم الهيدروجيني الحرج للمينا)",
+);
 
 const en: AnalysisMessages = {
   allergenNames: ALLERGEN_NAMES,
@@ -89,6 +185,10 @@ const en: AnalysisMessages = {
       "The ingredient list wasn't readable. These are the usual ingredients of this product as recalled by the AI: check them on the pack.",
     database: (product) =>
       `The ingredient list wasn't readable on the photo. It was completed from the Open Food Facts entry “${product}”: check that it matches your pack.`,
+    databaseScan: (product) =>
+      `This comes from the Open Food Facts entry “${product}”, a community database, not from a photo of your pack: check it against the label.`,
+    estimatedNutrition:
+      "The calories and nutrients are a rough estimate for a typical recipe and portion of this dish. The real figures can differ a lot.",
   },
   issues: {
     sugarsOverCarbs: "sugars exceed carbohydrates",
@@ -136,6 +236,38 @@ const en: AnalysisMessages = {
     nitrate_low: (v) => `Low in nitrate: ${v.minerals.nitrate} mg/L (10 or less).`,
     nitrate_high: (v) => `Nitrate ${v.minerals.nitrate} mg/L: above the 50 mg/L EU limit.`,
   },
+  waterTips: {
+    ph_neutral: () => "Right where drinking water should be. Nothing to think about.",
+    ph_acidic: (v) =>
+      (v.ph ?? 7) < 5.5
+        ? "Quite acidic. It's safe to drink, but tooth enamel starts to soften below about pH 5.5, so it's kinder to your teeth with meals than sipped all day."
+        : "A little on the acidic side. It's safe to drink; you may just notice a sharper taste.",
+    ph_alkaline: () => "More alkaline than usual. It's safe to drink and can taste a little flat or bitter. Your stomach acid neutralises it, so it doesn't change your body's own pH.",
+    ph_sparkling: () => "That's the bubbles: dissolved carbon dioxide makes any fizzy water a little acidic. Perfectly normal, and far gentler on teeth than sodas or juices.",
+    mineral_very_low: () => "A very light water with almost no minerals and a neutral taste. It hydrates just as well, but adds next to nothing to your mineral intake.",
+    mineral_low: () => "A light, everyday water. Easy to drink all day long.",
+    mineral_medium: () => "A fair amount of minerals. Fine for every day, with a taste you can notice.",
+    mineral_high: () => "A heavily mineralised water with a strong taste. Enjoy it, but look at the sodium, sulphate and fluoride lines below before making it your only water.",
+    hardness_soft: () => "Soft water: a gentle taste, and no limescale in the kettle.",
+    hardness_medium: () => "Middle of the road. Nothing to worry about.",
+    hardness_hard: () => "Hard water. No harm to health has been shown from drinking it, and its calcium and magnesium count towards your intake. It does leave limescale in kettles.",
+    hardness_very_hard: () => "Very hard water. Still no harm to health has been shown from drinking it; expect a fuller taste and plenty of limescale in the kettle.",
+    low_sodium: () => "Very little salt in here. A good pick if you watch your blood pressure or eat low-salt.",
+    sodium_rich: (v) =>
+      `Salty for a water: one litre brings about ${share(v.minerals.sodium, DAILY.sodium)} % of the 2 g of sodium adults are advised to stay under each day. If you have high blood pressure, heart or kidney disease, or were told to cut down on salt, keep it for now and then.`,
+    calcium_rich: (v) =>
+      `One litre gives about ${share(v.minerals.calcium, DAILY.calcium)} % of the calcium an adult needs in a day, which is good for bones. About kidney stones: calcium in water isn't the cause, and people who form stones are advised to drink plenty and keep a normal calcium intake rather than cut it. If your doctor has given you a calcium limit, follow that.`,
+    magnesium_rich: (v) =>
+      `One litre gives about ${share(v.minerals.magnesium, DAILY.magnesium)} % of an adult's daily magnesium. Above roughly 250 mg a day from water and supplements, magnesium can loosen the bowels. If you have kidney disease, ask your doctor first.`,
+    bicarbonate_rich: () => "Rich in bicarbonate, which many people find easy on the stomach after a meal. These waters are often high in sodium too, so check that line.",
+    sulphate_rich: () => "High in sulphate, which can have a laxative effect, more so if you're not used to it. Not a good choice for preparing baby bottles.",
+    chloride_rich: () => "Plenty of chloride, which gives the water a slightly salty taste. Not a health concern in itself.",
+    fluoride_present: () => "Contains fluoride, which helps protect teeth against decay. If you already use fluoride toothpaste, you don't need to seek out more.",
+    fluoride_high: () => "A lot of fluoride. Don't use it for babies or as young children's everyday water: over the years teeth are forming, too much fluoride can mottle them.",
+    nitrate_low: () => "Barely any nitrate: one of the things to look for in a water for baby bottles.",
+    nitrate_high: () => "Too much nitrate. Never use it for baby bottles: in bottle-fed infants nitrate can reduce the blood's ability to carry oxygen.",
+  },
+  waterSources: SOURCES_EN,
   categories: {},
   sugar: {
     high: (v, unit, t) =>
@@ -145,6 +277,7 @@ const en: AnalysisMessages = {
     medium: (v, unit, t) =>
       `${v} g of sugars per 100 ${unit}, between the ${t.low} g “low” and ${t.high} g “high” thresholds used on UK front-of-pack labels.`,
     notPrinted: "No sugar value per 100 g/ml is printed on the visible label.",
+    estimated: "A rough figure for a typical recipe of this dish, not a measured one.",
   },
   highlights: {
     high: (nutrient, value, unit) =>
@@ -197,6 +330,10 @@ const fr: AnalysisMessages = {
       "La liste des ingrédients était illisible. Voici les ingrédients habituels de ce produit, de mémoire de l'IA : vérifiez-les sur l'emballage.",
     database: (product) =>
       `La liste des ingrédients était illisible sur la photo. Elle a été complétée à partir de la fiche Open Food Facts « ${product} » : vérifiez qu'elle correspond à votre produit.`,
+    databaseScan: (product) =>
+      `Ces informations viennent de la fiche Open Food Facts « ${product} », une base communautaire, et non d'une photo de votre produit : comparez-les avec l'étiquette.`,
+    estimatedNutrition:
+      "Les calories et les nutriments sont une estimation approximative pour une recette et une portion typiques de ce plat. Les valeurs réelles peuvent être très différentes.",
   },
   issues: {
     sugarsOverCarbs: "les sucres dépassent les glucides",
@@ -245,6 +382,38 @@ const fr: AnalysisMessages = {
     nitrate_low: (v) => `Pauvre en nitrates : ${n(v.minerals.nitrate)} mg/L (10 ou moins).`,
     nitrate_high: (v) => `Nitrates ${n(v.minerals.nitrate)} mg/L : au-dessus de la limite européenne de 50 mg/L.`,
   },
+  waterTips: {
+    ph_neutral: () => "Pile là où une eau de boisson doit être. Rien à signaler.",
+    ph_acidic: (v) =>
+      (v.ph ?? 7) < 5.5
+        ? "Assez acide. Vous pouvez la boire, mais l'émail des dents commence à se fragiliser en dessous d'un pH d'environ 5,5 : mieux vaut la boire pendant les repas que la siroter toute la journée."
+        : "Légèrement acide. Vous pouvez la boire ; vous remarquerez peut-être un goût plus vif.",
+    ph_alkaline: () => "Plus alcaline que d'habitude. Vous pouvez la boire ; elle peut avoir un goût un peu plat ou amer. L'acidité de l'estomac la neutralise : elle ne change pas le pH de votre corps.",
+    ph_sparkling: () => "Ce sont les bulles : le gaz carbonique dissous rend toute eau gazeuse un peu acide. Tout à fait normal, et bien plus doux pour les dents que les sodas ou les jus.",
+    mineral_very_low: () => "Une eau très légère, presque sans minéraux, au goût neutre. Elle hydrate tout aussi bien, mais n'apporte presque rien en minéraux.",
+    mineral_low: () => "Une eau légère, pour tous les jours. Facile à boire toute la journée.",
+    mineral_medium: () => "Une bonne dose de minéraux. Convient au quotidien, avec un goût qui se remarque.",
+    mineral_high: () => "Une eau très minéralisée, au goût marqué. Avant d'en faire votre seule eau, regardez les lignes sodium, sulfates et fluor ci-dessous.",
+    hardness_soft: () => "Eau douce : goût léger, et pas de calcaire dans la bouilloire.",
+    hardness_medium: () => "Dans la moyenne. Rien à signaler.",
+    hardness_hard: () => "Eau dure. Aucun effet néfaste sur la santé n'a été démontré, et son calcium et son magnésium comptent dans vos apports. Elle laisse en revanche du calcaire dans les bouilloires.",
+    hardness_very_hard: () => "Eau très dure. Aucun effet néfaste sur la santé n'a été démontré non plus ; attendez-vous à un goût plus prononcé et à beaucoup de calcaire dans la bouilloire.",
+    low_sodium: () => "Très peu de sel. Un bon choix si vous surveillez votre tension ou mangez peu salé.",
+    sodium_rich: (v) =>
+      `Salée pour une eau : un litre apporte environ ${share(v.minerals.sodium, DAILY.sodium)} % des 2 g de sodium qu'il est conseillé aux adultes de ne pas dépasser par jour. En cas d'hypertension, de maladie du cœur ou des reins, ou de régime pauvre en sel, gardez-la pour de temps en temps.`,
+    calcium_rich: (v) =>
+      `Un litre apporte environ ${share(v.minerals.calcium, DAILY.calcium)} % du calcium dont un adulte a besoin par jour, ce qui est bon pour les os. Pour les calculs rénaux : le calcium de l'eau n'en est pas la cause, et l'on conseille aux personnes qui en font de boire beaucoup et de garder un apport normal en calcium plutôt que de le réduire. Si votre médecin vous a fixé une limite de calcium, suivez-la.`,
+    magnesium_rich: (v) =>
+      `Un litre apporte environ ${share(v.minerals.magnesium, DAILY.magnesium)} % du magnésium quotidien d'un adulte. Au-delà d'environ 250 mg par jour venant de l'eau et des compléments, le magnésium peut accélérer le transit. En cas de maladie rénale, demandez d'abord l'avis de votre médecin.`,
+    bicarbonate_rich: () => "Riche en bicarbonates, que beaucoup trouvent agréables pour la digestion après un repas. Ces eaux sont souvent riches en sodium aussi : vérifiez cette ligne.",
+    sulphate_rich: () => "Riche en sulfates, qui peuvent avoir un effet laxatif, surtout sans habitude. À éviter pour préparer les biberons.",
+    chloride_rich: () => "Beaucoup de chlorures, qui donnent à l'eau un goût légèrement salé. Sans conséquence pour la santé en soi.",
+    fluoride_present: () => "Contient du fluor, qui aide à protéger les dents des caries. Avec un dentifrice fluoré, inutile d'en chercher davantage.",
+    fluoride_high: () => "Beaucoup de fluor. Ne l'utilisez pas pour les bébés ni comme eau de tous les jours des jeunes enfants : pendant les années où les dents se forment, un excès de fluor peut les tacher.",
+    nitrate_low: () => "Presque pas de nitrates : l'un des critères à regarder pour l'eau des biberons.",
+    nitrate_high: () => "Trop de nitrates. Ne l'utilisez jamais pour les biberons : chez le nourrisson, les nitrates peuvent réduire la capacité du sang à transporter l'oxygène.",
+  },
+  waterSources: SOURCES_FR,
   categories: {
     Colour: "Colorant",
     Preservative: "Conservateur",
@@ -281,6 +450,7 @@ const fr: AnalysisMessages = {
     medium: (v, unit, t) =>
       `${n(v)} g de sucres pour 100 ${unit}, entre les seuils « faible » (${n(t.low)} g) et « élevé » (${n(t.high)} g) utilisés sur les étiquettes en face avant au Royaume-Uni.`,
     notPrinted: "Aucune teneur en sucres pour 100 g/ml n'est imprimée sur la partie visible de l'étiquette.",
+    estimated: "Valeur approximative pour une recette typique de ce plat, non mesurée.",
   },
   highlights: {
     high: (nutrient, value, unit) =>
@@ -331,6 +501,10 @@ const ar: AnalysisMessages = {
       "لم تكن قائمة المكوّنات مقروءة. هذه هي المكوّنات المعتادة لهذا المنتج كما يتذكّرها الذكاء الاصطناعي، فتحقق منها على العبوة.",
     database: (product) =>
       `لم تكن قائمة المكوّنات مقروءة في الصورة، فاستُكملت من صفحة «${product}» في قاعدة بيانات Open Food Facts. تأكد من أنها تطابق منتجك.`,
+    databaseScan: (product) =>
+      `هذه المعلومات من صفحة «${product}» في Open Food Facts، وهي قاعدة بيانات تشاركية، وليست من صورة لمنتجك: قارنها بالملصق.`,
+    estimatedNutrition:
+      "السعرات والعناصر الغذائية تقدير تقريبي لوصفة وحصة نموذجيتين من هذا الطبق، وقد تختلف القيم الحقيقية كثيرًا.",
   },
   issues: {
     sugarsOverCarbs: "السكريات تتجاوز الكربوهيدرات",
@@ -378,6 +552,38 @@ const ar: AnalysisMessages = {
     nitrate_low: (v) => `قليل النترات: ${v.minerals.nitrate} ملغ/ل (10 أو أقل).`,
     nitrate_high: (v) => `النترات ${v.minerals.nitrate} ملغ/ل: أعلى من الحد الأوروبي البالغ 50 ملغ/ل.`,
   },
+  waterTips: {
+    ph_neutral: () => "في المكان الصحيح تمامًا لماء الشرب. لا شيء يستدعي القلق.",
+    ph_acidic: (v) =>
+      (v.ph ?? 7) < 5.5
+        ? "حمضي بوضوح. شربه آمن، لكن مينا الأسنان تبدأ بالضعف تحت رقم هيدروجيني يقارب 5.5، لذا فالأرفق بأسنانك أن تشربه مع الوجبات لا أن ترتشفه طوال اليوم."
+        : "حمضي قليلًا. شربه آمن، وقد تلاحظ فقط طعمًا أكثر حدّة.",
+    ph_alkaline: () => "أكثر قلوية من المعتاد. شربه آمن، وقد يكون طعمه باهتًا أو مرًّا قليلًا. حمض المعدة يعادله، فهو لا يغيّر الرقم الهيدروجيني لجسمك.",
+    ph_sparkling: () => "السبب هو الفقاعات: ثاني أكسيد الكربون المذاب يجعل أي ماء غازي حمضيًّا قليلًا. أمر طبيعي تمامًا، وهو ألطف بالأسنان كثيرًا من المشروبات الغازية المحلّاة والعصائر.",
+    mineral_very_low: () => "ماء خفيف جدًّا يكاد يخلو من المعادن وطعمه محايد. يروي العطش كغيره، لكنه لا يضيف شيئًا يُذكر إلى حاجتك من المعادن.",
+    mineral_low: () => "ماء خفيف لكل يوم. سهل الشرب طوال اليوم.",
+    mineral_medium: () => "كمية معقولة من المعادن. مناسب لكل يوم، وطعمه ملحوظ.",
+    mineral_high: () => "ماء غني جدًّا بالمعادن وطعمه قوي. قبل أن تجعله ماءك الوحيد، انظر إلى أسطر الصوديوم والكبريتات والفلورايد أدناه.",
+    hardness_soft: () => "ماء يسير: طعم خفيف، ولا ترسّبات كلسية في الغلاية.",
+    hardness_medium: () => "في الوسط. لا شيء يستدعي القلق.",
+    hardness_hard: () => "ماء عسر. لم يثبت أي ضرر صحي من شربه، وما فيه من كالسيوم ومغنيسيوم يُحسب من حاجتك اليومية. لكنه يترك ترسّبات كلسية في الغلاية.",
+    hardness_very_hard: () => "ماء شديد العسرة. لم يثبت كذلك أي ضرر صحي من شربه؛ توقّع طعمًا أوضح وترسّبات كلسية كثيرة في الغلاية.",
+    low_sodium: () => "ملح قليل جدًّا. خيار جيد إذا كنت تراقب ضغط الدم أو تتبع حمية قليلة الملح.",
+    sodium_rich: (v) =>
+      `مالح بالنسبة إلى ماء: اللتر الواحد يعطي نحو ${share(v.minerals.sodium, DAILY.sodium)}% من 2 غ من الصوديوم التي يُنصح البالغون بعدم تجاوزها يوميًّا. إذا كان لديك ارتفاع في ضغط الدم أو مرض في القلب أو الكلى، أو طُلب منك تقليل الملح، فاجعله لبعض الأحيان فقط.`,
+    calcium_rich: (v) =>
+      `اللتر الواحد يعطي نحو ${share(v.minerals.calcium, DAILY.calcium)}% من الكالسيوم الذي يحتاجه البالغ في اليوم، وهذا مفيد للعظام. أما حصى الكلى: فكالسيوم الماء ليس سببها، ويُنصح من تتكوّن لديهم الحصى بالإكثار من شرب الماء والحفاظ على كمية طبيعية من الكالسيوم لا بتقليله. وإذا حدّد لك طبيبك مقدارًا من الكالسيوم فالتزم به.`,
+    magnesium_rich: (v) =>
+      `اللتر الواحد يعطي نحو ${share(v.minerals.magnesium, DAILY.magnesium)}% من حاجة البالغ اليومية من المغنيسيوم. فوق نحو 250 ملغ يوميًّا من الماء والمكمّلات قد يليّن المغنيسيوم الأمعاء. إذا كان لديك مرض في الكلى فاستشر طبيبك أولًا.`,
+    bicarbonate_rich: () => "غني بالبيكربونات، ويجده كثيرون مريحًا للمعدة بعد الأكل. هذه المياه تكون غالبًا غنية بالصوديوم أيضًا، فتحقق من ذلك السطر.",
+    sulphate_rich: () => "كبريتات مرتفعة، وقد يكون لها أثر مليّن، خصوصًا إذا لم تكن معتادًا عليها. ليس خيارًا جيدًا لتحضير رضّاعات الأطفال.",
+    chloride_rich: () => "كلوريد كثير، يعطي الماء طعمًا مالحًا قليلًا. لا يشكّل في ذاته مشكلة صحية.",
+    fluoride_present: () => "يحتوي على الفلورايد الذي يساعد على حماية الأسنان من التسوّس. إذا كنت تستعمل معجونًا بالفلورايد فلا حاجة إلى المزيد.",
+    fluoride_high: () => "فلورايد كثير. لا تستعمله للرضّع ولا كماء يومي للأطفال الصغار: في سنوات تكوّن الأسنان قد تترك الزيادة منه بقعًا عليها.",
+    nitrate_low: () => "نترات تكاد لا تُذكر: من الأمور التي يُنظر إليها عند اختيار ماء لرضّاعات الأطفال.",
+    nitrate_high: () => "نترات أكثر من اللازم. لا تستعمله أبدًا لرضّاعات الأطفال: عند الرضّع قد تُضعف النترات قدرة الدم على حمل الأكسجين.",
+  },
+  waterSources: SOURCES_AR,
   categories: {
     Colour: "ملوّن",
     Preservative: "مادة حافظة",
@@ -414,6 +620,7 @@ const ar: AnalysisMessages = {
     medium: (v, unit, t) =>
       `${v} غ من السكريات لكل 100 ${arUnit(unit)}، أي بين عتبتي «منخفض» (${t.low} غ) و«مرتفع» (${t.high} غ) المعتمدتين في الملصقات الأمامية البريطانية.`,
     notPrinted: "لا توجد قيمة للسكريات لكل 100 غ/مل مطبوعة على الجزء الظاهر من الملصق.",
+    estimated: "قيمة تقريبية لوصفة نموذجية من هذا الطبق وليست مقيسة.",
   },
   highlights: {
     high: (nutrient, value, unit) =>

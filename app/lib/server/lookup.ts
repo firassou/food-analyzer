@@ -1,5 +1,5 @@
 import "server-only";
-import { fold } from "../analysis/knowledge";
+import { fold, volumeMl } from "../analysis/knowledge";
 import { analysisMessages } from "../analysis/messages";
 import { normalize } from "../analysis/normalize";
 import type { AllergenId, LabelAnalysis, Nutrition } from "../analysis/types";
@@ -188,7 +188,12 @@ const asInput = (n: Nutrition) => ({
  * Re-runs the deterministic checks on the photo's reading completed by the database
  * entry. What was read on the photo always wins; the entry only fills what's missing.
  */
-export function completeFromDatabase(result: LabelAnalysis, found: DatabaseProduct, locale: Locale): LabelAnalysis {
+export function completeFromDatabase(
+  result: LabelAnalysis,
+  found: DatabaseProduct,
+  locale: Locale,
+  scanned = false,
+): LabelAnalysis {
   const product = [found.name, found.brand].filter(Boolean).join(" – ") || found.code || SOURCE;
   const completed = normalize(
     {
@@ -221,7 +226,7 @@ export function completeFromDatabase(result: LabelAnalysis, found: DatabaseProdu
       origin: result.origin,
       raw_text: result.raw_text,
     },
-    { locale, database: { name: SOURCE, product, url: found.url } },
+    { locale, database: { name: SOURCE, product, url: found.url, scanned } },
   );
   // the entry answers these; every other warning of the photo's reading still stands
   const w = analysisMessages(locale).warnings;
@@ -229,4 +234,12 @@ export function completeFromDatabase(result: LabelAnalysis, found: DatabaseProdu
   for (const warning of result.warnings)
     if (!answered.has(warning) && !completed.warnings.includes(warning)) completed.warnings.push(warning);
   return completed;
+}
+
+/** a result built from a database entry alone, for a scanned barcode (no photo) */
+export function fromDatabase(found: DatabaseProduct, locale: Locale): LabelAnalysis {
+  // sold by volume: a drink, with nutrition per 100 ml
+  const kind = volumeMl(found.quantity) !== null ? "drink" : "label";
+  const blank = normalize({ label_detected: true, image_quality: "good", kind }, { locale });
+  return completeFromDatabase(blank, found, locale, true);
 }

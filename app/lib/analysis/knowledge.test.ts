@@ -7,6 +7,7 @@ import {
   detectAllergens,
   findENumbers,
   fold,
+  glutenLikelihood,
   glutenSignal,
   isDairy,
   isColourCode,
@@ -346,5 +347,22 @@ describe("drink helpers", () => {
     expect(mentionsCaffeine("arômes naturels (dont caféine)")).toBe(true);
     expect(mentionsCaffeine("كافيين")).toBe(true);
     expect(mentionsCaffeine("café au lait")).toBe(false);
+  });
+});
+
+describe("glutenLikelihood", () => {
+  it("fills the bar with how likely gluten is, not with how sure the reading is", () => {
+    expect(glutenLikelihood("contains", "high")).toBe(1);
+    expect(glutenLikelihood("no_indication", "high")).toBe(0); // a confident "none" is an empty bar
+    expect(glutenLikelihood("no_indication", "low")).toBeCloseTo(0.2);
+    expect(glutenLikelihood("likely_contains", "medium")).toBeCloseTo(0.6);
+    expect(glutenLikelihood("unclear", "high")).toBeNull();
+  });
+  it("orders the verdicts whatever the confidence", () => {
+    const levels = ["low", "medium", "high"] as const;
+    const max = (s: "no_indication" | "likely_contains") => Math.max(...levels.map((c) => glutenLikelihood(s, c)!));
+    const min = (s: "likely_contains" | "contains") => Math.min(...levels.map((c) => glutenLikelihood(s, c)!));
+    expect(max("no_indication")).toBeLessThan(min("likely_contains"));
+    expect(max("likely_contains")).toBeLessThan(min("contains"));
   });
 });

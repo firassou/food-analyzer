@@ -1,7 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, CameraIcon, cn, Dot, dotClasses, Notice, Section, Tag, Tone, toneClasses, toneText } from "./components/ui";
-import { LEVEL_THRESHOLDS, WATER_LIMITS } from "./lib/analysis/knowledge";
+import { glutenLikelihood, LEVEL_THRESHOLDS, WATER_LIMITS } from "./lib/analysis/knowledge";
 import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
 import { MINERAL_KEYS } from "./lib/analysis/types";
 import type {
@@ -49,6 +49,7 @@ const highlightTone: Record<HighlightTone, Tone> = { positive: "green", neutral:
 const highlightMark: Record<HighlightTone, string> = { positive: "✓", neutral: "–", caution: "!" };
 
 const confidenceLevel: Record<Confidence, number> = { low: 1, medium: 2, high: 3 };
+
 
 // labels come from the dictionary (results.nutrition.rows / .meters)
 const tableRows: {
@@ -129,7 +130,7 @@ function Results({
 }) {
   const { t, fmt, languageName } = useI18n();
   const r = t.results;
-  const { kind, product, nutrition, ingredients, allergens, additives, gluten, lactose, sugar, water, drink } = result;
+  const { kind, product, nutrition, ingredients, allergens, additives, gluten, sugar, water, drink } = result;
 
   // ---- derived data ----
   const additiveByCode = new Map(additives.filter((a) => a.code).map((a) => [a.code!, a]));
@@ -285,11 +286,13 @@ function Results({
     hint: gluten.status === "unclear" ? r.tiles.notEnoughInfo : r.tiles.confidence[gluten.confidence],
     target: jump("dietary"),
   };
-  const lactoseTile: Tile = {
-    title: r.tiles.lactose,
-    label: r.presence[lactose.status],
-    tone: presenceTone[lactose.status],
-    target: jump("dietary"),
+  const kcal = nutrition?.per_serving?.energy_kcal ?? nutrition?.per_100?.energy_kcal ?? null;
+  const caloriesTile: Tile = {
+    title: r.dish.calories,
+    label: kcal !== null ? ltr(`≈ ${fmt(kcal)} kcal`) : r.tiles.unknown,
+    tone: "zinc",
+    hint: kcal === null ? undefined : nutrition?.per_serving?.energy_kcal != null ? r.dish.perPortion : r.dish.per100,
+    target: jump("nutrition"),
   };
   const sugarTile: Tile = {
     title: r.tiles.sugar,
@@ -350,8 +353,8 @@ function Results({
         allergenTile,
         glutenTile,
       ]
-    : kind === "dish" ? [allergenTile, glutenTile, lactoseTile]
-    : [glutenTile, lactoseTile, sugarTile, allergenTile, additiveTile];
+    : kind === "dish" ? [allergenTile, glutenTile, caloriesTile]
+    : [glutenTile, sugarTile, allergenTile, additiveTile];
 
   const blocks: Record<Exclude<SectionId, "overview">, React.ReactNode> = {
     water: (
@@ -452,25 +455,14 @@ function Results({
 
     dietary: (
       <Section {...head("dietary")}>
-        <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
-          <DietaryPanel title={r.tiles.gluten} status={gluten.status} evidence={gluten.evidence}>
-            <div className="mt-3">
-              <div className="eyebrow mb-1.5 flex justify-between text-ink-soft">
-                <span>{r.dietary.confidence}</span>
-                <span>{r.dietary.confidenceLevel[gluten.confidence]}</span>
-              </div>
-              <Bar value={confidenceLevel[gluten.confidence] / 3} tone="zinc" />
-            </div>
-          </DietaryPanel>
-          <DietaryPanel title={r.tiles.lactose} status={lactose.status} evidence={lactose.evidence} />
-        </div>
+        <GlutenPanel status={gluten.status} confidence={gluten.confidence} evidence={gluten.evidence} />
       </Section>
     ),
 
     nutrition: (
       <Section
         {...head("nutrition")}
-        title={r.nutrition.title}
+        title={nutrition?.estimated ? r.dish.nutrition : r.nutrition.title}
         aside={
           nutrition?.serving_size && (
             <>
@@ -913,7 +905,8 @@ function WaterPanel({ water }: { water: Water }) {
       {water.facts.length > 0 && (
         <div>
           <SubLabel>{w.meaning}</SubLabel>
-          <ul className="space-y-2">
+          <p className="mb-4 text-xs leading-5 text-ink-soft">{w.advice}</p>
+          <ul className="space-y-4">
             {water.facts.map((f) => (
               <li key={f.id} className="flex items-start gap-2.5 text-sm leading-6">
                 <span
@@ -925,7 +918,21 @@ function WaterPanel({ water }: { water: Water }) {
                 >
                   {highlightMark[f.tone]}
                 </span>
-                <span dir="auto">{f.text}</span>
+                <span className="min-w-0">
+                  <span dir="auto" className="block font-medium">
+                    {f.text}
+                  </span>
+                  {f.tip && (
+                    <span dir="auto" className="mt-0.5 block text-ink-soft">
+                      {f.tip}
+                    </span>
+                  )}
+                  {f.source && (
+                    <span dir="auto" className="mt-1 block text-xs text-ink-soft/80">
+                      {w.source} {f.source}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -1094,29 +1101,36 @@ function StatusTile({ title, label, tone, hint, onClick, className }: TileProps)
   );
 }
 
-function DietaryPanel({
-  title,
-  status,
-  evidence,
-  children,
-}: {
-  title: string;
-  status: Presence;
-  evidence: string[];
-  children?: React.ReactNode;
-}) {
-  const { t } = useI18n();
+/** the gluten verdict, how likely it is, and the evidence behind it */
+function GlutenPanel({ status, confidence, evidence }: { status: Presence; confidence: Confidence; evidence: string[] }) {
+  const { t, fmt } = useI18n();
+  const d = t.results.dietary;
   const tone = presenceTone[status];
+  const likelihood = glutenLikelihood(status, confidence);
   return (
     <div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-display font-semibold">{title}</span>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <div>
+          <p className="eyebrow text-ink-soft">{d.likelihood}</p>
+          <p className={cn("font-display mt-1 text-4xl leading-none font-bold tabular-nums", tone !== "zinc" && toneText[tone])}>
+            {likelihood !== null ? ltr(`${fmt(Math.round(likelihood * 100))} %`) : d.unknown}
+          </p>
+        </div>
         <Tag tone={tone}>
           <Dot tone={tone} />
           {t.results.presence[status]}
         </Tag>
       </div>
-      {children}
+      <div className="mt-4">
+        <Bar value={likelihood ?? 0} tone={tone} />
+        <div dir="ltr" aria-hidden className="eyebrow mt-1.5 flex justify-between text-ink-soft tabular-nums rtl:flex-row-reverse">
+          <span>0 %</span>
+          <span>100 %</span>
+        </div>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-ink-soft">
+        {d.confidence}: <span className="font-medium text-ink">{d.confidenceLevel[confidence]}</span> · {d.likelihoodHint}
+      </p>
       {evidence.length > 0 ?
         <ul className="mt-3 space-y-1 text-sm leading-6 text-ink-soft">
           {evidence.map((e, i) => (

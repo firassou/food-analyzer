@@ -2,7 +2,7 @@
 // Everything here is pure and safe to import from client components:
 // no I/O, no server imports. See .claude/skills/label-knowledge-rules.
 
-import type { AllergenId, Basis, HighlightTone, Level, LevelKey, MineralKey, WaterFactId } from "./types";
+import type { AllergenId, Basis, Confidence, HighlightTone, Level, LevelKey, MineralKey, Presence, WaterFactId } from "./types";
 
 /** lowercase, strip accents (é→e, œ→oe, ß→ss); non-Latin scripts untouched */
 export function fold(text: string): string {
@@ -583,6 +583,20 @@ export function waterFacts(w: {
   return out;
 }
 
+// ---------------------------------------------------------------- barcodes
+
+/**
+ * The digits of an EAN-8, UPC-A, EAN-13 or ITF-14 barcode, or null. Misread or
+ * mistyped digits could match another product, so the GS1 check digit must hold.
+ */
+export function barcodeDigits(raw: string): string | null {
+  const digits = raw.replace(/[\s-]/g, "");
+  if (!/^(\d{8}|\d{12,14})$/.test(digits)) return null;
+  // from the right, skipping the check digit: weights 3, 1, 3, …
+  const sum = [...digits.slice(0, -1)].reverse().reduce((total, d, i) => total + Number(d) * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === Number(digits.at(-1)) ? digits : null;
+}
+
 // ---------------------------------------------------------------- drinks: what to look at
 
 /** container volume in ml from a net quantity ("1.5 L", "33 cl", "6 x 330 ml" → one container) */
@@ -612,4 +626,19 @@ const CAFFEINE = /(?<![\p{L}])(caffeine|cafeine|cafeina|caffeina|koffein|guarana
 
 export function mentionsCaffeine(text: string): boolean {
   return CAFFEINE.test(fold(text));
+}
+
+// ---------------------------------------------------------------- gluten likelihood
+
+/**
+ * How likely the product is to contain gluten, from 0 to 1: the verdict sets the range
+ * and the confidence moves it within that range. A confident "no indication" is an empty
+ * bar and a confident "contains" a full one. Null when nothing could be read.
+ */
+export function glutenLikelihood(status: Presence, confidence: Confidence): number | null {
+  const sure = { low: 0, medium: 1, high: 2 }[confidence];
+  if (status === "contains") return 0.8 + sure * 0.1;
+  if (status === "likely_contains") return 0.5 + sure * 0.1;
+  if (status === "no_indication") return 0.2 - sure * 0.1;
+  return null;
 }

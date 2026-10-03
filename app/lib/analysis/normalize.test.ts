@@ -494,7 +494,24 @@ describe("fixture: bottled water", () => {
       id: "ph_neutral",
       tone: "positive",
       text: "pH 7.4: within the 6.5–9.5 range set for drinking water in the EU.",
+      tip: "Right where drinking water should be. Nothing to think about.",
+      source: "EU rules on drinking and mineral waters",
     });
+    // every remark comes with a plain-language word, in the reader's language
+    expect(r.water?.facts.every((f) => f.tip.length > 20)).toBe(true);
+    const rich = normalize({ kind: "water", product: { name: "Eau minérale" }, water: { minerals: { calcium: 480, nitrate: 60 } } }, { locale: "fr" });
+    expect(rich.water?.facts.map((f) => [f.id, f.tone])).toEqual([["nitrate_high", "caution"], ["calcium_rich", "neutral"]]);
+    // 480 mg/L against 950 mg a day; the stones myth is answered, not repeated
+    expect(rich.water?.facts[1].tip).toMatch(/^Un litre apporte environ 51 % du calcium/);
+    expect(rich.water?.facts[1].tip).toMatch(/le calcium de l'eau n'en est pas la cause/);
+    expect(rich.water?.facts[1].source).toMatch(/EFSA.*urologie/);
+    expect(rich.water?.facts[0].tip).toMatch(/jamais pour les biberons/);
+    const salty = normalize({ kind: "water", product: { name: "Mineral water" }, water: { ph: 5.2, minerals: { sodium: 1200, magnesium: 105 } } });
+    const tips = Object.fromEntries(salty.water!.facts.map((f) => [f.id, f.tip]));
+    expect(tips.sodium_rich).toMatch(/about 60 % of the 2 g of sodium/);
+    expect(tips.magnesium_rich).toMatch(/about 30 % of an adult's daily magnesium/);
+    expect(tips.ph_acidic).toMatch(/enamel starts to soften below about pH 5.5/);
+    expect(salty.water!.facts.every((f) => f.source.length > 5)).toBe(true);
   });
 
   it("has no gluten or lactose question and no missing-ingredients warning", () => {
@@ -545,7 +562,24 @@ describe("fixture: a dish with no label", () => {
     expect(r.ingredients.map((i) => [i.name, i.confidence])).toContainEqual(["hazelnuts", "low"]);
     expect(r.warnings).toEqual([
       "These ingredients are an estimate from the look of the food, not read from a label. The real recipe may differ: don't rely on this if you have allergies.",
+      "The calories and nutrients are a rough estimate for a typical recipe and portion of this dish. The real figures can differ a lot.",
     ]);
+  });
+
+  it("gives rough nutrition, flagged as an estimate and scaled to the portion", () => {
+    expect(r.nutrition).toMatchObject({ estimated: true, basis: "100g", serving_size: "1 slice (≈ 120 g)" });
+    expect(r.nutrition?.per_100?.energy_kcal).toBe(380);
+    expect(r.nutrition?.per_serving).toMatchObject({ energy_kcal: 456, sugars_g: 38.4, fat_g: 24 });
+    // a guess is never turned into a "High in …" statement
+    expect(r.highlights).toEqual([]);
+    expect(r.sugar.explanation).toBe("A rough figure for a typical recipe of this dish, not a measured one.");
+  });
+
+  it("ignores estimated nutrition for anything that isn't a dish", () => {
+    const label = normalize({ kind: "label", ingredients: ["rice"], estimated_nutrition: { per_100: { energy_kcal: 350 } } });
+    expect(label.nutrition).toBeNull();
+    const read = normalize({ ingredients: ["rice"], nutrition: { per_100: { energy_kcal: 350 } } });
+    expect(read.nutrition?.estimated).toBe(false);
   });
 
   it("never claims more than 'likely' from an estimate", () => {

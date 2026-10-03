@@ -23,6 +23,11 @@ Mobile first. The result reads like a printed spec sheet: warm paper, ink, heavy
 - The dock (fixed, bottom, thumb reach) carries the one primary action: take a photo. Leave room for it with `pb-dock`. Touch targets are at least 44 px.
 - From `lg`, the photo sits in a sticky left column.
 
+## Storage and overlays
+- Saved scans go through `app/lib/client/history.ts` only (guarded `localStorage`, read with `useSyncExternalStore`). Bump the key's version when `LabelAnalysis` changes in a way old entries can't satisfy.
+- The camera and the barcode scanner are full-screen dialogs portalled to `<body>`; both stop their stream on close and close on Escape.
+- Don't declare a component inside another component's render (the React compiler lint rejects it): lift it out and pass props.
+
 ## Languages and direction
 - Every visible string comes from `app/lib/i18n/messages/{en,fr,ar}.ts` through `useI18n()`. `en.ts` is the source of truth and its type forces the others to match. Use `format()` for `{placeholders}` and `rich()` for `<b>` emphasis. Remove strings that are no longer shown.
 - Use logical utilities only: `ms-*`/`me-*`, `ps-*`/`pe-*`, `text-start`/`text-end`, `start-*`/`end-*`; `rtl:` for the rare flip (bar origin, arrows).

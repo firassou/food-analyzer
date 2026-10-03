@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
@@ -42,8 +42,17 @@ async function requestLocale(): Promise<Locale> {
 
 export async function generateMetadata(): Promise<Metadata> {
   const { title, description } = MESSAGES[await requestLocale()].meta;
-  return { title, description };
+  return { title, description, appleWebApp: { capable: true, title: "Food Analyzer", statusBarStyle: "default" } };
 }
+
+export const viewport: Viewport = {
+  // the page paints under the notch and the home indicator; the dock pads itself with safe-area insets
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f1e8" },
+    { media: "(prefers-color-scheme: dark)", color: "#12110e" },
+  ],
+};
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const locale = await requestLocale();

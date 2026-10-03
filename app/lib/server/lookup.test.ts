@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalize } from "../analysis/normalize";
-import { completeFromDatabase, distance, findProduct, lookupEnabled, needsLookup, parseProduct } from "./lookup";
+import { completeFromDatabase, distance, findProduct, fromDatabase, lookupEnabled, needsLookup, parseProduct } from "./lookup";
 
 const ENTRY = {
   code: "3017620422003",
@@ -112,5 +112,26 @@ describe("completeFromDatabase", () => {
     const photo = normalize({ product: { name: "Nutella" }, nutrition: { basis: "100g", per_100: { sugars_g: 12, fat_g: 1 } } });
     const r = completeFromDatabase(photo, parseProduct(ENTRY, "en")!, "en");
     expect(r.nutrition?.per_100?.sugars_g).toBe(12);
+  });
+});
+
+describe("fromDatabase", () => {
+  it("builds a whole result from a scanned barcode and says it isn't from a photo", () => {
+    const r = fromDatabase(parseProduct(ENTRY, "en")!, "en");
+    expect(r.kind).toBe("label");
+    expect(r.label_detected).toBe(true);
+    expect(r.ingredient_source).toBe("database");
+    expect(r.product.name).toBe("Nutella");
+    expect(r.nutrition?.per_100?.sugars_g).toBe(56.3);
+    expect(r.warnings).toEqual([
+      "This comes from the Open Food Facts entry “Nutella – Nutella”, a community database, not from a photo of your pack: check it against the label.",
+    ]);
+    expect(r.database).toEqual({ name: "Open Food Facts", product: "Nutella – Nutella", url: "https://world.openfoodfacts.org/product/3017620422003" });
+  });
+  it("treats a product sold by volume as a drink", () => {
+    const r = fromDatabase({ ...parseProduct(ENTRY, "en")!, quantity: "33 cl", ingredients: "water, sugar, colour E150d" }, "en");
+    expect(r.kind).toBe("drink");
+    expect(r.nutrition?.basis).toBe("100ml");
+    expect(r.drink?.volume_ml).toBe(330);
   });
 });

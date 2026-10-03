@@ -59,7 +59,12 @@ export type WaterFactId =
 export interface WaterFact {
   id: WaterFactId;
   tone: HighlightTone;
+  /** the fact, with its figures */
   text: string;
+  /** what it means for the person drinking it, in everyday terms */
+  tip: string;
+  /** the published guidance the tip rests on */
+  source: string;
 }
 
 export interface Water {
@@ -184,6 +189,8 @@ export interface Nutrition {
   per_100: Nutrients | null;
   /** per-100 values derived from the serving column because the label doesn't print them */
   per_100_calculated: boolean;
+  /** a rough figure for a typical recipe (a dish with no label), not read from anything */
+  estimated: boolean;
   per_serving: Nutrients | null;
   /** UK FSA front-of-pack levels, computed from per_100 */
   levels: Record<LevelKey, Level | null>;
@@ -266,6 +273,7 @@ export type AnalyzeErrorCode =
   | "upstream_quota"
   | "upstream_unavailable"
   | "timeout"
+  | "not_found"
   | "internal";
 
 export type AnalyzeResponse =

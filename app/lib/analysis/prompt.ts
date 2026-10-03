@@ -35,6 +35,7 @@ JSON shape (every key must be present; use null, [] or "unclear" when unknown):
 "lactose": {"status": presence, "evidence": [string]},
 "additives": [{"code": string|null, "name": string${nameLocal}, "category": string|null, "purpose": string|null, "explanation": string|null}],
 "nutrition": {"basis": "100g"|"100ml", "per_100_printed": boolean, "serving_size": string|null, "per_100": nutrients|null, "per_serving": nutrients|null} | null,
+"estimated_nutrition": {"portion": string|null, "portion_g": number|null, "per_100": nutrients} | null, // kind "dish" only
 "water": {"ph": number|null, "dry_residue_mg_l": number|null, "sparkling": boolean, "minerals": {${minerals}}} | null, // bottled water only
 "claims": [string],
 "certifications": [string],
@@ -81,6 +82,7 @@ WATER (kind "water" only, otherwise water = null)
 ESTIMATES (estimated_ingredients)
 - Leave it [] whenever you could read an ingredient list on the photo: read ingredients always go in "ingredients".
 - kind "dish": there is no label, so estimate. product.name = what the food is (e.g. "Chocolate layer cake"), label_detected = false, ingredients = []. List in estimated_ingredients the ingredients it most probably contains, from most to least (max 15), including the basic recipe ingredients you cannot see (flour, eggs, butter, sugar), each with your confidence.
+- kind "dish" also gets estimated_nutrition: typical values per 100 g for this kind of dish (energy_kcal, fat_g, saturated_fat_g, carbohydrates_g, sugars_g, protein_g, salt_g; null where you cannot judge), portion = the portion in the photo in words (e.g. "1 slice"), portion_g = its approximate weight in grams. For everything else estimated_nutrition = null: nutrition is only ever read from a label.
 - A packaged product whose ingredient list is hidden or unreadable: only if the brand and product name are clearly visible and you know this exact product, list its usual ingredients in estimated_ingredients. Otherwise leave it [].
 - name: English ingredient name.
 

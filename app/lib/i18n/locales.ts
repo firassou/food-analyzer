@@ -36,3 +36,6 @@ export function matchLocale(acceptLanguage: string | null | undefined): Locale {
     .sort((a, b) => b.q - a.q || a.index - b.index);
   return ranked.map((x) => x.lang).find(isLocale) ?? DEFAULT_LOCALE;
 }
+
+/** date formatting: Arabic keeps Western digits here too */
+export const dateLocale = (locale: Locale): string => (locale === "ar" ? "ar-u-nu-latn" : locale);
