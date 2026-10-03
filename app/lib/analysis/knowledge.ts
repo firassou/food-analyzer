@@ -2,7 +2,7 @@
 // Everything here is pure and safe to import from client components:
 // no I/O, no server imports. See .claude/skills/label-knowledge-rules.
 
-import type { AllergenId, Basis, Level, LevelKey } from "./types";
+import type { AllergenId, Basis, HighlightTone, Level, LevelKey, MineralKey, WaterFactId } from "./types";
 
 /** lowercase, strip accents (é→e, œ→oe, ß→ss); non-Latin scripts untouched */
 export function fold(text: string): string {
@@ -489,4 +489,127 @@ export function splitPrecautions(text: string) {
     restAllergens: new Set(detectAllergens(rest)),
     rest,
   };
+}
+
+// ---------------------------------------------------------------- water
+
+const WATER =
+  /(?<![\p{L}])(mineral water|spring water|table water|drinking water|still water|sparkling water|eaux? minerales?( naturelles?)?|eaux? de source|eaux? de table|eaux? gazeuses?|eaux? plates?|agua mineral|agua de manantial|acqua minerale|mineralwasser|quellwasser)(?![\p{L}])|مياه معدنية|ماء معدني|مياه طبيعية|ماء طبيعي|مياه شرب|مياه منبع|ماء منبع/u;
+/** flavoured or sweetened waters are soft drinks, not water */
+const NOT_PLAIN_WATER =
+  /(?<![\p{L}])(flavou?red|aromatisee?s?|sucree?s?|sweetened|saveur|gout|lemonade|tonic|soda|juice|jus|sirop|syrup)(?![\p{L}])|بنكهة|نكهة|عصير/u;
+const SPARKLING =
+  /(?<![\p{L}])(sparkling|carbonated|fizzy|gazeuses?|gazeifiee?s?|petillantes?|con gas|frizzante|gassata|sprudel|kohlensaure)(?![\p{L}])|غازية|غازي/u;
+
+/** a product name/category that is plain bottled water */
+export function isWater(text: string): boolean {
+  const t = fold(text);
+  return WATER.test(t) && !NOT_PLAIN_WATER.test(t);
+}
+
+export function isSparkling(text: string): boolean {
+  return SPARKLING.test(fold(text));
+}
+
+/** total hardness in mg/L CaCO₃ (Ca × 2.497 + Mg × 4.118) */
+export function waterHardness(calcium: number | null, magnesium: number | null): number | null {
+  if (calcium === null || magnesium === null) return null;
+  return Math.round(calcium * 2.497 + magnesium * 4.118);
+}
+
+// Sources for the thresholds below:
+// - pH 6.5–9.5: EU Drinking Water Directive 2020/2184, Annex I part C (indicator parameter).
+// - Mineral content by dry residue and the "rich in / contains" levels: Directive 2009/54/EC, Annex III.
+// - Fluoride above 1.5 mg/L must carry an infant warning; nitrate limit 50 mg/L: Directive 2003/40/EC.
+// - Nitrate ≤ 10 mg/L: the level commonly required for "suitable for infant feeding" claims (e.g. France).
+// - Hardness classes (mg/L CaCO₃): 0–60 soft, 61–120 moderately hard, 121–180 hard, above very hard (USGS).
+export const WATER_LIMITS = {
+  ph: { low: 6.5, high: 9.5 },
+  dryResidue: { veryLow: 50, low: 500, high: 1500 },
+  hardness: { soft: 60, medium: 120, hard: 180 },
+  sodium: { low: 20, rich: 200 },
+  calcium: 150,
+  magnesium: 50,
+  bicarbonate: 600,
+  sulphate: 200,
+  chloride: 200,
+  fluoride: { present: 1, high: 1.5 },
+  nitrate: { low: 10, high: 50 },
+} as const;
+
+/** the remarks a water's printed composition supports, most relevant first; ids only, wording lives in messages.ts */
+export function waterFacts(w: {
+  minerals: Record<MineralKey, number | null>;
+  dry_residue_mg_l: number | null;
+  ph: number | null;
+  sparkling: boolean;
+  hardness_mg_l: number | null;
+}): { id: WaterFactId; tone: HighlightTone }[] {
+  const L = WATER_LIMITS;
+  const m = w.minerals;
+  const out: { id: WaterFactId; tone: HighlightTone }[] = [];
+  const add = (id: WaterFactId, tone: HighlightTone = "neutral") => out.push({ id, tone });
+  const over = (v: number | null, limit: number) => v !== null && v > limit;
+
+  if (w.ph !== null) {
+    // dissolved CO₂ makes sparkling water acidic: expected, not a defect
+    if (w.ph < L.ph.low) add(w.sparkling ? "ph_sparkling" : "ph_acidic", w.sparkling ? "neutral" : "caution");
+    else if (w.ph > L.ph.high) add("ph_alkaline", "caution");
+    else add("ph_neutral", "positive");
+  }
+  if (over(m.nitrate, L.nitrate.high)) add("nitrate_high", "caution");
+  if (over(m.fluoride, L.fluoride.high)) add("fluoride_high", "caution");
+  else if (over(m.fluoride, L.fluoride.present)) add("fluoride_present");
+
+  const residue = w.dry_residue_mg_l;
+  if (residue !== null) {
+    if (residue < L.dryResidue.veryLow) add("mineral_very_low");
+    else if (residue <= L.dryResidue.low) add("mineral_low");
+    else if (residue <= L.dryResidue.high) add("mineral_medium");
+    else add("mineral_high");
+  }
+  if (w.hardness_mg_l !== null) {
+    const h = w.hardness_mg_l;
+    add(h <= L.hardness.soft ? "hardness_soft" : h <= L.hardness.medium ? "hardness_medium" : h <= L.hardness.hard ? "hardness_hard" : "hardness_very_hard");
+  }
+  if (m.sodium !== null && m.sodium < L.sodium.low) add("low_sodium", "positive");
+  if (over(m.sodium, L.sodium.rich)) add("sodium_rich", "caution");
+  if (over(m.calcium, L.calcium)) add("calcium_rich");
+  if (over(m.magnesium, L.magnesium)) add("magnesium_rich");
+  if (over(m.bicarbonate, L.bicarbonate)) add("bicarbonate_rich");
+  if (over(m.sulphate, L.sulphate)) add("sulphate_rich");
+  if (over(m.chloride, L.chloride)) add("chloride_rich");
+  if (m.nitrate !== null && m.nitrate <= L.nitrate.low) add("nitrate_low", "positive");
+  return out;
+}
+
+// ---------------------------------------------------------------- drinks: what to look at
+
+/** container volume in ml from a net quantity ("1.5 L", "33 cl", "6 x 330 ml" → one container) */
+export function volumeMl(quantity: string | null): number | null {
+  if (!quantity) return null;
+  const m = /(\d+(?:[.,]\d+)?)\s*(ml|cl|dl|l|litres?|liters?|fl\.? ?oz)(?![\p{L}])/iu.exec(fold(quantity));
+  if (!m) return null;
+  const n = Number(m[1].replace(",", "."));
+  const unit = m[2].toLowerCase();
+  const ml = unit === "ml" ? n : unit === "cl" ? n * 10 : unit === "dl" ? n * 100 : unit.startsWith("fl") ? n * 29.5735 : n * 1000;
+  return ml > 0 && ml <= 20_000 ? Math.round(ml) : null;
+}
+
+/** E100–E199 are colours */
+export function isColourCode(code: string | null): boolean {
+  const n = Number(code?.match(/\d+/)?.[0]);
+  return n >= 100 && n < 200;
+}
+
+/** intense sweeteners and polyols (E420/E421, E950–E969) */
+export function isSweetenerCode(code: string | null): boolean {
+  const n = Number(code?.match(/\d+/)?.[0]);
+  return n === 420 || n === 421 || n === 953 || (n >= 950 && n < 970);
+}
+
+const CAFFEINE = /(?<![\p{L}])(caffeine|cafeine|cafeina|caffeina|koffein|guarana|taurine)(?![\p{L}])|كافيين/u;
+
+export function mentionsCaffeine(text: string): boolean {
+  return CAFFEINE.test(fold(text));
 }

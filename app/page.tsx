@@ -1,21 +1,18 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Content from "./Content";
-import Uploader from "./components/Uploader";
-import Scanner from "./components/Scanner";
 import Analyzing from "./components/Analyzing";
 import LanguageSwitcher from "./components/LanguageSwitcher";
-import { cn, Spinner } from "./components/ui";
+import { usePhotoPicker } from "./components/PhotoPicker";
+import Scanner from "./components/Scanner";
+import { CameraIcon, ImageIcon, Notice, Spinner } from "./components/ui";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
 import { format, rich, useI18n } from "./lib/i18n/I18nProvider";
 import type { Locale } from "./lib/i18n/locales";
 import type { Messages } from "./lib/i18n/messages";
 
-type Status = "preparing" | "ready" | "analyzing" | "done" | "error";
-
-/** in the order of `features` in the dictionaries */
-const FEATURE_ICONS = ["⚠️", "🧪", "📊"];
+type Status = "preparing" | "analyzing" | "done" | "error";
 
 /** an error is kept as a code so it follows the interface language; server text is the English fallback */
 type AppError =
@@ -45,13 +42,13 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [upload, setUpload] = useState<Blob | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [status, setStatus] = useState<Status>("ready");
+  const [status, setStatus] = useState<Status>("preparing");
   const [result, setResult] = useState<{ result: LabelAnalysis; meta: AnalyzeMeta } | null>(null);
   const [failure, setFailure] = useState<AppError | null>(null);
+  const [dragging, setDragging] = useState(false);
   // bumps on every new file/reset so stale async work is ignored
   const requestId = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
 
   const cancelInFlight = () => {
     inFlight.current?.abort();
@@ -66,31 +63,60 @@ export default function Home() {
   }, [imageSrc]);
   useEffect(() => () => inFlight.current?.abort(), []);
 
-  const selectFile = useCallback(async (f: File) => {
+  const run = useCallback(async (image: Blob, lang: Locale) => {
     const id = ++requestId.current;
     cancelInFlight();
+    const controller = new AbortController();
+    inFlight.current = controller;
+    setStatus("analyzing");
     setFailure(null);
     setResult(null);
-    setFile(f);
-    setUpload(null);
-    setImageSrc(null);
-    setStatus("preparing");
     try {
-      const prepared = await prepareImage(f);
-      if (id !== requestId.current) {
-        URL.revokeObjectURL(prepared.previewUrl);
-        return;
-      }
-      setUpload(prepared.blob);
-      setImageSrc(prepared.previewUrl);
-      setStatus("ready");
+      const r = await analyzeImage(image, controller.signal, lang);
+      if (id !== requestId.current) return;
+      setResult(r);
+      setStatus("done");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       if (id !== requestId.current) return;
-      setFile(null);
-      setStatus("ready");
-      setFailure({ kind: "client", key: e instanceof ImagePrepError ? e.code : "damaged" });
+      setFailure(e instanceof AnalysisFailure ? e.detail : { kind: "client", key: "network" });
+      setStatus("error");
+    } finally {
+      if (inFlight.current === controller) inFlight.current = null;
     }
   }, []);
+
+  // a photo is analyzed as soon as it is picked: one tap from camera to result
+  const selectFile = useCallback(
+    async (f: File) => {
+      const id = ++requestId.current;
+      cancelInFlight();
+      setFailure(null);
+      setResult(null);
+      setFile(f);
+      setUpload(null);
+      setImageSrc(null);
+      setStatus("preparing");
+      window.scrollTo({ top: 0 });
+      try {
+        const prepared = await prepareImage(f);
+        if (id !== requestId.current) {
+          URL.revokeObjectURL(prepared.previewUrl);
+          return;
+        }
+        setUpload(prepared.blob);
+        setImageSrc(prepared.previewUrl);
+        void run(prepared.blob, locale);
+      } catch (e) {
+        if (id !== requestId.current) return;
+        setFile(null);
+        setFailure({ kind: "client", key: e instanceof ImagePrepError ? e.code : "damaged" });
+      }
+    },
+    [locale, run],
+  );
+
+  const picker = usePhotoPicker(selectFile);
 
   const reset = () => {
     requestId.current++;
@@ -100,51 +126,17 @@ export default function Home() {
     setImageSrc(null);
     setResult(null);
     setFailure(null);
-    setStatus("ready");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const cancelAnalysis = () => {
-    requestId.current++;
-    cancelInFlight();
-    setStatus("ready");
-  };
-
-  const analyze = async () => {
-    if (!upload) return;
-    const id = ++requestId.current;
-    cancelInFlight();
-    const controller = new AbortController();
-    inFlight.current = controller;
-    setStatus("analyzing");
-    setFailure(null);
-    setResult(null);
-    // on small screens the results are below the image; bring them into view
-    if (window.innerWidth < 1024) {
-      requestAnimationFrame(() =>
-        resultsRef.current?.scrollIntoView({ behavior: "smooth" }),
-      );
-    }
-    try {
-      const r = await analyzeImage(upload, controller.signal, locale);
-      if (id !== requestId.current) return;
-      setResult(r);
-      setStatus("done");
-    } catch (e) {
-      if (id !== requestId.current) return;
-      setFailure(e instanceof AnalysisFailure ? e.detail : { kind: "client", key: "network" });
-      setStatus("error");
-    } finally {
-      if (inFlight.current === controller) inFlight.current = null;
-    }
+  const analyze = () => {
+    if (upload) void run(upload, locale);
   };
 
   // paste an image from the clipboard anywhere on the page
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const f = Array.from(e.clipboardData?.files ?? []).find((f) =>
-        f.type.startsWith("image/"),
-      );
+      const f = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
       if (f) {
         e.preventDefault();
         selectFile(f);
@@ -154,226 +146,195 @@ export default function Home() {
     return () => window.removeEventListener("paste", onPaste);
   }, [selectFile]);
 
-  const analyzing = status === "analyzing";
+  const busy = !!file && (status === "preparing" || status === "analyzing");
   const error = failure && errorText(failure, t, locale);
   // the result's text stays in the language it was analyzed in
   const resultLocale = status === "done" && result ? (result.meta.locale ?? "en") : locale;
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-x-clip bg-zinc-50 dark:bg-black">
-      {/* ambient glow */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-130 bg-[radial-gradient(60%_60%_at_50%_0%,rgb(16_185_129/0.14),transparent)] dark:bg-[radial-gradient(60%_60%_at_50%_0%,rgb(16_185_129/0.18),transparent)]"
-      />
+    <div
+      className="relative flex flex-1 flex-col"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        // dragleave also fires when the pointer moves over the page's own children
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) selectFile(f);
+      }}
+    >
+      {picker.elements}
 
-      <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/70 backdrop-blur-lg dark:border-zinc-800/70 dark:bg-black/60">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
-          <button
-            onClick={reset}
-            className="flex min-w-0 items-center gap-2.5 font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
-          >
+      <header className="sticky top-0 z-30 border-b border-rule bg-paper/90 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
+          <button onClick={reset} className="flex min-w-0 items-center gap-2.5 rounded-lg">
             <Logo />
-            <span className="truncate">Food Analyzer</span>
+            <span dir="ltr" className="font-display truncate text-[17px] font-bold tracking-tight">
+              Food Analyzer
+            </span>
           </button>
-          <div className="ms-auto flex items-center gap-1">
-            {file && (
-              <button
-                onClick={reset}
-                className="animate-fade-in rounded-xl px-3 py-1.5 text-sm font-medium whitespace-nowrap text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-              >
-                {t.header.newScan}
-              </button>
-            )}
+          <div className="ms-auto">
             <LanguageSwitcher />
           </div>
         </div>
       </header>
 
-      <main className="relative mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6 lg:py-14">
+      <main className="pb-dock mx-auto w-full max-w-5xl flex-1 px-4 pt-7 sm:px-6 sm:pt-12">
         {!file ? (
-          <section className="mx-auto max-w-2xl">
-            <div className="animate-fade-up text-center">
-              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+          <section className="mx-auto max-w-xl">
+            <p className="animate-fade-up eyebrow text-accent">{t.hero.badge}</p>
+            <h1 className="animate-fade-up font-display mt-3 text-[2.6rem] leading-[1.02] font-bold tracking-tight text-balance sm:text-6xl">
+              {rich(t.hero.title, (word) => (
+                <span className="relative inline-block">
+                  {/* a highlighter stroke under the word */}
+                  <span aria-hidden className="absolute inset-x-[-0.06em] bottom-[0.1em] h-[0.32em] -skew-x-6 rounded-sm bg-accent/25" />
+                  <span className="relative">{word}</span>
                 </span>
-                {t.hero.badge}
-              </span>
-              <h1 className="mt-5 text-4xl font-semibold tracking-tight text-balance text-zinc-900 sm:text-5xl dark:text-zinc-50">
-                {rich(t.hero.title, (word) => (
-                  <span className="bg-linear-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
-                    {word}
-                  </span>
-                ))}
-              </h1>
-              <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-pretty text-zinc-600 sm:text-lg dark:text-zinc-400">
-                {t.hero.lead}
-              </p>
-            </div>
-
-            <div
-              className="animate-fade-up mt-10"
-              style={{ animationDelay: "120ms" }}
-            >
-              <Uploader onFile={selectFile} />
-              {error && <ErrorBanner message={error} />}
-            </div>
-
-            <div className="mt-10 grid gap-3 sm:grid-cols-3">
-              {t.features.map((f, i) => (
-                <div
-                  key={f.title}
-                  style={{ animationDelay: `${240 + i * 80}ms` }}
-                  className="animate-fade-up rounded-2xl border border-zinc-200 bg-white/70 p-4 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950/70"
-                >
-                  <span className="text-xl" aria-hidden>
-                    {FEATURE_ICONS[i]}
-                  </span>
-                  <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {f.title}
-                  </p>
-                  <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                    {f.text}
-                  </p>
-                </div>
               ))}
-            </div>
+            </h1>
+            <p className="animate-fade-up mt-4 max-w-md text-base leading-7 text-ink-soft" style={{ animationDelay: "60ms" }}>
+              {t.hero.lead}
+            </p>
+
+            {error && (
+              <Notice tone="red" role="alert" className="animate-fade-up mt-6">
+                {error}
+              </Notice>
+            )}
+
+            <ol className="animate-fade-up mt-9 border-t-[3px] border-ink" style={{ animationDelay: "120ms" }}>
+              {t.modes.map((mode, i) => (
+                <li key={mode.title} className="flex gap-4 border-b border-rule py-4">
+                  <span aria-hidden dir="ltr" className="eyebrow pt-1 text-accent tabular-nums">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div>
+                    <p className="font-display text-lg leading-tight font-semibold">{mode.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-ink-soft">{mode.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            {/* dropping and pasting need a mouse and a keyboard */}
+            <p className="mt-5 hidden text-sm text-ink-soft [@media(pointer:fine)]:block">
+              {t.uploader.hint}{" "}
+              <kbd dir="ltr" className="rounded-md border border-rule bg-sheet px-1.5 py-0.5 font-mono text-xs">
+                Ctrl V
+              </kbd>
+            </p>
           </section>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:gap-10">
-            <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
-              <Scanner src={imageSrc} file={file} scanning={analyzing} />
-
-              <div className="flex gap-2">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10">
+            <aside className="lg:sticky lg:top-20 lg:self-start">
+              <Scanner src={imageSrc} scanning={busy} compact={!busy} />
+              {status === "done" && (
                 <button
                   onClick={analyze}
-                  disabled={analyzing || !upload}
-                  className={cn(
-                    "inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-500 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 transition",
-                    "hover:shadow-xl hover:shadow-emerald-600/30 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70",
-                  )}
+                  className="mt-2 inline-flex h-10 items-center rounded-full px-1 text-sm font-medium text-accent underline underline-offset-4"
                 >
-                  {analyzing ? (
-                    <>
-                      <Spinner /> {t.actions.analyzing}
-                    </>
-                  ) : status === "preparing" ? (
-                    <>
-                      <Spinner /> {t.actions.preparing}
-                    </>
-                  ) : status === "done" ? (
-                    t.actions.analyzeAgain
-                  ) : (
-                    t.actions.analyze
-                  )}
+                  {t.actions.analyzeAgain}
                 </button>
-                {analyzing ? (
-                  <button
-                    onClick={cancelAnalysis}
-                    className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                  >
-                    {t.actions.cancel}
-                  </button>
-                ) : (
-                  <Uploader onFile={selectFile} compact />
-                )}
-              </div>
-
-              {error && status !== "error" && <ErrorBanner message={error} />}
+              )}
             </aside>
 
-            <div ref={resultsRef} className="min-w-0 scroll-mt-20">
-              {status === "analyzing" && <Analyzing />}
+            <div className="min-w-0">
+              {busy && <Analyzing />}
               {status === "done" && result && resultLocale !== locale && (
-                <div
-                  role="note"
-                  className="animate-fade-up mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400"
-                >
-                  <span>
-                    🌐 {format(t.status.otherLanguage, { language: languageName(resultLocale) })}
-                  </span>
-                  <button
-                    onClick={analyze}
-                    className="font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
-                  >
+                <Notice tone="zinc" className="animate-fade-up mb-3">
+                  {format(t.status.otherLanguage, { language: languageName(resultLocale) })}{" "}
+                  <button onClick={analyze} className="font-medium text-accent underline underline-offset-4">
                     {t.status.translate}
                   </button>
-                </div>
+                </Notice>
               )}
-              {status === "done" && result && <Content result={result.result} meta={result.meta} />}
+              {status === "done" && result && (
+                <Content result={result.result} meta={result.meta} onTakePhoto={picker.takePhoto} />
+              )}
               {status === "error" && (
-                <div className="animate-fade-up rounded-3xl border border-red-200 bg-red-50 p-6 dark:border-red-900 dark:bg-red-950/30">
-                  <p className="font-semibold text-red-800 dark:text-red-200">
-                    {t.status.failed}
-                  </p>
-                  <p className="mt-1 text-sm wrap-break-word text-red-700 dark:text-red-300">
-                    {error}
-                  </p>
-                  <button
-                    onClick={analyze}
-                    className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98]"
-                  >
-                    {t.actions.tryAgain}
-                  </button>
-                </div>
-              )}
-              {(status === "ready" || status === "preparing") && (
-                <div className="animate-fade-up flex h-full min-h-64 flex-col items-center justify-center rounded-3xl border-2 border-dashed border-zinc-200 p-8 text-center dark:border-zinc-800">
-                  <span className="animate-float text-4xl" aria-hidden>
-                    🔍
-                  </span>
-                  <p className="mt-4 font-semibold text-zinc-900 dark:text-zinc-100">
-                    {t.status.readyTitle}
-                  </p>
-                  <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-                    {rich(t.status.readyText, (label) => (
-                      <b>{label}</b>
-                    ))}
-                  </p>
+                <div role="alert" className="animate-fade-up overflow-hidden rounded-[28px] border border-rule bg-sheet">
+                  <div className="border-t-[3px] border-bad px-5 pt-5 pb-6 sm:px-7">
+                    <p className="font-display text-xl font-bold">{t.status.failed}</p>
+                    <p className="mt-2 text-sm leading-6 wrap-break-word text-ink-soft">{error}</p>
+                    <button
+                      onClick={analyze}
+                      className="mt-4 inline-flex h-11 items-center rounded-full bg-ink px-5 text-sm font-semibold text-paper transition active:scale-[0.98]"
+                    >
+                      {t.actions.tryAgain}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         )}
       </main>
+
+      {/* Dock: the one primary action, where the thumb is */}
+      <div className="bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4">
+        <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-full border border-rule bg-sheet/95 p-2 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.4)] backdrop-blur">
+          {busy ? (
+            <>
+              <p className="flex min-w-0 flex-1 items-center gap-3 ps-4 text-sm font-medium" aria-live="polite">
+                <Spinner className="shrink-0 text-accent" />
+                <span className="truncate">{status === "preparing" ? t.actions.preparing : t.actions.analyzing}</span>
+              </p>
+              <button
+                onClick={reset}
+                className="h-12 shrink-0 rounded-full border border-rule px-5 text-sm font-semibold transition hover:border-ink active:scale-[0.98]"
+              >
+                {t.actions.cancel}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={picker.takePhoto}
+                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-full bg-accent px-4 text-base font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <CameraIcon className="size-6 shrink-0" />
+                <span className="truncate">{file ? t.uploader.retake : t.uploader.takePhoto}</span>
+              </button>
+              <button
+                onClick={picker.choosePhoto}
+                aria-label={file ? t.uploader.replace : t.uploader.choosePhoto}
+                title={file ? t.uploader.replace : t.uploader.choosePhoto}
+                className="grid size-14 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink active:scale-[0.98]"
+              >
+                <ImageIcon className="size-6" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {dragging && (
+        <div className="animate-fade-in pointer-events-none fixed inset-3 z-50 grid place-items-center rounded-[28px] border-2 border-dashed border-accent bg-paper/90">
+          <p className="font-display text-2xl font-bold text-accent">{t.uploader.dropHere}</p>
+        </div>
+      )}
     </div>
   );
 }
 
-function ErrorBanner({ message }: { message: string }) {
-  return (
-    <p
-      role="alert"
-      className="animate-fade-up mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
-    >
-      {message}
-    </p>
-  );
-}
-
+/** a label with its printed lines */
 function Logo() {
   return (
-    <span className="grid size-8 place-items-center rounded-xl bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-600/30">
-      <svg
-        viewBox="0 0 24 24"
-        className="size-4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
-        <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-ink text-paper">
+      <svg viewBox="0 0 24 24" className="size-4.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+        <path d="M5 7h14M5 12h9M5 17h12" />
       </svg>
     </span>
   );
 }
 
-// functions
 async function analyzeImage(
   image: Blob,
   signal: AbortSignal,
@@ -392,8 +353,7 @@ async function analyzeImage(
       signal: AbortSignal.any([signal, AbortSignal.timeout(CLIENT_TIMEOUT_MS)]),
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === "TimeoutError")
-      throw new AnalysisFailure({ kind: "client", key: "timeout" });
+    if (e instanceof DOMException && e.name === "TimeoutError") throw new AnalysisFailure({ kind: "client", key: "timeout" });
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new AnalysisFailure({ kind: "client", key: "network" });
   }

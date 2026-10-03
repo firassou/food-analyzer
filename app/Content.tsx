@@ -1,21 +1,28 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Card, cn, Dot, dotClasses, Pill, Tone, toneClasses } from "./components/ui";
-import { LEVEL_THRESHOLDS } from "./lib/analysis/knowledge";
+import { Bar, CameraIcon, cn, Dot, dotClasses, Notice, Section, Tag, Tone, toneClasses, toneText } from "./components/ui";
+import { LEVEL_THRESHOLDS, WATER_LIMITS } from "./lib/analysis/knowledge";
 import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
+import { MINERAL_KEYS } from "./lib/analysis/types";
 import type {
   Additive,
   AnalyzeMeta,
+  Confidence,
+  HighlightTone,
   Ingredient,
   LabelAnalysis,
   Level,
   NutrientKey,
   Nutrients,
   Presence,
+  Water,
+  WaterFactId,
 } from "./lib/analysis/types";
 
 type SectionId =
   | "overview"
+  | "water"
+  | "drink"
   | "allergens"
   | "dietary"
   | "nutrition"
@@ -38,7 +45,10 @@ const levelTone: Record<Level | "unknown", Tone> = {
   unknown: "zinc",
 };
 
-const confidenceWidth = { low: "33%", medium: "66%", high: "100%" };
+const highlightTone: Record<HighlightTone, Tone> = { positive: "green", neutral: "zinc", caution: "amber" };
+const highlightMark: Record<HighlightTone, string> = { positive: "✓", neutral: "–", caution: "!" };
+
+const confidenceLevel: Record<Confidence, number> = { low: 1, medium: 2, high: 3 };
 
 // labels come from the dictionary (results.nutrition.rows / .meters)
 const tableRows: {
@@ -64,6 +74,9 @@ const meters = [
   { key: "salt", nutrient: "salt_g" },
 ] as const;
 
+/** one sugar cube, in grams */
+const SUGAR_CUBE_G = 4;
+
 function cellValue(
   n: Nutrients | null,
   key: NutrientKey | "energy",
@@ -73,13 +86,13 @@ function cellValue(
   if (!n) return null;
   if (key === "energy") {
     const parts = [
-      n.energy_kj !== null && `${fmt(n.energy_kj)}\u00a0kJ`,
-      n.energy_kcal !== null && `${fmt(n.energy_kcal)}\u00a0kcal`,
+      n.energy_kj !== null && `${fmt(n.energy_kj)} kJ`,
+      n.energy_kcal !== null && `${fmt(n.energy_kcal)} kcal`,
     ].filter(Boolean);
     return parts.length ? parts.join(" / ") : null;
   }
   const v = n[key];
-  return v === null ? null : `${fmt(v)}\u00a0${unit}`;
+  return v === null ? null : `${fmt(v)} ${unit}`;
 }
 
 /** anchor id: coded additives are linked from ingredient pills; code-less ones get their index so ids stay unique */
@@ -91,44 +104,41 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export default function Content({
   result,
   meta,
+  onTakePhoto,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
+  /** opens the camera, for results that ask for another photo */
+  onTakePhoto?: () => void;
 }) {
-  if (!result.label_detected) return <NotALabel result={result} />;
-  return <Results result={result} meta={meta} />;
+  // nothing about a food: neither a label, a product, nor an estimate
+  const empty =
+    result.kind === "other" || (!result.label_detected && result.ingredients.length === 0 && !result.product.name);
+  if (empty) return <NotALabel result={result} />;
+  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} />;
 }
 
 function Results({
   result,
   meta,
+  onTakePhoto,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
+  onTakePhoto?: () => void;
 }) {
   const { t, fmt, languageName } = useI18n();
   const r = t.results;
-  const {
-    product,
-    nutrition,
-    ingredients,
-    allergens,
-    additives,
-    gluten,
-    lactose,
-    sugar,
-  } = result;
+  const { kind, product, nutrition, ingredients, allergens, additives, gluten, lactose, sugar, water, drink } = result;
 
   // ---- derived data ----
-  const additiveByCode = new Map(
-    additives.filter((a) => a.code).map((a) => [a.code!, a]),
-  );
+  const additiveByCode = new Map(additives.filter((a) => a.code).map((a) => [a.code!, a]));
   const contains = allergens.filter((a) => a.presence === "contains");
   const mayContain = allergens.filter((a) => a.presence === "may_contain");
-  const tags = [product.category, product.quantity].filter(
-    (t): t is string => !!t,
-  );
-  const hasNutrition = !!nutrition || !!sugar.explanation;
+  const tags = [product.category, product.quantity].filter((x): x is string => !!x);
+  const isWater = kind === "water";
+  const estimated = result.ingredient_source === "estimated";
+  const hasNutrition = !!nutrition || (!!sugar.explanation && kind !== "drink");
   const unit = sugar.basis === "100ml" ? "ml" : "g";
   // free text is in the language the photo was analyzed in, which the interface may since have left
   const analysisLocale = meta?.locale ?? "en";
@@ -136,8 +146,10 @@ function Results({
   const translated = !!labelLanguage && labelLanguage !== analysisLocale;
   const translationOf = (i: Ingredient) =>
     analysisLocale === "en" ? i.name_en
-    : translated ? (i.name_local ?? i.name_en)
+    : translated || estimated ? (i.name_local ?? i.name_en)
     : (i.name_local ?? null);
+  // a packaged product whose ingredient list is still missing or only recalled
+  const needsProductPhoto = (kind === "label" || kind === "drink") && (ingredients.length === 0 || estimated);
 
   const details = {
     dates: [
@@ -157,26 +169,41 @@ function Results({
       [r.details.origin, result.origin],
     ],
   } satisfies Record<string, [string, string | null][]>;
-  const hasDetails =
-    result.certifications.length > 0 ||
-    result.claims.length > 0 ||
-    Object.values(details).some((rows) => rows.some(([, v]) => v));
+  const marks = [...result.certifications, ...result.claims];
+  const hasDetails = marks.length > 0 || Object.values(details).some((rows) => rows.some(([, v]) => v));
 
-  const sections: { id: SectionId; label: string }[] = [
-    { id: "overview", label: r.sections.overview },
-    { id: "allergens", label: r.sections.allergens },
-    { id: "dietary", label: r.sections.dietary },
-    ...(hasNutrition ? [{ id: "nutrition" as const, label: r.sections.nutrition }] : []),
-    ...(ingredients.length ?
-      [{ id: "ingredients" as const, label: r.sections.ingredients }]
-    : []),
-    ...(additives.length ?
-      [{ id: "additives" as const, label: r.sections.additives }]
-    : []),
-    ...(hasDetails ? [{ id: "details" as const, label: r.sections.details }] : []),
-    ...(result.raw_text ? [{ id: "raw" as const, label: r.sections.raw }] : []),
-  ];
-  const sectionKey = sections.map((s) => s.id).join();
+  // what the sheet contains depends on what was photographed; the order is the reading order
+  const shown: Record<Exclude<SectionId, "overview">, boolean> = {
+    water: isWater,
+    drink: kind === "drink",
+    allergens: !isWater,
+    dietary: !isWater,
+    nutrition: hasNutrition,
+    ingredients: ingredients.length > 0,
+    additives: additives.length > 0,
+    details: hasDetails,
+    raw: !!result.raw_text,
+  };
+  const order: Exclude<SectionId, "overview">[] =
+    kind === "dish" ? ["ingredients", "allergens", "dietary", "nutrition", "additives", "details", "raw"]
+    : kind === "drink" ? ["drink", "nutrition", "additives", "ingredients", "allergens", "dietary", "details", "raw"]
+    : ["water", "allergens", "dietary", "nutrition", "ingredients", "additives", "details", "raw"];
+  const visible = order.filter((id) => shown[id]);
+  const numberOf = (id: SectionId) => visible.indexOf(id as (typeof visible)[number]) + 1;
+  const titles: Record<SectionId, string> = {
+    overview: r.sections.overview,
+    water: r.water.title,
+    drink: r.drink.title,
+    allergens: estimated && kind === "dish" ? r.dish.allergens : r.sections.allergens,
+    dietary: r.sections.dietary,
+    nutrition: r.sections.nutrition,
+    ingredients: estimated ? r.dish.ingredients : r.sections.ingredients,
+    additives: r.sections.additives,
+    details: r.sections.details,
+    raw: r.sections.raw,
+  };
+  const sections: SectionId[] = ["overview", ...visible];
+  const sectionKey = sections.join();
 
   // ---- navigation / highlight ----
   const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
@@ -190,7 +217,7 @@ function Results({
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     setFlash((f) => ({ id, n: (f?.n ?? 0) + 1 }));
     clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlash(null), 1800);
+    flashTimer.current = setTimeout(() => setFlash(null), 1500);
   }, []);
   useEffect(() => () => clearTimeout(flashTimer.current), []);
   const flashFor = (id: string) => (flash?.id === id ? flash.n : undefined);
@@ -201,13 +228,11 @@ function Results({
     let frame = 0;
     const update = () => {
       frame = 0;
-      const atBottom =
-        window.innerHeight + window.scrollY >=
-        document.documentElement.scrollHeight - 4;
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
       let current = ids[0];
       for (const id of ids) {
         const el = document.getElementById(`section-${id}`);
-        if (el && el.getBoundingClientRect().top <= 160) current = id;
+        if (el && el.getBoundingClientRect().top <= 140) current = id;
       }
       setActive(atBottom ? ids[ids.length - 1] : current);
     };
@@ -234,606 +259,698 @@ function Results({
   }, [active]);
 
   const sid = (id: SectionId) => `section-${id}`;
+  /** where a tile leads: the section, when it is on the sheet */
+  const jump = (id: Exclude<SectionId, "overview">) => (shown[id] ? id : undefined);
+  const head = (id: Exclude<SectionId, "overview">) => ({
+    id: sid(id),
+    index: numberOf(id),
+    title: titles[id],
+    flash: flashFor(sid(id)),
+  });
+  const found = (count: number) => format(r.tiles.found, { count });
 
-  return (
-    <div className="flex w-full flex-col gap-5">
-      {/* Section nav */}
-      <nav
-        ref={navRef}
-        aria-label={r.nav}
-        className="animate-fade-in sticky top-14 z-20 -mx-4 flex gap-1.5 overflow-x-auto border-b border-zinc-200/70 bg-zinc-50/90 px-4 py-2.5 backdrop-blur-lg scrollbar-none sm:mx-0 sm:rounded-2xl sm:border sm:px-2 dark:border-zinc-800/70 dark:bg-black/85"
-      >
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            data-id={s.id}
-            onClick={() => goTo(sid(s.id))}
-            className={cn(
-              "shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-300",
-              active === s.id ?
-                "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
-              : "text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
-      </nav>
+  // ---- at a glance: what matters most for this kind of photo ----
+  const factOf = (...ids: WaterFactId[]) => water?.facts.find((f) => ids.includes(f.id));
+  const waterTile = (title: string, value: string | null, fact: Water["facts"][number] | undefined): Tile => ({
+    title,
+    label: value ?? r.water.notPrinted,
+    tone: fact ? highlightTone[fact.tone] : "zinc",
+    hint: fact ? r.water.short[fact.id as keyof typeof r.water.short] : undefined,
+    target: jump("water"),
+  });
+  const glutenTile: Tile = {
+    title: r.tiles.gluten,
+    label: r.presence[gluten.status],
+    tone: presenceTone[gluten.status],
+    hint: gluten.status === "unclear" ? r.tiles.notEnoughInfo : r.tiles.confidence[gluten.confidence],
+    target: jump("dietary"),
+  };
+  const lactoseTile: Tile = {
+    title: r.tiles.lactose,
+    label: r.presence[lactose.status],
+    tone: presenceTone[lactose.status],
+    target: jump("dietary"),
+  };
+  const sugarTile: Tile = {
+    title: r.tiles.sugar,
+    label: r.level[sugar.level],
+    tone: levelTone[sugar.level],
+    hint: sugar.per_100 !== null ? ltr(`${fmt(sugar.per_100)} g / 100 ${unit}`) : undefined,
+    target: jump(kind === "drink" ? "drink" : "nutrition"),
+  };
+  const allergenTile: Tile = {
+    title: titles.allergens,
+    label:
+      contains.length ? found(contains.length)
+      : estimated && mayContain.length ? found(mayContain.length)
+      : ingredients.length ? r.tiles.noneFound
+      : r.tiles.unknown,
+    tone:
+      contains.length ? "red"
+      : mayContain.length ? "amber"
+      : ingredients.length ? "green"
+      : "zinc",
+    hint: contains.length || !estimated ? (mayContain.length ? format(r.tiles.mayContain, { count: mayContain.length }) : undefined) : undefined,
+    target: jump("allergens"),
+  };
+  const countTile = (title: string, count: number, target: Exclude<SectionId, "overview">): Tile => ({
+    title,
+    label: count ? found(count) : ingredients.length ? r.tiles.noneFound : r.tiles.unknown,
+    tone: count ? "amber" : ingredients.length ? "green" : "zinc",
+    target: count ? jump(target) : jump("ingredients"),
+  });
+  const additiveTile = countTile(r.tiles.additives, additives.length, "additives");
 
-      {/* Overview */}
-      <header
-        id={sid("overview")}
-        className="animate-fade-up relative scroll-mt-32 overflow-hidden rounded-3xl bg-linear-to-br from-emerald-500 via-emerald-600 to-teal-700 p-6 text-white shadow-xl shadow-emerald-600/20 sm:p-8"
-      >
-        <div
-          aria-hidden
-          className="animate-float absolute -top-16 -right-10 size-56 rounded-full bg-white/10 blur-2xl"
-        />
-        <div
-          aria-hidden
-          className="absolute -bottom-20 -left-10 size-48 rounded-full bg-teal-300/20 blur-2xl"
-        />
-        <div className="relative">
-          {product.brand && (
-            <p className="text-xs font-semibold tracking-[0.2em] text-emerald-100 uppercase">
-              {product.brand}
-            </p>
-          )}
-          <h2
-            dir="auto"
-            className="mt-1.5 text-2xl leading-tight font-semibold text-balance sm:text-3xl"
-          >
-            {product.name ?? product.category ?? r.fallbackName}
-          </h2>
-          {(tags.length > 0 || translated) && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {tags.map((t) => (
-                <span
-                  key={t}
-                  dir="auto"
-                  className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium ring-1 ring-white/20 backdrop-blur"
-                >
-                  {t}
-                </span>
-              ))}
-              {translated && (
-                <span className="rounded-full bg-black/10 px-3 py-1 text-xs font-medium ring-1 ring-white/20">
-                  🌐 {format(r.labelIn, { language: languageName(labelLanguage) })}
-                </span>
-              )}
-            </div>
-          )}
-          {result.summary && (
-            <p
-              dir="auto"
-              className="mt-5 border-t border-white/20 pt-4 text-sm leading-6 text-emerald-50 sm:text-[15px] sm:leading-7"
-            >
-              {result.summary}
-            </p>
-          )}
-          {result.highlights.length > 0 && (
-            <ul className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {result.highlights.map((h) => (
-                <li
-                  key={h.text}
-                  className="flex items-start gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-sm ring-1 ring-white/15"
-                >
-                  <span aria-hidden className="shrink-0">
-                    {h.tone === "caution" ?
-                      "⚠"
-                    : h.tone === "positive" ?
-                      "✓"
-                    : "•"}
-                  </span>
-                  <span dir="auto">{h.text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </header>
+  const tiles: Tile[] =
+    isWater ?
+      [
+        waterTile(r.water.ph, water?.ph != null ? ltr(fmt(water.ph)) : null, factOf("ph_neutral", "ph_acidic", "ph_alkaline", "ph_sparkling")),
+        waterTile(
+          r.water.mineralContent,
+          water?.dry_residue_mg_l != null ? ltr(`${fmt(water.dry_residue_mg_l)} mg/L`) : null,
+          factOf("mineral_very_low", "mineral_low", "mineral_medium", "mineral_high"),
+        ),
+        waterTile(
+          r.water.hardness,
+          water?.hardness_mg_l != null ? ltr(`${fmt(water.hardness_mg_l)} mg/L`) : null,
+          factOf("hardness_soft", "hardness_medium", "hardness_hard", "hardness_very_hard"),
+        ),
+        waterTile(
+          r.water.sodium,
+          water?.minerals.sodium != null ? ltr(`${fmt(water.minerals.sodium)} mg/L`) : null,
+          factOf("low_sodium", "sodium_rich"),
+        ),
+      ]
+    : kind === "drink" ?
+      [
+        sugarTile,
+        countTile(r.drink.colours, drink?.colours.length ?? 0, "drink"),
+        countTile(r.drink.sweeteners, drink?.sweeteners.length ?? 0, "drink"),
+        additiveTile,
+        allergenTile,
+        glutenTile,
+      ]
+    : kind === "dish" ? [allergenTile, glutenTile, lactoseTile]
+    : [glutenTile, lactoseTile, sugarTile, allergenTile, additiveTile];
 
-      {result.warnings.length > 0 && (
-        <div
-          role="note"
-          className="animate-fade-up flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
-        >
-          <span aria-hidden>ⓘ</span>
-          <ul className="space-y-1">
-            {result.warnings.map((w) => (
-              <li key={w} dir="auto">
-                {w}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+  const blocks: Record<Exclude<SectionId, "overview">, React.ReactNode> = {
+    water: (
+      <Section {...head("water")}>
+        {water ?
+          <WaterPanel water={water} />
+        : <Notice tone="zinc">{r.water.noComposition}</Notice>}
+      </Section>
+    ),
 
-      {/* Key indicators */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-        <StatusTile
-          delay={1}
-          title={r.tiles.gluten}
-          label={r.presence[gluten.status]}
-          tone={presenceTone[gluten.status]}
-          hint={
-            gluten.status === "unclear" ?
-              r.tiles.notEnoughInfo
-            : r.tiles.confidence[gluten.confidence]
-          }
-          onClick={() => goTo(sid("dietary"))}
-        />
-        <StatusTile
-          delay={2}
-          title={r.tiles.lactose}
-          label={r.presence[lactose.status]}
-          tone={presenceTone[lactose.status]}
-          onClick={() => goTo(sid("dietary"))}
-        />
-        <StatusTile
-          delay={3}
-          title={r.tiles.sugar}
-          label={r.level[sugar.level]}
-          tone={levelTone[sugar.level]}
-          hint={
-            sugar.per_100 !== null ?
-              ltr(`${fmt(sugar.per_100)} g / 100 ${unit}`)
-            : undefined
-          }
-          onClick={hasNutrition ? () => goTo(sid("nutrition")) : undefined}
-        />
-        <StatusTile
-          delay={4}
-          title={r.tiles.allergens}
-          label={
-            contains.length ? format(r.tiles.found, { count: contains.length })
-            : ingredients.length ?
-              r.tiles.noneFound
-            : r.tiles.unknown
-          }
-          tone={
-            contains.length ? "red"
-            : mayContain.length ?
-              "amber"
-            : ingredients.length ?
-              "green"
-            : "zinc"
-          }
-          hint={
-            mayContain.length ? format(r.tiles.mayContain, { count: mayContain.length }) : undefined
-          }
-          onClick={() => goTo(sid("allergens"))}
-        />
-        <StatusTile
-          delay={5}
-          className="col-span-2 sm:col-span-1"
-          title={r.tiles.additives}
-          label={
-            additives.length ? format(r.tiles.found, { count: additives.length })
-            : ingredients.length ?
-              r.tiles.noneFound
-            : r.tiles.unknown
-          }
-          tone={
-            additives.length ? "amber"
-            : ingredients.length ?
-              "green"
-            : "zinc"
-          }
-          onClick={
-            additives.length ? () => goTo(sid("additives"))
-            : ingredients.length ?
-              () => goTo(sid("ingredients"))
-            : undefined
-          }
-        />
-      </div>
-
-      {/* Allergens */}
-      <Card
-        id={sid("allergens")}
-        flash={flashFor(sid("allergens"))}
-        title={r.sections.allergens}
-        icon="⚠️"
-        delay={2}
-      >
-        {allergens.length === 0 ?
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {ingredients.length ?
-              r.allergens.none
-            : r.allergens.unreadable}
+    drink: (
+      <Section {...head("drink")}>
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+          <p className="font-display text-5xl leading-none font-bold tabular-nums">
+            {sugar.per_100 !== null ? ltr(`${fmt(sugar.per_100)} g`) : "—"}
           </p>
-        : <div className="space-y-5">
-            {contains.length > 0 && (
-              <AllergenGroup title={r.allergens.contains} tone="red" items={contains} />
+          <div className="pb-1">
+            <p className="eyebrow text-ink-soft">
+              {r.drink.sugars} · {r.drink.per100}
+            </p>
+            <Tag tone={levelTone[sugar.level]} className="mt-1">
+              <Dot tone={levelTone[sugar.level]} />
+              {sugar.per_100 !== null ? r.level[sugar.level] : r.drink.unknown}
+            </Tag>
+          </div>
+        </div>
+        {sugar.per_100 !== null && (
+          <div className="mt-4">
+            <Bar value={sugar.per_100 / (LEVEL_THRESHOLDS["100ml"].sugars.high * 1.4)} tone={levelTone[sugar.level]} />
+          </div>
+        )}
+        {drink?.sugar_per_container_g != null && drink.volume_ml !== null && (
+          <p className="mt-4 text-sm leading-6">
+            <span className="font-medium">
+              {format(r.drink.perContainer, {
+                grams: fmt(drink.sugar_per_container_g),
+                volume: ltr(drink.volume_ml >= 1000 ? `${fmt(drink.volume_ml / 1000)} L` : `${fmt(drink.volume_ml)} ml`),
+              })}
+            </span>
+            {drink.sugar_per_container_g >= SUGAR_CUBE_G && (
+              <span className="text-ink-soft">
+                {" "}
+                · {format(r.drink.cubes, { count: Math.round(drink.sugar_per_container_g / SUGAR_CUBE_G) })}
+              </span>
             )}
+          </p>
+        )}
+        {sugar.explanation && (
+          <p dir="auto" className="mt-2 text-sm leading-6 text-ink-soft">
+            {sugar.explanation}
+          </p>
+        )}
+        <dl className="mt-5 border-t border-rule">
+          {(
+            [
+              [r.drink.colours, drink?.colours ?? []],
+              [r.drink.sweeteners, drink?.sweeteners ?? []],
+            ] as const
+          ).map(([label, names]) => (
+            <div key={label} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule py-3">
+              <dt className="eyebrow w-28 shrink-0 text-ink-soft">{label}</dt>
+              <dd className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                {names.length ?
+                  names.map((name) => (
+                    <Tag key={name} tone="amber" dir="auto">
+                      {capitalize(name)}
+                    </Tag>
+                  ))
+                : <span className="text-sm text-ink-soft">{ingredients.length ? r.drink.none : r.drink.unknown}</span>}
+              </dd>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule py-3">
+            <dt className="eyebrow w-28 shrink-0 text-ink-soft">{r.drink.caffeine}</dt>
+            <dd className="text-sm">
+              {drink?.caffeine ?
+                <Tag tone="amber">{r.drink.present}</Tag>
+              : <span className="text-ink-soft">{ingredients.length ? r.drink.none : r.drink.unknown}</span>}
+            </dd>
+          </div>
+        </dl>
+      </Section>
+    ),
+
+    allergens: (
+      <Section {...head("allergens")}>
+        {allergens.length === 0 ?
+          <p className="text-sm leading-6 text-ink-soft">{ingredients.length ? r.allergens.none : r.allergens.unreadable}</p>
+        : <div className="space-y-6">
+            {contains.length > 0 && <AllergenGroup title={r.allergens.contains} tone="red" items={contains} />}
             {mayContain.length > 0 && (
-              <AllergenGroup
-                title={r.allergens.mayContain}
-                tone="amber"
-                items={mayContain}
-              />
+              <AllergenGroup title={estimated ? r.dish.likely : r.allergens.mayContain} tone="amber" items={mayContain} />
             )}
           </div>
         }
-      </Card>
+      </Section>
+    ),
 
-      {/* Gluten & lactose */}
-      <Card
-        id={sid("dietary")}
-        flash={flashFor(sid("dietary"))}
-        title={r.sections.dietary}
-        icon="🌾"
-        delay={3}
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <DietaryPanel
-            title={r.tiles.gluten}
-            status={gluten.status}
-            evidence={gluten.evidence}
-          >
+    dietary: (
+      <Section {...head("dietary")}>
+        <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+          <DietaryPanel title={r.tiles.gluten} status={gluten.status} evidence={gluten.evidence}>
             <div className="mt-3">
-              <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="eyebrow mb-1.5 flex justify-between text-ink-soft">
                 <span>{r.dietary.confidence}</span>
                 <span>{r.dietary.confidenceLevel[gluten.confidence]}</span>
               </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                <div
-                  className="animate-grow h-full origin-left rounded-full bg-emerald-500 rtl:origin-right"
-                  style={{ width: confidenceWidth[gluten.confidence] }}
-                />
-              </div>
+              <Bar value={confidenceLevel[gluten.confidence] / 3} tone="zinc" />
             </div>
           </DietaryPanel>
-          <DietaryPanel
-            title={r.tiles.lactose}
-            status={lactose.status}
-            evidence={lactose.evidence}
-          />
+          <DietaryPanel title={r.tiles.lactose} status={lactose.status} evidence={lactose.evidence} />
         </div>
-      </Card>
+      </Section>
+    ),
 
-      {/* Nutrition */}
-      {hasNutrition && (
-        <Card
-          id={sid("nutrition")}
-          flash={flashFor(sid("nutrition"))}
-          title={r.nutrition.title}
-          icon="📊"
-          delay={4}
-          aside={
-            nutrition?.serving_size && (
-              <>
-                {r.nutrition.serving}
-                <br />
-                <span dir="auto" className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {nutrition.serving_size}
-                </span>
-              </>
-            )
-          }
-        >
-          {nutrition?.per_100 && (
-            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {meters.map((m, i) => (
-                <LevelMeter
-                  key={m.key}
-                  label={r.nutrition.meters[m.key]}
-                  value={nutrition.per_100![m.nutrient]}
-                  level={nutrition.levels[m.key]}
-                  threshold={LEVEL_THRESHOLDS[nutrition.basis][m.key]}
-                  delay={i}
-                />
-              ))}
-            </div>
-          )}
+    nutrition: (
+      <Section
+        {...head("nutrition")}
+        title={r.nutrition.title}
+        aside={
+          nutrition?.serving_size && (
+            <>
+              {r.nutrition.serving} · <span dir="auto">{nutrition.serving_size}</span>
+            </>
+          )
+        }
+      >
+        {nutrition?.per_100 && (
+          <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-rule bg-rule sm:grid-cols-4">
+            {meters.map((m, i) => (
+              <LevelMeter
+                key={m.key}
+                label={r.nutrition.meters[m.key]}
+                value={nutrition.per_100![m.nutrient]}
+                level={nutrition.levels[m.key]}
+                threshold={LEVEL_THRESHOLDS[nutrition.basis][m.key]}
+                delay={i}
+              />
+            ))}
+          </div>
+        )}
 
-          {nutrition && (
-            <div className="-mx-1 overflow-x-auto px-1">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-start text-xs tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-                    <th className="pb-2 text-start font-medium">{r.nutrition.nutrient}</th>
-                    {nutrition.per_100 && (
-                      <th className="pb-2 text-end font-medium">
-                        {format(r.nutrition.per100, { unit })}
-                        {nutrition.per_100_calculated && (
-                          <span
-                            className="block text-[10px] font-normal normal-case"
-                            title={r.nutrition.calculatedHint}
-                          >
-                            {r.nutrition.calculated}
-                          </span>
-                        )}
-                      </th>
-                    )}
-                    {nutrition.per_serving && (
-                      <th className="pb-2 ps-4 text-end font-medium">
-                        {r.nutrition.perServing}
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
-                  {tableRows.map((row) => {
-                    const a = cellValue(nutrition.per_100, row.key, row.unit, fmt);
-                    const b = cellValue(
-                      nutrition.per_serving,
-                      row.key,
-                      row.unit,
-                      fmt,
-                    );
-                    if (!a && !b) return null;
-                    return (
-                      <tr
-                        key={row.key}
-                        className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                      >
-                        <td
-                          className={cn(
-                            "py-2.5",
-                            row.sub ?
-                              "ps-4 text-zinc-500 dark:text-zinc-400"
-                            : "font-medium text-zinc-900 dark:text-zinc-100",
-                          )}
-                        >
-                          {r.nutrition.rows[row.key]}
-                        </td>
-                        {nutrition.per_100 && (
-                          <td className="py-2.5 text-end tabular-nums">
-                            {a ? ltr(a) : "—"}
-                          </td>
-                        )}
-                        {nutrition.per_serving && (
-                          <td className="py-2.5 ps-4 text-end tabular-nums">
-                            {b ? ltr(b) : "—"}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+        {nutrition && (
+          <div className="-mx-1 overflow-x-auto px-1">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="eyebrow border-b-2 border-ink text-ink-soft">
+                  <th className="pb-2 text-start font-medium">{r.nutrition.nutrient}</th>
+                  {nutrition.per_100 && (
+                    <th className="pb-2 text-end font-medium">
+                      {format(r.nutrition.per100, { unit })}
+                      {nutrition.per_100_calculated && (
+                        <span className="block text-[10px] font-normal normal-case" title={r.nutrition.calculatedHint}>
+                          {r.nutrition.calculated}
+                        </span>
+                      )}
+                    </th>
+                  )}
+                  {nutrition.per_serving && <th className="pb-2 ps-4 text-end font-medium">{r.nutrition.perServing}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((row) => {
+                  const a = cellValue(nutrition.per_100, row.key, row.unit, fmt);
+                  const b = cellValue(nutrition.per_serving, row.key, row.unit, fmt);
+                  if (!a && !b) return null;
+                  return (
+                    <tr key={row.key} className="border-b border-rule">
+                      <td className={cn("py-2.5", row.sub ? "ps-4 text-ink-soft" : "font-medium")}>
+                        {r.nutrition.rows[row.key]}
+                      </td>
+                      {nutrition.per_100 && (
+                        <td className="py-2.5 text-end font-mono text-[13px] tabular-nums">{a ? ltr(a) : "—"}</td>
+                      )}
+                      {nutrition.per_serving && (
+                        <td className="py-2.5 ps-4 text-end font-mono text-[13px] tabular-nums">{b ? ltr(b) : "—"}</td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {sugar.explanation && (
-            <div
-              className={cn(
-                "mt-5 flex gap-3 rounded-2xl p-4 text-sm ring-1 ring-inset",
-                toneClasses[levelTone[sugar.level]],
-              )}
-            >
-              <span aria-hidden>🍬</span>
-              <p>
-                {sugar.level !== "unknown" && (
-                  <span className="font-semibold">
-                    {r.nutrition.sugarLevel[sugar.level]}{" "}
-                  </span>
-                )}
-                <span dir="auto">{sugar.explanation}</span>
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
+        {sugar.explanation && kind !== "drink" && (
+          <Notice tone={levelTone[sugar.level]} className="mt-5">
+            {sugar.level !== "unknown" && <span className="font-semibold">{r.nutrition.sugarLevel[sugar.level]} </span>}
+            <span dir="auto">{sugar.explanation}</span>
+          </Notice>
+        )}
+      </Section>
+    ),
 
-      {/* Ingredients */}
-      {ingredients.length > 0 && (
-        <Card
-          id={sid("ingredients")}
-          flash={flashFor(sid("ingredients"))}
-          title={r.sections.ingredients}
-          icon="🥣"
-          delay={5}
-          aside={format(r.ingredients.count, { count: ingredients.length })}
-        >
-          <ol className="flex flex-wrap gap-2">
+    ingredients: (
+      <Section {...head("ingredients")} aside={format(r.ingredients.count, { count: ingredients.length })}>
+        {estimated ?
+          <ol>
+            {ingredients.map((ing, i) => (
+              <EstimatedIngredient key={`${i}-${ing.name}`} ingredient={ing} translation={translationOf(ing)} />
+            ))}
+          </ol>
+        : <ol className="flex flex-wrap gap-1.5">
             {ingredients.map((ing, i) => (
               <IngredientPill
                 key={`${i}-${ing.name}`}
                 ingredient={ing}
                 translation={translationOf(ing)}
                 index={i}
-                additive={
-                  ing.e_number ? additiveByCode.get(ing.e_number) : undefined
-                }
+                additive={ing.e_number ? additiveByCode.get(ing.e_number) : undefined}
                 onAdditive={(a) => goTo(additiveId(a))}
               />
             ))}
           </ol>
-          <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            <Legend tone="red">{r.ingredients.legendAllergen}</Legend>
-            <Legend tone="amber">{r.ingredients.legendAdditive}</Legend>
-          </div>
-        </Card>
-      )}
+        }
+        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-soft">
+          <Legend tone="red">{r.ingredients.legendAllergen}</Legend>
+          {!estimated && <Legend tone="amber">{r.ingredients.legendAdditive}</Legend>}
+        </div>
+      </Section>
+    ),
 
-      {/* Additives */}
-      {additives.length > 0 && (
-        <Card
-          id={sid("additives")}
-          flash={flashFor(sid("additives"))}
-          title={r.sections.additives}
-          icon="🧪"
-          delay={6}
-          aside={format(r.tiles.found, { count: additives.length })}
-        >
-          <ul className="grid gap-3 md:grid-cols-2">
-            {additives.map((a, i) => {
-              const id = additiveId(a, i);
-              return (
-                <li
-                  key={id}
-                  id={id}
-                  className={cn(
-                    "scroll-mt-32 rounded-2xl border p-4 transition-all duration-500",
-                    flash?.id === id ?
-                      "border-amber-400 bg-amber-50/60 shadow-lg shadow-amber-500/10 dark:border-amber-600 dark:bg-amber-950/30"
-                    : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700",
-                  )}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    {a.code && (
-                      <span className="rounded-lg bg-amber-100 px-2 py-0.5 font-mono text-xs font-semibold text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                        {a.code}
-                      </span>
-                    )}
-                    <span dir="auto" className="font-medium text-zinc-900 dark:text-zinc-100">
-                      {capitalize(a.name_local ?? a.name)}
+    additives: (
+      <Section {...head("additives")} aside={found(additives.length)}>
+        <ul className="grid gap-x-8 md:grid-cols-2">
+          {additives.map((a, i) => {
+            const id = additiveId(a, i);
+            return (
+              <li
+                key={id}
+                id={id}
+                className={cn(
+                  "scroll-mt-28 border-t border-rule py-4 transition-colors duration-500 first:border-t-0 md:nth-2:border-t-0",
+                  flash?.id === id && "bg-accent/10",
+                )}
+              >
+                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                  {a.code && (
+                    <span dir="ltr" className="rounded-md bg-warn-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-warn">
+                      {a.code}
                     </span>
-                  </div>
-                  {a.category && (
-                    <p dir="auto" className="mt-2 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-                      {a.category}
-                    </p>
                   )}
-                  {a.purpose && (
-                    <p dir="auto" className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      <span className="font-medium">{r.additives.purpose}</span> {a.purpose}
-                    </p>
-                  )}
-                  {a.explanation && (
-                    <p dir="auto" className="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                      {a.explanation}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      )}
+                  <span dir="auto" className="font-medium">
+                    {capitalize(a.name_local ?? a.name)}
+                  </span>
+                </div>
+                {a.category && (
+                  <p dir="auto" className="eyebrow mt-2 text-ink-soft">
+                    {a.category}
+                  </p>
+                )}
+                {a.purpose && (
+                  <p dir="auto" className="mt-2 text-sm leading-6">
+                    <span className="font-medium">{r.additives.purpose}</span> {a.purpose}
+                  </p>
+                )}
+                {a.explanation && (
+                  <p dir="auto" className="mt-1 text-sm leading-6 text-ink-soft">
+                    {a.explanation}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </Section>
+    ),
 
-      {/* Details */}
-      {hasDetails && (
-        <div
-          id={sid("details")}
-          className="grid scroll-mt-32 gap-5 sm:grid-cols-2"
-        >
-          <InfoCard title={r.details.dates} icon="📅" rows={details.dates} delay={7} flash={flashFor(sid("details"))} />
-          <InfoCard
-            title={r.details.storage}
-            icon="❄️"
-            rows={details.storage}
-            delay={7}
-            flash={flashFor(sid("details"))}
-          />
-          <InfoCard
-            title={r.details.manufacturer}
-            icon="🏭"
-            rows={details.manufacturer}
-            delay={8}
-            flash={flashFor(sid("details"))}
-          />
-          {(result.certifications.length > 0 || result.claims.length > 0) && (
-            <Card title={r.details.claims} icon="🏅" delay={8} flash={flashFor(sid("details"))}>
-              <div className="flex flex-wrap gap-2">
+    details: (
+      <Section {...head("details")}>
+        <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+          <InfoList title={r.details.dates} rows={details.dates} />
+          <InfoList title={r.details.storage} rows={details.storage} />
+          <InfoList title={r.details.manufacturer} rows={details.manufacturer} />
+          {marks.length > 0 && (
+            <div>
+              <SubLabel>{r.details.claims}</SubLabel>
+              <div className="flex flex-wrap gap-1.5">
                 {result.certifications.map((c) => (
-                  <Pill key={`cert-${c}`} tone="green">
+                  <Tag key={`cert-${c}`} tone="green" dir="auto">
                     {c}
-                  </Pill>
+                  </Tag>
                 ))}
                 {result.claims.map((c) => (
-                  <Pill key={`claim-${c}`} tone="zinc">
+                  <Tag key={`claim-${c}`} dir="auto">
                     {c}
-                  </Pill>
+                  </Tag>
                 ))}
               </div>
-            </Card>
+            </div>
           )}
         </div>
-      )}
+      </Section>
+    ),
 
-      {/* Raw text */}
-      {result.raw_text && <RawText id={sid("raw")} text={result.raw_text} flash={flashFor(sid("raw"))} />}
+    raw: result.raw_text ? <RawText {...head("raw")} text={result.raw_text} /> : null,
+  };
 
-      <p className="px-4 pt-2 text-center text-xs leading-5 text-zinc-400 dark:text-zinc-600">
-        {r.disclaimer}
-        {meta && (
-          <span className="mt-1 block tabular-nums">
-            {format(r.duration, { seconds: fmt(Math.round(meta.duration_ms / 100) / 10) })}
-          </span>
-        )}
-      </p>
+  return (
+    <div className="flex w-full flex-col gap-3">
+      {/* Section nav */}
+      <nav
+        ref={navRef}
+        aria-label={r.nav}
+        className="animate-fade-in scrollbar-none sticky top-14 z-20 -mx-4 flex gap-1.5 overflow-x-auto bg-paper/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0"
+      >
+        {sections.map((id) => (
+          <button
+            key={id}
+            data-id={id}
+            onClick={() => goTo(sid(id))}
+            aria-current={active === id ? "true" : undefined}
+            className={cn(
+              "h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium whitespace-nowrap transition-colors duration-200",
+              active === id ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft hover:border-ink hover:text-ink",
+            )}
+          >
+            {titles[id]}
+          </button>
+        ))}
+      </nav>
+
+      <article className="animate-fade-up overflow-hidden rounded-[28px] border border-rule bg-sheet">
+        {/* Overview */}
+        <header id={sid("overview")} className="scroll-mt-28 px-5 pt-6 pb-6 sm:px-7 sm:pt-7">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Stamp>{t.kinds[kind]}</Stamp>
+            {estimated && <Stamp tone="amber">{r.source.estimated}</Stamp>}
+            {result.database && <Stamp tone="zinc">{format(r.source.database, { name: result.database.name })}</Stamp>}
+            {translated && <Stamp tone="zinc">{format(r.labelIn, { language: languageName(labelLanguage) })}</Stamp>}
+          </div>
+          {product.brand && (
+            <p dir="auto" className="eyebrow mt-5 text-ink-soft">
+              {product.brand}
+            </p>
+          )}
+          <h2
+            dir="auto"
+            className={cn("font-display text-[1.75rem] leading-[1.1] font-bold text-balance sm:text-4xl", product.brand ? "mt-1" : "mt-5")}
+          >
+            {product.name ?? product.category ?? r.fallbackName}
+          </h2>
+          {tags.length > 0 && (
+            <p className="mt-2 flex flex-wrap gap-x-2 text-sm text-ink-soft">
+              {tags.map((x, i) => (
+                <span key={x} dir="auto">
+                  {i > 0 && <span aria-hidden>· </span>}
+                  {x}
+                </span>
+              ))}
+            </p>
+          )}
+          {result.summary && (
+            <p dir="auto" className="mt-4 text-[15px] leading-7 text-ink-soft">
+              {result.summary}
+            </p>
+          )}
+          {result.highlights.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {result.highlights.map((h) => (
+                <li key={h.text} className="flex items-start gap-2.5 text-sm leading-6">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md text-xs font-bold",
+                      toneClasses[highlightTone[h.tone]],
+                    )}
+                  >
+                    {highlightMark[h.tone]}
+                  </span>
+                  <span dir="auto">{h.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* nothing the analysis is unsure about is hidden */}
+          {(result.warnings.length > 0 || needsProductPhoto || result.database) && (
+            <div className="mt-5 space-y-2">
+              {result.warnings.map((w) => (
+                <Notice key={w} tone="amber">
+                  <span dir="auto">{w}</span>
+                  {result.database && w.includes(result.database.product) && (
+                    <a
+                      href={result.database.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ms-1 font-medium text-accent underline underline-offset-2"
+                    >
+                      {r.source.viewEntry}
+                    </a>
+                  )}
+                </Notice>
+              ))}
+              {needsProductPhoto && onTakePhoto && (
+                // the warning above says why; this is the way out
+                <button
+                  onClick={onTakePhoto}
+                  className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+                >
+                  <CameraIcon className="size-5" />
+                  {r.retake.button}
+                </button>
+              )}
+            </div>
+          )}
+        </header>
+
+        {/* At a glance */}
+        <div className="grid grid-cols-2 gap-px border-t border-rule bg-rule sm:grid-cols-3">
+          {tiles.map(({ target, ...tile }, i) => (
+            <StatusTile
+              key={tile.title}
+              {...tile}
+              onClick={target ? () => goTo(sid(target)) : undefined}
+              // the last tile fills its row instead of leaving a hole (2 columns, 3 from `sm`)
+              className={
+                i === tiles.length - 1 ?
+                  cn(tiles.length % 2 === 1 && "col-span-2", ["sm:col-span-1", "sm:col-span-3", "sm:col-span-2"][tiles.length % 3])
+                : undefined
+              }
+            />
+          ))}
+        </div>
+
+        {visible.map((id) => (
+          <React.Fragment key={id}>{blocks[id]}</React.Fragment>
+        ))}
+
+        <footer className="border-t border-rule px-5 py-5 text-xs leading-5 text-ink-soft sm:px-7">
+          {r.disclaimer}
+          {meta && (
+            <span className="eyebrow mt-2 block tabular-nums">
+              {format(r.duration, { seconds: fmt(Math.round(meta.duration_ms / 100) / 10) })}
+            </span>
+          )}
+        </footer>
+      </article>
     </div>
   );
 }
-
-/** in the order of `results.notALabel.tips` in the dictionaries */
-const TIP_ICONS = ["📦", "💡", "🔍"];
 
 function NotALabel({ result }: { result: LabelAnalysis }) {
   const { t } = useI18n();
   const n = t.results.notALabel;
   return (
-    <div className="animate-fade-up flex flex-col items-center rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <span className="animate-float text-5xl" aria-hidden>
-        🔎
-      </span>
-      <h2 className="mt-4 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-        {n.title}
-      </h2>
-      {result.product.name && (
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          {rich(format(n.looksLike, { name: result.product.name }), (name) => (
-            <b dir="auto">{name}</b>
+    <article className="animate-fade-up overflow-hidden rounded-[28px] border border-rule bg-sheet">
+      <div className="border-t-[3px] border-ink px-5 pt-5 pb-7 sm:px-7">
+        <h2 className="font-display text-2xl leading-tight font-bold text-balance">{n.title}</h2>
+        {result.product.name && (
+          <p className="mt-3 text-sm leading-6 text-ink-soft">
+            {rich(format(n.looksLike, { name: result.product.name }), (name) => (
+              <b dir="auto" className="text-ink">
+                {name}
+              </b>
+            ))}
+          </p>
+        )}
+        {result.summary && (
+          <p dir="auto" className="mt-3 text-sm leading-6 text-ink-soft">
+            {result.summary}
+          </p>
+        )}
+        {result.warnings.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {result.warnings.map((w) => (
+              <Notice key={w} tone="amber">
+                <span dir="auto">{w}</span>
+              </Notice>
+            ))}
+          </div>
+        )}
+        <ol className="mt-6">
+          {n.tips.map((tip, i) => (
+            <li key={tip} className="flex gap-4 border-t border-rule py-3 text-sm leading-6">
+              <span aria-hidden dir="ltr" className="eyebrow pt-1 text-accent tabular-nums">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              {tip}
+            </li>
           ))}
-        </p>
-      )}
-      {result.summary && (
-        <p dir="auto" className="mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
-          {result.summary}
-        </p>
-      )}
-      <ul className="mt-6 grid w-full max-w-md gap-2 text-start text-sm text-zinc-600 dark:text-zinc-400">
-        {n.tips.map((tip, i) => (
-          <li
-            key={tip}
-            className="flex gap-3 rounded-xl bg-zinc-50 px-4 py-2.5 dark:bg-zinc-900"
-          >
-            <span aria-hidden>{TIP_ICONS[i]}</span>
-            {tip}
-          </li>
+        </ol>
+      </div>
+    </article>
+  );
+}
+
+/** the printed composition: pH on its scale, the mineral table, and what the values mean */
+function WaterPanel({ water }: { water: Water }) {
+  const { t, fmt } = useI18n();
+  const w = t.results.water;
+  const printed = MINERAL_KEYS.filter((k) => water.minerals[k] !== null);
+  const largest = Math.max(1, ...printed.map((k) => water.minerals[k]!));
+  const stats: [string, string | null][] = [
+    [w.ph, water.ph !== null ? fmt(water.ph) : null],
+    [w.residue, water.dry_residue_mg_l !== null ? `${fmt(water.dry_residue_mg_l)} mg/L` : null],
+    [w.hardness, water.hardness_mg_l !== null ? `${fmt(water.hardness_mg_l)} mg/L` : null],
+  ];
+  const { low, high } = WATER_LIMITS.ph;
+
+  return (
+    <div className="space-y-6">
+      <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
+        {stats.map(([label, value]) => (
+          <div key={label} className="bg-sheet p-3.5">
+            <dt className="eyebrow text-ink-soft">{label}</dt>
+            <dd className={cn("mt-1 font-display leading-tight font-semibold tabular-nums", value ? "text-xl" : "text-sm text-ink-soft")}>
+              {value ? ltr(value) : w.notPrinted}
+            </dd>
+          </div>
         ))}
-      </ul>
+      </dl>
+
+      {water.ph !== null && (
+        // the scale reads 0 → 14 left to right in every language
+        <div dir="ltr" aria-hidden>
+          <div className="relative h-2.5 rounded-full bg-mute-soft">
+            <div
+              className="absolute inset-y-0 rounded-full bg-good/35"
+              style={{ left: `${(low / 14) * 100}%`, width: `${((high - low) / 14) * 100}%` }}
+            />
+            <div
+              className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-sheet bg-ink"
+              style={{ left: `${(Math.min(14, Math.max(0, water.ph)) / 14) * 100}%` }}
+            />
+          </div>
+          <div className="eyebrow mt-1.5 flex justify-between text-ink-soft tabular-nums">
+            <span>0</span>
+            <span>7</span>
+            <span>14</span>
+          </div>
+        </div>
+      )}
+
+      {printed.length > 0 && (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="eyebrow border-b-2 border-ink text-ink-soft">
+              <th className="pb-2 text-start font-medium">{w.mineral}</th>
+              <th className="pb-2 text-end font-medium">{w.perLitre}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printed.map((k, i) => (
+              <tr key={k} className="border-b border-rule">
+                <td className="py-2.5">
+                  <span className="font-medium">{w.minerals[k]}</span>
+                  <div className="mt-1.5 max-w-56">
+                    <Bar value={water.minerals[k]! / largest} tone="zinc" delay={i * 50} />
+                  </div>
+                </td>
+                <td className="py-2.5 text-end align-top font-mono text-[13px] tabular-nums">{ltr(fmt(water.minerals[k]!))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {water.facts.length > 0 && (
+        <div>
+          <SubLabel>{w.meaning}</SubLabel>
+          <ul className="space-y-2">
+            {water.facts.map((f) => (
+              <li key={f.id} className="flex items-start gap-2.5 text-sm leading-6">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md text-xs font-bold",
+                    toneClasses[highlightTone[f.tone]],
+                  )}
+                >
+                  {highlightMark[f.tone]}
+                </span>
+                <span dir="auto">{f.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
-function AllergenGroup({
-  title,
-  tone,
-  items,
-}: {
-  title: string;
-  tone: Tone;
-  items: LabelAnalysis["allergens"];
-}) {
+function AllergenGroup({ title, tone, items }: { title: string; tone: Tone; items: LabelAnalysis["allergens"] }) {
   const { t } = useI18n();
   return (
     <div>
       <SubLabel>{title}</SubLabel>
-      <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
+      <ul>
         {items.map((a) => (
-          <li
-            key={a.id}
-            className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4"
-          >
-            <span className="flex shrink-0 items-center gap-2 sm:w-40">
-              <Pill tone={tone} className="font-medium">
+          <li key={a.id} className="flex flex-col gap-1.5 border-t border-rule py-3 first:border-t-0 first:pt-0 sm:flex-row sm:items-baseline sm:gap-4">
+            <span className="flex shrink-0 items-center gap-2 sm:w-44">
+              <Tag tone={tone}>
+                <Dot tone={tone} />
                 {t.results.allergenNames[a.id] ?? a.name}
-              </Pill>
-              {a.declared && (
-                <span className="text-[11px] font-medium text-zinc-400 uppercase">
-                  {t.results.allergens.declared}
-                </span>
-              )}
+              </Tag>
+              {a.declared && <span className="eyebrow text-ink-soft">{t.results.allergens.declared}</span>}
             </span>
-            <span
-              dir="auto"
-              className="text-sm text-zinc-500 dark:text-zinc-400"
-            >
+            <span dir="auto" className="text-sm leading-6 text-ink-soft">
               {a.sources.join(" · ")}
             </span>
           </li>
@@ -859,10 +976,10 @@ function IngredientPill({
 }) {
   const { t } = useI18n();
   const flagged = ing.allergens.length > 0 || ing.gluten;
-  const tone: Tone =
+  const tone: Tone | undefined =
     flagged ? "red"
     : additive ? "amber"
-    : "zinc";
+    : undefined;
   const title = [
     ing.allergens.length ?
       format(t.results.ingredients.allergensTitle, {
@@ -873,15 +990,21 @@ function IngredientPill({
   ]
     .filter(Boolean)
     .join("\n");
+  const className = cn(
+    "inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-start text-sm",
+    tone ? toneClasses[tone] : "border border-rule",
+  );
   const content = (
     <>
-      <span className="me-1.5 text-xs tabular-nums opacity-50">
+      <span dir="ltr" className="font-mono text-[11px] tabular-nums opacity-55">
         {index + 1}
       </span>
-      <span className="flex flex-col text-start leading-tight">
-        <span dir="auto">{ing.name}</span>
+      <span className="flex flex-col leading-tight">
+        <span dir="auto" className={cn(tone && "text-ink")}>
+          {ing.name}
+        </span>
         {translation && (
-          <span dir="auto" className="text-xs opacity-60">
+          <span dir="auto" className="text-xs text-ink-soft">
             {translation}
           </span>
         )}
@@ -889,31 +1012,15 @@ function IngredientPill({
     </>
   );
   return (
-    <li
-      className="animate-fade-up"
-      style={{ animationDelay: `${Math.min(index, 20) * 25}ms` }}
-    >
+    <li>
       {additive ?
-        <button
-          onClick={() => onAdditive(additive)}
-          title={title || undefined}
-          className={cn(
-            "inline-flex items-center rounded-2xl px-3 py-1.5 text-sm ring-1 ring-inset transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0",
-            toneClasses[tone],
-          )}
-        >
+        <button onClick={() => onAdditive(additive)} title={title || undefined} className={cn(className, "transition active:scale-[0.98]")}>
           {content}
-          <span aria-hidden className="ms-1.5 inline-block opacity-60 rtl:-scale-x-100">
+          <span aria-hidden className="inline-block opacity-60 rtl:-scale-x-100">
             ↗
           </span>
         </button>
-      : <span
-          title={title || undefined}
-          className={cn(
-            "inline-flex items-center rounded-2xl px-3 py-1.5 text-sm ring-1 ring-inset",
-            toneClasses[tone],
-          )}
-        >
+      : <span title={title || undefined} className={className}>
           {content}
         </span>
       }
@@ -921,53 +1028,69 @@ function IngredientPill({
   );
 }
 
-function StatusTile({
-  title,
-  label,
-  tone,
-  hint,
-  onClick,
-  delay = 0,
-  className,
-}: {
+/** one guessed ingredient: a row, with how sure the guess is */
+function EstimatedIngredient({ ingredient: ing, translation }: { ingredient: Ingredient; translation: string | null }) {
+  const { t } = useI18n();
+  const flagged = ing.allergens.length > 0 || ing.gluten;
+  const level = ing.confidence ?? "medium";
+  return (
+    <li className="flex items-center gap-3 border-t border-rule py-2.5 first:border-t-0 first:pt-0">
+      <Dot tone={flagged ? "red" : "zinc"} className={cn(!flagged && "opacity-0")} />
+      <span className="min-w-0 flex-1 leading-tight">
+        <span dir="auto" className="text-sm font-medium">
+          {capitalize(translation ?? ing.name)}
+        </span>
+        {flagged && (
+          <span className="block text-xs text-bad">
+            {ing.allergens.map((a) => t.results.allergenNames[a]).join(", ")}
+          </span>
+        )}
+      </span>
+      <span
+        className="flex shrink-0 items-center gap-2"
+        title={`${t.results.dish.confidence}: ${t.results.dietary.confidenceLevel[level]}`}
+      >
+        <span className="eyebrow text-ink-soft">{t.results.dietary.confidenceLevel[level]}</span>
+        <span aria-hidden className="flex gap-0.5">
+          {[1, 2, 3].map((n) => (
+            <span key={n} className={cn("h-3 w-1.5 rounded-full", n <= confidenceLevel[level] ? "bg-ink" : "bg-mute-soft")} />
+          ))}
+        </span>
+      </span>
+    </li>
+  );
+}
+
+interface TileProps {
   title: string;
   label: string;
   tone: Tone;
   hint?: string;
   onClick?: () => void;
-  delay?: number;
   className?: string;
-}) {
-  const Tag = onClick ? "button" : "div";
+}
+
+/** a tile before it is wired up: `target` is the section it jumps to */
+type Tile = Omit<TileProps, "onClick" | "className"> & { target?: Exclude<SectionId, "overview"> };
+
+function StatusTile({ title, label, tone, hint, onClick, className }: TileProps) {
+  const Root = onClick ? "button" : "div";
   return (
-    <Tag
+    <Root
       onClick={onClick}
-      style={{ animationDelay: `${delay * 60}ms` }}
       className={cn(
-        "group animate-fade-up relative flex flex-col items-start justify-start rounded-2xl p-4 text-start ring-1 ring-inset transition-all duration-300",
-        toneClasses[tone],
-        onClick &&
-          "cursor-pointer hover:-translate-y-1 hover:shadow-lg focus-visible:ring-2 focus-visible:outline-none active:translate-y-0 active:scale-[0.98]",
+        "group flex min-h-24 flex-col items-start bg-sheet p-4 text-start transition-colors",
+        onClick && "cursor-pointer hover:bg-mute-soft/60 active:bg-mute-soft",
         className,
       )}
     >
-      <p className="text-xs font-medium tracking-wide uppercase opacity-70">
-        {title}
-      </p>
-      <p className="mt-1 flex items-center gap-2 font-semibold">
-        <Dot tone={tone} />
-        {label}
-      </p>
-      {hint && <p className="mt-1 text-xs opacity-70">{hint}</p>}
-      {onClick && (
-        <span
-          aria-hidden
-          className="absolute end-3.5 top-3.5 text-sm opacity-0 transition-all duration-300 group-hover:translate-y-0.5 group-hover:opacity-60"
-        >
-          ↓
-        </span>
-      )}
-    </Tag>
+      <span className="eyebrow text-ink-soft">{title}</span>
+      <span className="mt-2 flex items-center gap-2">
+        <Dot tone={tone} className="size-2.5" />
+        <span className={cn("font-display text-lg leading-tight font-semibold", tone !== "zinc" && toneText[tone])}>{label}</span>
+      </span>
+      {hint && <span className="mt-1 text-xs text-ink-soft">{hint}</span>}
+    </Root>
   );
 }
 
@@ -985,29 +1108,26 @@ function DietaryPanel({
   const { t } = useI18n();
   const tone = presenceTone[status];
   return (
-    <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+    <div>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-zinc-900 dark:text-zinc-100">
-          {title}
-        </span>
-        <Pill tone={tone} className="text-xs font-medium">
+        <span className="font-display font-semibold">{title}</span>
+        <Tag tone={tone}>
           <Dot tone={tone} />
-          <span className="ms-1.5">{t.results.presence[status]}</span>
-        </Pill>
+          {t.results.presence[status]}
+        </Tag>
       </div>
       {children}
       {evidence.length > 0 ?
-        <ul className="mt-3 list-disc space-y-1 ps-5 text-sm text-zinc-600 dark:text-zinc-400">
+        <ul className="mt-3 space-y-1 text-sm leading-6 text-ink-soft">
           {evidence.map((e, i) => (
-            <li key={i} dir="auto">
+            <li key={i} dir="auto" className="flex gap-2">
+              <span aria-hidden>–</span>
               {e}
             </li>
           ))}
         </ul>
-      : <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-500">
-          {status === "unclear" ?
-            t.results.dietary.unclear
-          : t.results.dietary.noEvidence}
+      : <p className="mt-3 text-sm leading-6 text-ink-soft">
+          {status === "unclear" ? t.results.dietary.unclear : t.results.dietary.noEvidence}
         </p>
       }
     </div>
@@ -1029,83 +1149,54 @@ function LevelMeter({
 }) {
   const { t, fmt } = useI18n();
   const tone = levelTone[level ?? "unknown"];
-  const pct =
-    value == null ? 0 : Math.min(100, (value / (threshold.high * 1.4)) * 100);
-
   return (
     <div
-      className="animate-fade-up rounded-2xl bg-zinc-50 p-3.5 dark:bg-zinc-900/60"
-      style={{ animationDelay: `${delay * 80}ms` }}
+      className="bg-sheet p-3.5"
       title={format(t.results.nutrition.thresholds, { low: fmt(threshold.low), high: fmt(threshold.high) })}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          {label}
-        </span>
-        <span
-          className={cn(
-            "text-[11px] font-semibold uppercase",
-            {
-              red: "text-red-600 dark:text-red-400",
-              amber: "text-amber-600 dark:text-amber-400",
-              green: "text-emerald-600 dark:text-emerald-400",
-              zinc: "text-zinc-400",
-            }[tone],
-          )}
-        >
-          {level ? t.results.level[level] : t.results.nutrition.notAvailable}
-        </span>
+        <span className="eyebrow text-ink-soft">{label}</span>
+        <span className={cn("eyebrow", toneText[tone])}>{level ? t.results.level[level] : t.results.nutrition.notAvailable}</span>
       </div>
-      <p className="mt-1 text-lg font-semibold text-zinc-900 tabular-nums dark:text-zinc-100">
-        {value !== null ? ltr(`${fmt(value)} g`) : "—"}
-      </p>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-        <div
-          className={cn("animate-grow h-full origin-left rounded-full rtl:origin-right", dotClasses[tone])}
-          style={{ width: `${pct}%`, animationDelay: `${200 + delay * 80}ms` }}
-        />
-      </div>
+      <p className="mt-1 mb-2 font-display text-xl font-semibold tabular-nums">{value !== null ? ltr(`${fmt(value)} g`) : "—"}</p>
+      <Bar value={value == null ? 0 : value / (threshold.high * 1.4)} tone={tone} delay={150 + delay * 80} />
     </div>
   );
 }
 
-function InfoCard({
-  title,
-  icon,
-  rows,
-  delay,
-  flash,
-}: {
-  title: string;
-  icon: string;
-  rows: [string, string | null][];
-  delay: number;
-  flash?: number;
-}) {
-  const filled = rows.filter((r): r is [string, string] => !!r[1]);
+function InfoList({ title, rows }: { title: string; rows: [string, string | null][] }) {
+  const filled = rows.filter((row): row is [string, string] => !!row[1]);
   if (filled.length === 0) return null;
   return (
-    <Card title={title} icon={icon} delay={delay} flash={flash}>
-      <dl className="space-y-2.5 text-sm">
+    <div>
+      <SubLabel>{title}</SubLabel>
+      <dl className="text-sm">
         {filled.map(([label, value]) => (
-          <div key={label} className="flex gap-3">
-            <dt className="w-28 shrink-0 text-zinc-500 dark:text-zinc-400">
-              {label}
-            </dt>
-            <dd
-              dir="auto"
-              className="min-w-0 wrap-break-word text-zinc-900 dark:text-zinc-100"
-            >
+          <div key={label} className="flex gap-3 border-t border-rule py-2 first:border-t-0 first:pt-0">
+            <dt className="w-28 shrink-0 text-ink-soft">{label}</dt>
+            <dd dir="auto" className="min-w-0 wrap-break-word">
               {value}
             </dd>
           </div>
         ))}
       </dl>
-    </Card>
+    </div>
   );
 }
 
-function RawText({ id, text, flash }: { id: string; text: string; flash?: number }) {
+function RawText({
+  id,
+  index,
+  title,
+  text,
+  flash,
+}: {
+  id: string;
+  index: number;
+  title: string;
+  text: string;
+  flash?: number;
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1122,17 +1213,13 @@ function RawText({ id, text, flash }: { id: string; text: string; flash?: number
   };
 
   return (
-    <Card
+    <Section
       id={id}
+      index={index}
+      title={title}
       flash={flash}
-      title={t.results.raw.title}
-      icon="📝"
-      delay={9}
       aside={
-        <button
-          onClick={copy}
-          className="rounded-lg px-2.5 py-1 font-medium text-zinc-600 transition hover:bg-zinc-100 active:scale-95 dark:text-zinc-400 dark:hover:bg-zinc-900"
-        >
+        <button onClick={copy} className="eyebrow rounded-md px-2 py-1 text-accent transition hover:bg-mute-soft active:scale-95">
           {copied ? t.results.raw.copied : t.results.raw.copy}
         </button>
       }
@@ -1141,51 +1228,40 @@ function RawText({ id, text, flash }: { id: string; text: string; flash?: number
         <pre
           dir="auto"
           className={cn(
-            "overflow-hidden font-mono text-xs leading-5 whitespace-pre-wrap text-zinc-600 transition-[max-height] duration-500 dark:text-zinc-400",
+            "overflow-hidden font-mono text-xs leading-5 whitespace-pre-wrap text-ink-soft transition-[max-height] duration-500",
             open || !long ? "max-h-[2000px]" : "max-h-24",
           )}
         >
           {text}
         </pre>
-        {!open && long && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-white dark:from-zinc-950" />
-        )}
+        {!open && long && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-sheet" />}
       </div>
       {long && (
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="mt-3 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
-        >
+        <button onClick={() => setOpen((o) => !o)} className="mt-3 text-sm font-medium text-accent underline underline-offset-4">
           {open ? t.results.raw.showLess : t.results.raw.showAll}
         </button>
       )}
-    </Card>
+    </Section>
   );
 }
 
-function SubLabel({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
+/** a small printed stamp in the sheet's header: what the photo is, where the data comes from */
+function Stamp({ tone, children }: { tone?: Tone; children: React.ReactNode }) {
   return (
-    <p
-      className={cn(
-        "mb-2.5 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400",
-        className,
-      )}
-    >
+    <span className={cn("eyebrow inline-flex items-center rounded-md px-2 py-1", tone ? toneClasses[tone] : "border border-accent text-accent")}>
       {children}
-    </p>
+    </span>
   );
+}
+
+function SubLabel({ children }: { children: React.ReactNode }) {
+  return <p className="eyebrow mb-2.5 text-ink-soft">{children}</p>;
 }
 
 function Legend({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-1.5">
-      <Dot tone={tone} />
+      <span aria-hidden className={cn("size-2.5 rounded-sm", dotClasses[tone])} />
       {children}
     </span>
   );

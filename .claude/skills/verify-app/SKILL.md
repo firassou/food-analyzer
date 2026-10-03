@@ -20,5 +20,8 @@ description: Use after any change, and before saying a step is done: build, lint
    - a drink per 100 ml
    - a blurry photo
    - a non-label photo
-4. In the browser (use the global `run` skill), walk through: landing → drop, paste and replace → analyze → cancel → results nav, scroll-spy, tile jumps and additive links → error state → not-a-label → dark mode → mobile width (360 px).
+   - still missing: a bottled water, a dish with no label, a front-of-pack shot (for the product lookup)
+4. In the browser, walk through: landing → take / choose / drop / paste (analysis starts by itself) → cancel → results nav, scroll-spy, tile jumps and additive links → error state → not-a-label → each kind (label, drink, water, dish, unreadable product) → language switch (English, French, Arabic right-to-left) → dark mode → mobile width (360 px).
+   - No browser tool is needed: drive `/usr/bin/google-chrome` with `playwright-core` installed in a scratch folder, and stub `**/api/analyze` with results made by `normalize()` from the fixtures to see every kind without spending model quota. Check the console for errors and `scrollWidth > clientWidth` for horizontal overflow.
+   - Language: `curl -H "Accept-Language: ar" localhost:3000 | grep -o '<html[^>]*>'` should show `lang="ar" dir="rtl"`; a `lang` cookie wins. `-F lang=fr` on the analyze call returns French text.
 5. Report what you actually verified, and say plainly what you skipped (for example, no API key, so there was no live analysis).

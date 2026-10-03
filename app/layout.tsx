@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
 import { dirOf, isLocale, LOCALE_COOKIE, matchLocale, type Locale } from "./lib/i18n/locales";
@@ -16,12 +16,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Geist has no Arabic glyphs; this one is only fetched when Arabic text is on screen
+// headings and big figures
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+});
+
+// The Latin faces have no Arabic glyphs; this one is fetched only when it is needed.
+// No metric fallback face: it leads the stack in Arabic (see globals.css), where a
+// local-Arial fallback would add nothing.
 const plexArabic = IBM_Plex_Sans_Arabic({
   variable: "--font-arabic",
   subsets: ["arabic"],
   weight: ["400", "500", "600", "700"],
   preload: false,
+  adjustFontFallback: false,
 });
 
 /** a language picked by hand wins; otherwise follow the device (Accept-Language) */
@@ -42,7 +51,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang={locale}
       dir={dirOf(locale)}
-      className={`${geistSans.variable} ${geistMono.variable} ${plexArabic.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} ${plexArabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider initialLocale={locale}>{children}</I18nProvider>

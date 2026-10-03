@@ -1,5 +1,6 @@
 import { AnalyzeError, analyzeLabel } from "@/app/lib/server/analyze";
 import { ImageError, MAX_UPLOAD_BYTES, prepareImage, TOO_LARGE_MESSAGE } from "@/app/lib/server/image";
+import { completeFromDatabase, findProduct, lookupEnabled, needsLookup } from "@/app/lib/server/lookup";
 import { getTargets } from "@/app/lib/server/models";
 import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
@@ -40,7 +41,20 @@ export async function POST(req: Request) {
 
   try {
     const image = await prepareImage(new Uint8Array(await file.arrayBuffer()));
-    const { result, meta } = await analyzeLabel(image.dataUrl, req.signal, locale);
+    const analysis = await analyzeLabel(image.dataUrl, req.signal, locale);
+    const { meta } = analysis;
+    let { result } = analysis;
+    // a recognised product with no readable ingredient list: complete it from the product database
+    if (lookupEnabled() && needsLookup(result)) {
+      try {
+        const found = await findProduct(result.product, locale, req.signal);
+        if (found) result = completeFromDatabase(result, found, locale);
+        console.log(`[analyze] product lookup: ${found ? `matched ${found.url}` : "no match"}`);
+      } catch (error) {
+        // the photo's own reading (and its "couldn't read the ingredients" warning) still stands
+        console.warn("[analyze] product lookup failed:", error instanceof Error ? error.message : error);
+      }
+    }
     return Response.json({ ok: true, result, meta } satisfies AnalyzeResponse);
   } catch (error) {
     if (error instanceof ImageError) {

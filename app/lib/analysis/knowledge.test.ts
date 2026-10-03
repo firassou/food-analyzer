@@ -9,8 +9,16 @@ import {
   fold,
   glutenSignal,
   isDairy,
+  isColourCode,
   isDrink,
   isNutrientFortificant,
+  isSparkling,
+  isSweetenerCode,
+  isWater,
+  mentionsCaffeine,
+  volumeMl,
+  waterFacts,
+  waterHardness,
   LEVEL_THRESHOLDS,
   levelOf,
   mayContainStatements,
@@ -283,5 +291,60 @@ describe("mayContainStatements", () => {
   });
   it("finds nothing in a plain ingredient list", () => {
     expect(mayContainStatements("Ingredients: wheat flour, sugar, milk.")).toEqual([]);
+  });
+});
+
+describe("water", () => {
+  it("recognises plain bottled water in several languages", () => {
+    expect(isWater("Natural mineral water")).toBe(true);
+    expect(isWater("Eau minérale naturelle gazeuse")).toBe(true);
+    expect(isWater("Eau de source")).toBe(true);
+    expect(isWater("مياه معدنية طبيعية")).toBe(true);
+  });
+  it("doesn't take flavoured waters, or foods named after water, for water", () => {
+    expect(isWater("Lemon flavoured sparkling water")).toBe(false);
+    expect(isWater("Eau minérale aromatisée saveur citron")).toBe(false);
+    expect(isWater("Water crackers")).toBe(false);
+    expect(isWater("Watermelon juice")).toBe(false);
+  });
+  it("detects sparkling water", () => {
+    expect(isSparkling("Eau minérale naturelle gazeuse")).toBe(true);
+    expect(isSparkling("مياه غازية")).toBe(true);
+    expect(isSparkling("Still spring water")).toBe(false);
+  });
+  it("computes hardness and remarks from the printed values only", () => {
+    expect(waterHardness(80, 26)).toBe(307);
+    expect(waterHardness(80, null)).toBeNull();
+    const none = Object.fromEntries(["calcium", "magnesium", "sodium", "potassium", "bicarbonate", "sulphate", "chloride", "nitrate", "fluoride", "silica"].map((k) => [k, null]));
+    const facts = (w: object) =>
+      waterFacts({ minerals: { ...none }, dry_residue_mg_l: null, ph: null, sparkling: false, hardness_mg_l: null, ...w } as never).map((f) => f.id);
+    expect(facts({})).toEqual([]);
+    expect(facts({ ph: 6.5 })).toEqual(["ph_neutral"]);
+    expect(facts({ ph: 9.6 })).toEqual(["ph_alkaline"]);
+    expect(facts({ dry_residue_mg_l: 1800 })).toEqual(["mineral_high"]);
+    expect(facts({ minerals: { ...none, fluoride: 1.6, nitrate: 60, sodium: 250 } })).toEqual(["nitrate_high", "fluoride_high", "sodium_rich"]);
+  });
+});
+
+describe("drink helpers", () => {
+  it("reads the container volume", () => {
+    expect(volumeMl("1,5 L")).toBe(1500);
+    expect(volumeMl("33 cl")).toBe(330);
+    expect(volumeMl("6 x 330 ml")).toBe(330);
+    expect(volumeMl("200 g")).toBeNull();
+    expect(volumeMl(null)).toBeNull();
+  });
+  it("classifies colour and sweetener codes", () => {
+    expect(isColourCode("E150d")).toBe(true);
+    expect(isColourCode("E202")).toBe(false);
+    expect(isSweetenerCode("E951")).toBe(true);
+    expect(isSweetenerCode("E420")).toBe(true);
+    expect(isSweetenerCode("E330")).toBe(false);
+    expect(isSweetenerCode(null)).toBe(false);
+  });
+  it("spots caffeine, not decaffeinated-sounding false friends", () => {
+    expect(mentionsCaffeine("arômes naturels (dont caféine)")).toBe(true);
+    expect(mentionsCaffeine("كافيين")).toBe(true);
+    expect(mentionsCaffeine("café au lait")).toBe(false);
   });
 });

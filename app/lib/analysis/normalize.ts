@@ -12,8 +12,16 @@ import {
   fold,
   glutenSignal,
   isDairy,
+  isColourCode,
   isDrink,
   isNutrientFortificant,
+  isSparkling,
+  isSweetenerCode,
+  isWater,
+  mentionsCaffeine,
+  volumeMl,
+  waterFacts,
+  waterHardness,
   LEVEL_THRESHOLDS,
   levelOf,
   splitPrecautions,
@@ -24,22 +32,28 @@ import type { Locale } from "../i18n/locales";
 import { analysisMessages, localCategory, type AnalysisMessages } from "./messages";
 import {
   ALLERGEN_IDS,
+  MINERAL_KEYS,
   NUTRIENT_KEYS,
   type Additive,
   type Allergen,
   type AllergenId,
   type Basis,
   type Confidence,
+  type Drink,
   type HighlightTone,
   type ImageQuality,
   type Ingredient,
+  type IngredientSource,
   type LabelAnalysis,
   type Level,
   type LevelKey,
+  type MineralKey,
   type NutrientKey,
   type Nutrients,
   type Nutrition,
   type Presence,
+  type SubjectKind,
+  type Water,
 } from "./types";
 
 type Obj = Record<string, unknown>;
@@ -436,6 +450,60 @@ function buildNutrition(raw: unknown, productText: string, warn: (w: string) => 
   };
 }
 
+// ------------------------------------------------------------------ water
+
+const MINERAL_ALIASES: Record<MineralKey, string[]> = {
+  calcium: ["calcium", "ca", "calcium_mg_l"],
+  magnesium: ["magnesium", "mg", "magnesium_mg_l"],
+  sodium: ["sodium", "na", "sodium_mg_l"],
+  potassium: ["potassium", "k", "potassium_mg_l"],
+  bicarbonate: ["bicarbonate", "bicarbonates", "hco3", "hydrogencarbonate"],
+  sulphate: ["sulphate", "sulfate", "sulphates", "sulfates", "so4"],
+  chloride: ["chloride", "chlorides", "cl"],
+  nitrate: ["nitrate", "nitrates", "no3"],
+  fluoride: ["fluoride", "fluorides", "f", "fluor"],
+  silica: ["silica", "sio2", "silice"],
+};
+/** nothing dissolves beyond this in a drinkable water: larger values are misreads */
+const MAX_MINERAL_MG_L = 20_000;
+
+/** the printed composition of a water; null when the label gives none of it */
+function buildWater(raw: unknown, sparkling: boolean, m: AnalysisMessages): Water | null {
+  if (!isObj(raw)) return null;
+  const table = pick(raw, "minerals", "composition", "mineral_composition");
+  const mgL = (v: unknown) => {
+    const x = num(isObj(v) ? pick(v, "value", "mg_l", "amount") : v);
+    return x !== null && x >= 0 && x <= MAX_MINERAL_MG_L ? round(x, 2) : null;
+  };
+  const minerals = Object.fromEntries(
+    MINERAL_KEYS.map((k) => [k, mgL(pick(table, ...MINERAL_ALIASES[k]) ?? pick(raw, ...MINERAL_ALIASES[k]))]),
+  ) as Record<MineralKey, number | null>;
+  const phRaw = num(pick(raw, "ph", "ph_value"));
+  const ph = phRaw !== null && phRaw >= 2 && phRaw <= 12 ? round(phRaw, 2) : null;
+  const residue = mgL(pick(raw, "dry_residue_mg_l", "dry_residue", "residue", "tds", "total_dissolved_solids", "residu_sec"));
+  if (ph === null && residue === null && MINERAL_KEYS.every((k) => minerals[k] === null)) return null;
+
+  const base = {
+    minerals,
+    dry_residue_mg_l: residue,
+    ph,
+    sparkling: sparkling || bool(pick(raw, "sparkling", "carbonated")) === true,
+    hardness_mg_l: waterHardness(minerals.calcium, minerals.magnesium),
+  };
+  const values = { ph, residue, hardness: base.hardness_mg_l, minerals };
+  return { ...base, facts: waterFacts(base).map((f) => ({ ...f, text: m.water[f.id](values) })) };
+}
+
+function subjectKind(v: unknown): SubjectKind | null {
+  const s = fold(str(v) ?? "");
+  if (/water|eau|ماء|مياه/.test(s)) return "water";
+  if (/drink|beverage|boisson|juice|مشروب/.test(s)) return "drink";
+  if (/dish|meal|food|plat|prepared|طبق/.test(s)) return "dish";
+  if (/label|pack|product/.test(s)) return "label";
+  if (/other|none|unknown/.test(s)) return "other";
+  return null;
+}
+
 // ------------------------------------------------------------------ ingredients
 
 /** "chocolate chips (22%) (sugar, cocoa…)" → "chocolate chips" */
@@ -476,6 +544,18 @@ function ingredientsFromText(raw: string): string[] {
 
 const bothNames = (i: { name: string; name_en: string | null }) => `${i.name} ${i.name_en ?? ""}`;
 
+/**
+ * The digits under a barcode: EAN-8, UPC-A, EAN-13 or ITF-14. Models misread small
+ * digits, and a wrong code could match another product, so the GS1 check digit must hold.
+ */
+function barcode(v: unknown): string | null {
+  const digits = (typeof v === "number" ? String(v) : (str(v, 40) ?? "")).replace(/[\s-]/g, "");
+  if (!/^(\d{8}|\d{12,14})$/.test(digits)) return null;
+  // from the right, skipping the check digit: weights 3, 1, 3, …
+  const sum = [...digits.slice(0, -1)].reverse().reduce((total, d, i) => total + Number(d) * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === Number(digits.at(-1)) ? digits : null;
+}
+
 /** ambiguous additives (code null) are deduplicated by kind, not by exact wording */
 function additiveKey(code: string | null, name: string): string {
   if (code) return code;
@@ -496,6 +576,8 @@ export interface NormalizeOptions {
   repaired?: boolean;
   /** language of the sentences normalize writes itself (default "en") */
   locale?: Locale;
+  /** the input was completed from a product database entry: its ingredients weren't read on the photo */
+  database?: { name: string; product: string; url: string };
 }
 
 export function normalize(input: unknown, opts: NormalizeOptions = {}): LabelAnalysis {
@@ -503,7 +585,7 @@ export function normalize(input: unknown, opts: NormalizeOptions = {}): LabelAna
     return normalizeUnsafe(input, opts);
   } catch {
     // Last line of defence for invariant 1: a bug in a rule must not become a 500.
-    return normalizeUnsafe({}, { repaired: opts?.repaired, locale: opts?.locale });
+    return normalizeUnsafe({}, { repaired: opts?.repaired, locale: opts?.locale, database: opts?.database });
   }
 }
 
@@ -534,6 +616,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       )
         // the ℮ "estimated quantity" mark is often read as a stray "e"
         ?.replace(/(\d\s*(g|kg|ml|cl|l|oz))\s*[℮e]$/i, "$1") ?? null,
+    barcode: barcode(pick(productRaw, "barcode", "ean", "gtin", "upc", "code") ?? get("barcode", "ean")),
   };
   const productText = `${product.category ?? ""} ${product.name ?? ""}`;
 
@@ -578,10 +661,18 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   // ---- 3. ingredients
   let ingredientItems = arr(get("ingredients", "ingredient_list", "ingredients_list"));
+  let ingredientSource: IngredientSource = opts.database ? "database" : "label";
   if (ingredientItems.length === 0 && rawText) {
     ingredientItems = ingredientsFromText(rawText);
-    if (ingredientItems.length) warn(m.warnings.reconstructed);
+    if (ingredientItems.length && !opts.database) warn(m.warnings.reconstructed);
   }
+  // nothing readable: fall back to the model's estimate (a dish, or a product it recognises),
+  // kept apart from read ingredients so it can never pass for a label
+  if (ingredientItems.length === 0) {
+    ingredientItems = arr(get("estimated_ingredients", "estimated", "likely_ingredients"));
+    if (ingredientItems.length) ingredientSource = "estimated";
+  }
+  const estimated = ingredientSource === "estimated";
   if (ingredientItems.length > 0 && ingredientItems.every((x) => isObj(x) && num(pick(x, "order", "position")) !== null)) {
     ingredientItems = [...ingredientItems].sort(
       (a, b) => (num(pick(a, "order", "position")) ?? 0) - (num(pick(b, "order", "position")) ?? 0),
@@ -648,6 +739,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       name_en: nameEn,
       name_local: nameLocal,
       percent: pct !== null && pct > 0 && pct <= 100 ? pct : null,
+      confidence: estimated ? confidence(isObj(item) ? pick(item, "confidence", "certainty") : null) : null,
       e_number: eNumber,
       allergens: ALLERGEN_IDS.filter((a) => allergens.has(a)),
       gluten,
@@ -669,10 +761,15 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       cur.sources.push(source);
     allergenMap.set(id, cur);
   };
-  // oats alone only make gluten likely, so they don't put it on the "contains" list
+  // oats alone only make gluten likely, so they don't put it on the "contains" list;
+  // an estimated ingredient is a guess, so its allergens are never "contains" either
   for (const ing of ingredients)
     for (const a of ing.allergens)
-      addAllergen(a, a === "gluten" && glutenSignals.get(ing) === "oats" ? "may_contain" : "contains", label(ing));
+      addAllergen(
+        a,
+        estimated || (a === "gluten" && glutenSignals.get(ing) === "oats") ? "may_contain" : "contains",
+        label(ing),
+      );
   for (const id of declaredSet) addAllergen(id, "contains", null, true);
   for (const { id, evidence } of detectedFromList) addAllergen(id, "contains", evidence);
   for (const id of mayContain) {
@@ -725,6 +822,9 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     glutenStatus = "unclear";
     glutenConfidence = "low";
   }
+  // an estimate can make gluten likely at most, whatever the model claims
+  if (estimated && glutenStatus === "contains") glutenStatus = "likely_contains";
+  if (estimated && glutenConfidence === "high") glutenConfidence = "medium";
   if (glutenStatus === "contains" && !allergenMap.has("gluten")) addAllergen("gluten", "contains", glutenEvidence[0] ?? null);
   if (glutenFreeClaim && !glutenEvidence.some((e) => !ownEvidence.has(e) && mentionsGlutenFree(e)))
     glutenEvidence.push(m.evidence.glutenFree);
@@ -759,6 +859,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     lactoseEvidence.push(m.evidence.lactoseFree);
   }
   if (lactoseStatus === "no_indication" && ingredients.length === 0 && !lactoseFreeClaim) lactoseStatus = "unclear";
+  if (estimated && lactoseStatus === "contains") lactoseStatus = "likely_contains";
 
   // ---- 7. additives
   const additives: Additive[] = [];
@@ -833,8 +934,29 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   // ---- 8. nutrition
   const nutrition = buildNutrition(get("nutrition", "nutrition_facts", "nutritional_information"), productText, warn, m);
 
+  // ---- 8b. what the photo shows (the model's word, checked against what was actually read)
+  const readIngredients = estimated ? 0 : ingredients.length;
+  const modelKind = subjectKind(get("kind", "subject", "photo_kind"));
+  const waterRaw = get("water", "water_composition", "mineral_composition");
+  const namedWater = isWater(productText);
+  // water has no recipe: sugars or a real ingredient list make it a soft drink
+  const plain = readIngredients <= 2 && (nutrition?.per_100?.sugars_g ?? 0) <= 0.5;
+  let water =
+    plain && (modelKind === "water" || namedWater || (modelKind === null && isObj(waterRaw)))
+      ? buildWater(waterRaw, isSparkling(`${productText} ${packText}`), m)
+      : null;
+  const substantive = readIngredients > 0 || nutrition !== null || !!rawText || water !== null;
+  let kind: SubjectKind;
+  if (water || (plain && (namedWater || modelKind === "water"))) kind = "water";
+  else if (modelKind === "dish" && !substantive) kind = "dish";
+  else if (modelKind === "drink" || nutrition?.basis === "100ml" || isDrink(productText)) kind = "drink";
+  else if (substantive || modelKind === "label") kind = "label";
+  else if (estimated) kind = "dish";
+  else kind = modelKind ?? (bool(get("label_detected", "is_food_label", "is_label")) ? "label" : "other");
+  if (kind !== "water") water = null;
+
   // ---- 9. sugar (computed from per-100 sugars; the model's opinion is only a fallback)
-  const basis: Basis = nutrition?.basis ?? (isDrink(productText) ? "100ml" : "100g");
+  const basis: Basis = nutrition?.basis ?? (kind === "water" || kind === "drink" || isDrink(productText) ? "100ml" : "100g");
   const unit = basis === "100ml" ? "ml" : "g";
   const sugarPer100 = nutrition?.per_100?.sugars_g ?? null;
   const oldSugar = get("sugar");
@@ -847,7 +969,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
   } else {
     sugarExplanation =
       str(pick(oldSugar, "explanation"), 300) ??
-      (ingredients.length || nutrition ? m.sugar.notPrinted : null);
+      (readIngredients || nutrition ? m.sugar.notPrinted : null);
   }
 
   // ---- 10. highlights (computed levels first; model claims about levels are replaced)
@@ -876,21 +998,53 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       highlights.push({ tone: isObj(h) ? tone(pick(h, "tone", "type", "sentiment")) : "neutral", text: t });
   }
 
+  // ---- 10b. drinks: sugar in the whole container, colours, sweeteners, caffeine
+  let drink: Drink | null = null;
+  if (kind === "drink") {
+    const volume = volumeMl(product.quantity);
+    const named = (a: Additive) => a.name_local ?? a.name;
+    const isColour = (a: Additive) => isColourCode(a.code) || /colou?r|colorant|ملو/.test(fold(`${a.category ?? ""} ${a.name}`));
+    const isSweetener = (a: Additive) => isSweetenerCode(a.code) || /sweetener|edulcorant|محل/.test(fold(a.category ?? ""));
+    drink = {
+      volume_ml: volume,
+      sugar_per_container_g: volume !== null && sugarPer100 !== null ? round((sugarPer100 * volume) / 100, 1) : null,
+      colours: additives.filter(isColour).map(named),
+      sweeteners: additives.filter((a) => !isColour(a) && isSweetener(a)).map(named),
+      caffeine: mentionsCaffeine(`${ingredients.map(bothNames).join(" ")} ${packText}`),
+    };
+  }
+
   // ---- 11. detection & quality
-  const substantive = ingredients.length > 0 || nutrition !== null || !!rawText;
-  const labelDetected = substantive || (bool(get("label_detected", "is_food_label", "is_label")) ?? false);
+  const labelDetected =
+    kind !== "dish" && kind !== "other" && (substantive || (bool(get("label_detected", "is_food_label", "is_label")) ?? false));
   const quality = imageQuality(get("image_quality", "quality", "readability")) ?? (substantive ? "fair" : "poor");
 
-  if (!labelDetected) {
-    warn(m.warnings.notALabel);
+  if (kind === "dish") {
+    if (estimated) warn(m.warnings.estimatedDish);
+  } else if (!labelDetected) {
+    // a pack shot from the front: the product is known, its label isn't in view
+    if (product.name && kind !== "other") warn(estimated ? m.warnings.estimatedProduct : m.warnings.needProductPhoto);
+    else warn(m.warnings.notALabel);
+  } else if (kind === "water") {
+    // a water label has no ingredient list to miss
+    if (quality === "poor") warn(m.warnings.poorQuality);
+    else if (quality === "fair" && water) warn(m.warnings.fairQuality);
   } else {
     if (quality === "poor")
       warn(m.warnings.poorQuality);
     else if (quality === "fair" && (nutrition || ingredients.length))
       warn(m.warnings.fairQuality);
-    if (ingredients.length === 0) warn(m.warnings.noIngredients);
+    if (opts.database) warn(m.warnings.database(opts.database.product));
+    else if (estimated) warn(m.warnings.estimatedProduct);
+    else if (ingredients.length === 0) warn(product.name || product.barcode ? m.warnings.needProductPhoto : m.warnings.noIngredients);
   }
   if (opts.repaired) warn(m.warnings.cutShort);
+
+  // water carries neither gluten nor lactose; "unclear" would only be noise
+  if (kind === "water") {
+    if (glutenStatus === "unclear") glutenStatus = "no_indication";
+    if (lactoseStatus === "unclear") lactoseStatus = "no_indication";
+  }
 
   // every allergen needs at least one source, including ones added by the gluten rule
   for (const a of allergenMap.values())
@@ -904,12 +1058,15 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   return {
     label_detected: labelDetected,
+    kind,
     image_quality: quality,
     language: language && /^[a-z]{2,3}(-[a-z]{2,4})?$/i.test(language) ? language.toLowerCase() : null,
     product,
     summary: str(get("summary", "description", "overview"), 700),
     highlights: highlights.slice(0, MAX_HIGHLIGHTS),
     ingredients,
+    ingredient_source: ingredients.length ? ingredientSource : "label",
+    database: opts.database && ingredientSource === "database" ? opts.database : null,
     allergens: [...allergenMap.values()].sort(
       (a, b) =>
         (a.presence === b.presence ? 0 : a.presence === "contains" ? -1 : 1) ||
@@ -919,6 +1076,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     lactose: { status: lactoseStatus, evidence: lactoseEvidence.slice(0, 6) },
     additives: additives.slice(0, MAX_ADDITIVES),
     nutrition,
+    water,
+    drink,
     sugar: { level: sugarLevelValue, per_100: sugarPer100, basis, explanation: sugarExplanation },
     claims,
     certifications,

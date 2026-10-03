@@ -37,6 +37,11 @@ description: Use when adding or changing allergen keywords, false-friend exclusi
 - `isDrink(text)`: the multilingual DRINK regex, minus foods named after drinks (NOT_DRINK: "rich tea biscuits", "water crackers"). It picks the 100 ml basis when the model gives none.
 - FSA thresholds (per 100 g, halved for drinks per 100 ml) drive `levelOf`. Change them only with a cited source.
 
+## Water and drinks
+- `isWater`: plain bottled water only. Flavoured or sweetened waters are excluded by `NOT_PLAIN_WATER` (they are drinks).
+- `WATER_LIMITS` and `waterFacts` hold the reference levels (EU 2020/2184 pH 6.5–9.5; 2009/54/EC mineral claims; 2003/40/EC fluoride and nitrate; USGS hardness classes). The sources are cited above the table: change a number only with its source. `waterFacts` returns ids and tones; the wording is in `messages.ts`. An acidic sparkling water is `ph_sparkling` (expected), not `ph_acidic`.
+- `volumeMl`, `isColourCode` (E100–E199), `isSweetenerCode` (E420, E421, E950–E969) and `mentionsCaffeine` feed the drink summary.
+
 ## Tests (required for every change)
 - Add Vitest cases to `app/lib/analysis/knowledge.test.ts`:
   1. one positive match

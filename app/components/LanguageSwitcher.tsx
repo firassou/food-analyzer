@@ -6,20 +6,12 @@ import { isLocale, LOCALE_NAMES, LOCALES } from "../lib/i18n/locales";
 export default function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n();
   return (
-    <label className="relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-zinc-600 transition focus-within:ring-2 focus-within:ring-emerald-500/40 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100">
-      <svg
-        viewBox="0 0 24 24"
-        className="size-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        aria-hidden
-      >
+    <label className="relative inline-flex h-10 items-center gap-1.5 rounded-full border border-rule px-3 text-ink transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent hover:border-ink">
+      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" />
       </svg>
-      <span aria-hidden className="uppercase">
+      <span aria-hidden className="eyebrow">
         {locale}
       </span>
       <select

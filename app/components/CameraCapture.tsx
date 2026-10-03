@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../lib/i18n/I18nProvider";
-import { Spinner } from "./ui";
+import { CloseIcon, Spinner } from "./ui";
 
 type State = "starting" | "live" | "denied" | "unavailable";
 
@@ -95,17 +95,15 @@ export default function CameraCapture({
       className="animate-fade-in fixed inset-0 z-50 flex flex-col bg-black text-white"
     >
       <div className="flex items-center gap-3 px-4 py-3">
-        <p className="min-w-0 flex-1 truncate text-sm font-medium">{t.camera.title}</p>
+        <p className="font-display min-w-0 flex-1 truncate text-base font-semibold">{t.camera.title}</p>
         <button
           type="button"
           onClick={onClose}
           aria-label={t.camera.close}
           title={t.camera.close}
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+          className="grid size-11 shrink-0 place-items-center rounded-full bg-white/10 transition hover:bg-white/20 focus-visible:outline-white"
         >
-          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <path d="M6 6l12 12M18 6 6 18" />
-          </svg>
+          <CloseIcon className="size-5" />
         </button>
       </div>
 
@@ -120,7 +118,7 @@ export default function CameraCapture({
               "left-6 bottom-6 border-l-2 border-b-2 rounded-bl-xl",
               "right-6 bottom-6 border-r-2 border-b-2 rounded-br-xl",
             ].map((corner) => (
-              <span key={corner} aria-hidden className={`pointer-events-none absolute size-8 border-emerald-400 ${corner}`} />
+              <span key={corner} aria-hidden className={`pointer-events-none absolute size-8 border-white ${corner}`} />
             ))}
             <p className="pointer-events-none absolute inset-x-6 bottom-8 mx-auto w-fit max-w-full rounded-full bg-black/60 px-4 py-1.5 text-center text-xs backdrop-blur">
               {t.camera.tip}
@@ -128,17 +126,17 @@ export default function CameraCapture({
           </>
         )}
         {state === "starting" && (
-          <p className="absolute flex items-center gap-2 text-sm text-zinc-300">
+          <p className="absolute flex items-center gap-2 text-sm text-white/70">
             <Spinner /> {t.camera.starting}
           </p>
         )}
         {failed && (
           <div role="alert" className="absolute mx-6 flex max-w-sm flex-col items-center gap-4 text-center">
-            <p className="text-sm leading-6 text-zinc-200">{state === "denied" ? t.camera.denied : t.camera.unavailable}</p>
+            <p className="text-sm leading-6 text-white/85">{state === "denied" ? t.camera.denied : t.camera.unavailable}</p>
             <button
               type="button"
               onClick={onChooseFile}
-              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 active:scale-[0.98]"
+              className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/85 active:scale-[0.98]"
             >
               {t.uploader.choosePhoto}
             </button>
@@ -154,7 +152,7 @@ export default function CameraCapture({
           disabled={state !== "live"}
           aria-label={t.camera.capture}
           title={t.camera.capture}
-          className="grid size-18 place-items-center rounded-full border-4 border-white/80 transition hover:border-white focus-visible:ring-4 focus-visible:ring-emerald-400 focus-visible:outline-none active:scale-95 disabled:opacity-30"
+          className="grid size-18 place-items-center rounded-full border-4 border-white/80 transition hover:border-white focus-visible:outline-white active:scale-95 disabled:opacity-30"
         >
           <span className="size-13 rounded-full bg-white" />
         </button>

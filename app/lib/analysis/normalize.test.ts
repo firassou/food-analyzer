@@ -17,12 +17,13 @@ const EXPECTED_KEYS = [
   "label_detected", "image_quality", "language", "product", "summary", "highlights", "ingredients",
   "allergens", "gluten", "lactose", "additives", "nutrition", "sugar", "claims", "certifications",
   "dates", "storage", "manufacturer", "origin", "raw_text", "warnings",
+  "kind", "ingredient_source", "database", "water", "drink",
 ].sort();
 
 /** invariant 2: every field present, nothing undefined anywhere */
 function expectComplete(r: LabelAnalysis) {
   expect(Object.keys(r).sort()).toEqual(EXPECTED_KEYS);
-  expect(Object.keys(r.product).sort()).toEqual(["brand", "category", "name", "quantity"]);
+  expect(Object.keys(r.product).sort()).toEqual(["barcode", "brand", "category", "name", "quantity"]);
   expect(Object.keys(r.dates).sort()).toEqual(["best_before", "expiration", "lot", "production"]);
   expect(Object.keys(r.storage).sort()).toEqual(["instructions", "temperature"]);
   expect(Object.keys(r.manufacturer).sort()).toEqual(["address", "country", "name"]);
@@ -62,7 +63,10 @@ describe("invariants", () => {
   it("uses null / [] / unclear for unknowns", () => {
     const r = normalize({});
     expect(r.label_detected).toBe(false);
-    expect(r.product).toEqual({ name: null, brand: null, category: null, quantity: null });
+    expect(r.product).toEqual({ name: null, brand: null, category: null, quantity: null, barcode: null });
+    expect(r.kind).toBe("other");
+    expect(r.ingredient_source).toBe("label");
+    expect([r.water, r.drink, r.database]).toEqual([null, null, null]);
     expect(r.ingredients).toEqual([]);
     expect(r.gluten).toEqual({ status: "unclear", confidence: "medium", evidence: [] });
     expect(r.lactose).toEqual({ status: "unclear", evidence: [] });
@@ -75,7 +79,8 @@ describe("fixture: EU biscuit with may-contain", () => {
   const r = analyze("eu-biscuit.txt");
 
   it("reads the product and strips the ℮ mark", () => {
-    expect(r.product).toEqual({ name: "Choc Chip Hazelnut Cookies", brand: "Brightbake", category: "Biscuits", quantity: "200 g" });
+    expect(r.product).toEqual({ name: "Choc Chip Hazelnut Cookies", brand: "Brightbake", category: "Biscuits", quantity: "200 g", barcode: null });
+    expect(r.kind).toBe("label");
     expect(r.language).toBe("en");
     expect(r.dates.lot).toBe("L2345B");
   });
@@ -469,5 +474,150 @@ describe("locale", () => {
       { locale: "fr" },
     );
     expect(r.highlights.map((h) => h.text)).toEqual(["Riche en sucres (30 g pour 100 g)", "Sans huile de palme"]);
+  });
+});
+
+describe("fixture: bottled water", () => {
+  const r = analyze("water.txt");
+
+  it("is water, with the printed composition and computed remarks", () => {
+    expect(r.kind).toBe("water");
+    expect(r.product.barcode).toBe("6191507400012");
+    // a misread digit fails the check digit and is dropped rather than looked up
+    expect(normalize({ product: { name: "X", barcode: "6191507400014" } }).product.barcode).toBeNull();
+    expect(normalize({ product: { name: "X", barcode: 3017620422003 } }).product.barcode).toBe("3017620422003");
+    expect(r.water?.ph).toBe(7.4);
+    expect(r.water?.minerals).toMatchObject({ calcium: 78, magnesium: 14, sodium: 12, fluoride: null });
+    expect(r.water?.hardness_mg_l).toBe(252); // 78 × 2.497 + 14 × 4.118
+    expect(r.water?.facts.map((f) => f.id)).toEqual(["ph_neutral", "mineral_low", "hardness_very_hard", "low_sodium", "nitrate_low"]);
+    expect(r.water?.facts[0]).toEqual({
+      id: "ph_neutral",
+      tone: "positive",
+      text: "pH 7.4: within the 6.5–9.5 range set for drinking water in the EU.",
+    });
+  });
+
+  it("has no gluten or lactose question and no missing-ingredients warning", () => {
+    expect(r.gluten.status).toBe("no_indication");
+    expect(r.lactose.status).toBe("no_indication");
+    expect(r.allergens).toEqual([]);
+    expect(r.warnings).toEqual([]);
+    expect(r.sugar.basis).toBe("100ml");
+    expect(r.drink).toBeNull();
+  });
+
+  it("ignores impossible values and never invents a composition", () => {
+    const odd = normalize({ kind: "water", product: { name: "Spring water" }, water: { ph: 71, minerals: { calcium: -3, sodium: "9 mg/l" } } });
+    expect(odd.water).toMatchObject({ ph: null, minerals: { calcium: null, sodium: 9 } });
+    const bare = normalize({ kind: "water", product: { name: "Spring water" }, water: null });
+    expect(bare.kind).toBe("water");
+    expect(bare.water).toBeNull();
+  });
+
+  it("treats a sweetened or flavoured water as a drink", () => {
+    const r2 = normalize({
+      kind: "water",
+      product: { name: "Lemon flavoured water", quantity: "50 cl" },
+      ingredients: ["water", "sugar", "lemon juice", "citric acid"],
+      nutrition: { basis: "100ml", per_100: { sugars_g: 4.5 } },
+      water: { ph: 3.2 },
+    });
+    expect(r2.kind).toBe("drink");
+    expect(r2.water).toBeNull();
+    expect(r2.drink).toMatchObject({ volume_ml: 500, sugar_per_container_g: 22.5 });
+  });
+
+  it("flags an acidic sparkling water as normal, a still one as acidic", () => {
+    const fizzy = normalize({ kind: "water", product: { name: "Eau minérale naturelle gazeuse" }, water: { ph: 5.6 } });
+    expect(fizzy.water?.facts.map((f) => [f.id, f.tone])).toEqual([["ph_sparkling", "neutral"]]);
+    const still = normalize({ kind: "water", product: { name: "Mineral water" }, water: { ph: 5.6 } });
+    expect(still.water?.facts.map((f) => [f.id, f.tone])).toEqual([["ph_acidic", "caution"]]);
+  });
+});
+
+describe("fixture: a dish with no label", () => {
+  const r = analyze("dish.txt");
+
+  it("keeps the estimate apart from read ingredients", () => {
+    expect(r.kind).toBe("dish");
+    expect(r.label_detected).toBe(false);
+    expect(r.ingredient_source).toBe("estimated");
+    expect(r.ingredients.map((i) => [i.name, i.confidence])).toContainEqual(["hazelnuts", "low"]);
+    expect(r.warnings).toEqual([
+      "These ingredients are an estimate from the look of the food, not read from a label. The real recipe may differ: don't rely on this if you have allergies.",
+    ]);
+  });
+
+  it("never claims more than 'likely' from an estimate", () => {
+    expect(r.allergens.map((a) => [a.id, a.presence])).toEqual([
+      ["gluten", "may_contain"],
+      ["milk", "may_contain"],
+      ["eggs", "may_contain"],
+      ["tree_nuts", "may_contain"],
+    ]);
+    expect(r.gluten).toMatchObject({ status: "likely_contains", confidence: "medium" });
+    expect(r.lactose.status).toBe("likely_contains");
+  });
+
+  it("uses read ingredients, not the estimate, whenever a list was read", () => {
+    const both = normalize({ kind: "label", ingredients: ["rice", "salt"], estimated_ingredients: [{ name: "wheat flour" }] });
+    expect(both.ingredient_source).toBe("label");
+    expect(both.ingredients.map((i) => i.name)).toEqual(["rice", "salt"]);
+    expect(both.ingredients[0].confidence).toBeNull();
+  });
+});
+
+describe("drinks and unreadable products", () => {
+  it("summarises a drink: sugar per container, colours, sweeteners, caffeine", () => {
+    const r = analyze("drink.txt");
+    expect(r.kind).toBe("drink");
+    expect(r.drink?.colours).toEqual(["Sunset yellow FCF"]);
+    expect(r.drink?.sweeteners).toEqual([]);
+    const cola = normalize({
+      product: { name: "Cola zero", category: "Soft drink", quantity: "33 cl" },
+      ingredients: ["carbonated water", "colour E150d", "sweeteners: aspartame, acesulfame K", "caffeine"],
+      nutrition: { basis: "100ml", per_100: { sugars_g: 0 } },
+    });
+    expect(cola.drink).toEqual({
+      volume_ml: 330,
+      sugar_per_container_g: 0,
+      colours: ["Sulphite ammonia caramel"],
+      sweeteners: ["Aspartame", "Acesulfame K"],
+      caffeine: true,
+    });
+  });
+
+  it("asks for a photo of the whole product when a known pack has no readable list", () => {
+    const r = normalize({ label_detected: true, image_quality: "good", kind: "label", product: { name: "Choco Pops", brand: "Acme" } });
+    expect(r.warnings).toEqual([
+      "The ingredient list couldn't be read, so allergen, gluten and additive checks are incomplete. Take a photo of the whole product, with its name and barcode visible, so it can be looked up.",
+    ]);
+  });
+
+  it("marks a recalled product recipe as an estimate", () => {
+    const r = normalize({
+      label_detected: false,
+      kind: "label",
+      product: { name: "Choco Pops", brand: "Acme" },
+      estimated_ingredients: [{ name: "wheat flour", confidence: "high" }, { name: "sugar" }],
+    });
+    expect(r.kind).toBe("label");
+    expect(r.ingredient_source).toBe("estimated");
+    expect(r.warnings[0]).toMatch(/usual ingredients of this product/);
+    expect(r.gluten.status).toBe("likely_contains");
+  });
+
+  it("labels ingredients completed from a product database", () => {
+    const database = { name: "Open Food Facts", product: "Choco Pops – Acme", url: "https://example.org/p/1" };
+    const r = normalize(
+      { label_detected: true, image_quality: "good", product: { name: "Choco Pops" }, ingredients: "wheat flour, sugar, cocoa" },
+      { database },
+    );
+    expect(r.ingredient_source).toBe("database");
+    expect(r.database).toEqual(database);
+    expect(r.gluten.status).toBe("contains");
+    expect(r.warnings).toEqual([
+      "The ingredient list wasn't readable on the photo. It was completed from the Open Food Facts entry “Choco Pops – Acme”: check that it matches your pack.",
+    ]);
   });
 });

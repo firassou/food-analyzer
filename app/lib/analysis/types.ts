@@ -10,6 +10,82 @@ export type Level = "low" | "medium" | "high";
 export type Basis = "100g" | "100ml";
 export type ImageQuality = "good" | "fair" | "poor";
 export type HighlightTone = "positive" | "neutral" | "caution";
+/** what the photo shows: a packaged food label, bottled water, another drink, a prepared dish, or none of these */
+export type SubjectKind = "label" | "water" | "drink" | "dish" | "other";
+/** where the ingredient list comes from: read on the label, a product database, or an estimate */
+export type IngredientSource = "label" | "database" | "estimated";
+
+/** dissolved minerals a water label prints, in mg/L */
+export const MINERAL_KEYS = [
+  "calcium",
+  "magnesium",
+  "sodium",
+  "potassium",
+  "bicarbonate",
+  "sulphate",
+  "chloride",
+  "nitrate",
+  "fluoride",
+  "silica",
+] as const;
+export type MineralKey = (typeof MINERAL_KEYS)[number];
+
+/** deterministic remarks about a water's composition (see knowledge.ts `waterFacts`) */
+export type WaterFactId =
+  | "ph_acidic"
+  | "ph_neutral"
+  | "ph_alkaline"
+  | "ph_sparkling"
+  | "mineral_very_low"
+  | "mineral_low"
+  | "mineral_medium"
+  | "mineral_high"
+  | "hardness_soft"
+  | "hardness_medium"
+  | "hardness_hard"
+  | "hardness_very_hard"
+  | "low_sodium"
+  | "sodium_rich"
+  | "calcium_rich"
+  | "magnesium_rich"
+  | "bicarbonate_rich"
+  | "sulphate_rich"
+  | "chloride_rich"
+  | "fluoride_present"
+  | "fluoride_high"
+  | "nitrate_low"
+  | "nitrate_high";
+
+export interface WaterFact {
+  id: WaterFactId;
+  tone: HighlightTone;
+  text: string;
+}
+
+export interface Water {
+  /** mg/L as printed; null when the label doesn't give it */
+  minerals: Record<MineralKey, number | null>;
+  /** dry residue at 180 °C (total dissolved solids), mg/L */
+  dry_residue_mg_l: number | null;
+  ph: number | null;
+  sparkling: boolean;
+  /** total hardness as mg/L CaCO₃, computed from calcium and magnesium */
+  hardness_mg_l: number | null;
+  /** computed from the values above, never taken from the model */
+  facts: WaterFact[];
+}
+
+export interface Drink {
+  /** container volume parsed from the net quantity */
+  volume_ml: number | null;
+  /** sugars in the whole container, from sugars per 100 ml × volume */
+  sugar_per_container_g: number | null;
+  /** names of the colour additives found */
+  colours: string[];
+  /** names of the sweeteners found */
+  sweeteners: string[];
+  caffeine: boolean;
+}
 
 /** the EU 14 major allergens, in regulation order */
 export const ALLERGEN_IDS = [
@@ -73,6 +149,8 @@ export interface Ingredient {
   name_local: string | null;
   /** only a percentage literally printed next to the ingredient */
   percent: number | null;
+  /** how sure the estimate is; null for ingredients read on a label */
+  confidence: Confidence | null;
   /** canonical code, e.g. "E322", "E150d", "E500ii" */
   e_number: string | null;
   allergens: AllergenId[];
@@ -113,6 +191,7 @@ export interface Nutrition {
 
 export interface LabelAnalysis {
   label_detected: boolean;
+  kind: SubjectKind;
   image_quality: ImageQuality;
   /** ISO 639 code of the label's main language */
   language: string | null;
@@ -121,15 +200,25 @@ export interface LabelAnalysis {
     brand: string | null;
     category: string | null;
     quantity: string | null;
+    /** digits printed under the barcode, when legible */
+    barcode: string | null;
   };
   summary: string | null;
   highlights: { tone: HighlightTone; text: string }[];
   ingredients: Ingredient[];
+  /** "estimated" and "database" ingredients were not read on the photo */
+  ingredient_source: IngredientSource;
+  /** the product database entry the result was completed from */
+  database: { name: string; product: string; url: string } | null;
   allergens: Allergen[];
   gluten: { status: Presence; confidence: Confidence; evidence: string[] };
   lactose: { status: Presence; evidence: string[] };
   additives: Additive[];
   nutrition: Nutrition | null;
+  /** composition of a bottled water; null for anything else */
+  water: Water | null;
+  /** what matters in a drink; null for anything else */
+  drink: Drink | null;
   sugar: {
     level: Level | "unknown";
     per_100: number | null;

@@ -1,0 +1,16 @@
+```json
+{"label_detected": true, "kind": "water", "image_quality": "good", "language": "fr",
+"product": {"name": "Eau minérale naturelle Safia", "brand": "Safia", "category": "Eau minérale", "quantity": "1,5 L", "barcode": "6191 5074 0001 2"},
+"ingredients": [], "estimated_ingredients": [],
+"allergens": {"declared": [], "may_contain": []},
+"gluten": {"status": "unclear", "confidence": "low", "evidence": []},
+"lactose": {"status": "unclear", "evidence": []},
+"additives": [], "nutrition": null,
+"water": {"ph": 7.4, "dry_residue_mg_l": 420, "sparkling": false,
+ "minerals": {"calcium": 78, "magnesium": 14, "sodium": 12, "potassium": 2.5, "bicarbonate": 256, "sulphate": 30, "chloride": 21, "nitrate": 4, "fluoride": null, "silica": null}},
+"claims": [], "certifications": [],
+"dates": {"best_before": null, "expiration": null, "production": null, "lot": null},
+"storage": {"instructions": "À conserver à l'abri du soleil", "temperature": null},
+"manufacturer": {"name": null, "address": null, "country": "Tunisie"},
+"origin": null, "summary": "Eau minérale naturelle plate.", "highlights": [], "raw_text": null}
+```

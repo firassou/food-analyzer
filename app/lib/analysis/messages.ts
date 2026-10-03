@@ -4,8 +4,16 @@
 // Shared by client and server: keep it free of runtime dependencies.
 
 import type { Locale } from "../i18n/locales";
-import type { AllergenId, LevelKey } from "./types";
+import type { AllergenId, LevelKey, MineralKey, WaterFactId } from "./types";
 import { ALLERGEN_NAMES } from "./types";
+
+/** values a water remark may quote */
+export interface WaterValues {
+  ph: number | null;
+  residue: number | null;
+  hardness: number | null;
+  minerals: Record<MineralKey, number | null>;
+}
 
 type Unit = "g" | "ml";
 type Threshold = { low: number; high: number };
@@ -23,6 +31,13 @@ export interface AnalysisMessages {
     cutShort: string;
     /** the model answered, but never with a structured reading */
     unstructured: string;
+    /** a packaged product whose ingredient list couldn't be read or found */
+    needProductPhoto: string;
+    /** ingredients guessed from a photo of the food itself */
+    estimatedDish: string;
+    /** the usual ingredients of a recognised product, recalled by the model */
+    estimatedProduct: string;
+    database: (product: string) => string;
   };
   issues: { sugarsOverCarbs: string; saturatesOverFat: string; macrosOver100: string; energyMismatch: string };
   evidence: {
@@ -35,6 +50,7 @@ export interface AnalysisMessages {
     lactoseFree: string;
   };
   sources: { mayContain: string; declared: string; listed: string };
+  water: Record<WaterFactId, (v: WaterValues) => string>;
   /** keyed by English class names: those of knowledge.ts `additiveCategory`, plus the ones models write anyway */
   categories: Record<string, string>;
   sugar: {
@@ -65,6 +81,14 @@ const en: AnalysisMessages = {
     cutShort: "The analysis was cut short; some sections may be incomplete.",
     unstructured:
       "The AI couldn't produce a structured reading of this photo. Try a sharper, well-lit photo of the ingredient list or nutrition table.",
+    needProductPhoto:
+      "The ingredient list couldn't be read, so allergen, gluten and additive checks are incomplete. Take a photo of the whole product, with its name and barcode visible, so it can be looked up.",
+    estimatedDish:
+      "These ingredients are an estimate from the look of the food, not read from a label. The real recipe may differ: don't rely on this if you have allergies.",
+    estimatedProduct:
+      "The ingredient list wasn't readable. These are the usual ingredients of this product as recalled by the AI: check them on the pack.",
+    database: (product) =>
+      `The ingredient list wasn't readable on the photo. It was completed from the Open Food Facts entry “${product}”: check that it matches your pack.`,
   },
   issues: {
     sugarsOverCarbs: "sugars exceed carbohydrates",
@@ -85,6 +109,32 @@ const en: AnalysisMessages = {
     mayContain: "“May contain” statement",
     declared: "Declared on the label",
     listed: "Listed on the label",
+  },
+  water: {
+    ph_neutral: (v) => `pH ${v.ph}: within the 6.5–9.5 range set for drinking water in the EU.`,
+    ph_acidic: (v) => `pH ${v.ph}: more acidic than the 6.5–9.5 range set for drinking water in the EU.`,
+    ph_alkaline: (v) => `pH ${v.ph}: more alkaline than the 6.5–9.5 range set for drinking water in the EU.`,
+    ph_sparkling: (v) => `pH ${v.ph}: acidic, which is normal for sparkling water (dissolved carbon dioxide).`,
+    mineral_very_low: (v) => `Very low mineral content: ${v.residue} mg/L of dry residue (under 50).`,
+    mineral_low: (v) => `Low mineral content: ${v.residue} mg/L of dry residue (up to 500).`,
+    mineral_medium: (v) => `Medium mineral content: ${v.residue} mg/L of dry residue (500 to 1500).`,
+    mineral_high: (v) => `Rich in mineral salts: ${v.residue} mg/L of dry residue (above 1500).`,
+    hardness_soft: (v) => `Soft water: hardness of about ${v.hardness} mg/L as calcium carbonate.`,
+    hardness_medium: (v) => `Moderately hard water: hardness of about ${v.hardness} mg/L as calcium carbonate.`,
+    hardness_hard: (v) => `Hard water: hardness of about ${v.hardness} mg/L as calcium carbonate.`,
+    hardness_very_hard: (v) => `Very hard water: hardness of about ${v.hardness} mg/L as calcium carbonate.`,
+    low_sodium: (v) => `Low in sodium: ${v.minerals.sodium} mg/L (under 20), the level for a low-sodium diet claim.`,
+    sodium_rich: (v) => `Contains sodium: ${v.minerals.sodium} mg/L (above 200).`,
+    calcium_rich: (v) => `Contains calcium: ${v.minerals.calcium} mg/L (above 150).`,
+    magnesium_rich: (v) => `Contains magnesium: ${v.minerals.magnesium} mg/L (above 50).`,
+    bicarbonate_rich: (v) => `Contains bicarbonate: ${v.minerals.bicarbonate} mg/L (above 600).`,
+    sulphate_rich: (v) => `Contains sulphate: ${v.minerals.sulphate} mg/L (above 200).`,
+    chloride_rich: (v) => `Contains chloride: ${v.minerals.chloride} mg/L (above 200).`,
+    fluoride_present: (v) => `Contains fluoride: ${v.minerals.fluoride} mg/L (above 1).`,
+    fluoride_high: (v) =>
+      `Fluoride ${v.minerals.fluoride} mg/L (above 1.5): EU rules require a notice that it isn't suitable for regular use by infants and children under 7.`,
+    nitrate_low: (v) => `Low in nitrate: ${v.minerals.nitrate} mg/L (10 or less).`,
+    nitrate_high: (v) => `Nitrate ${v.minerals.nitrate} mg/L: above the 50 mg/L EU limit.`,
   },
   categories: {},
   sugar: {
@@ -139,6 +189,14 @@ const fr: AnalysisMessages = {
     cutShort: "L'analyse a été interrompue ; certaines sections peuvent être incomplètes.",
     unstructured:
       "L'IA n'a pas pu produire une lecture structurée de cette photo. Essayez une photo plus nette et bien éclairée de la liste des ingrédients ou du tableau nutritionnel.",
+    needProductPhoto:
+      "La liste des ingrédients n'a pas pu être lue : les vérifications des allergènes, du gluten et des additifs sont incomplètes. Photographiez le produit en entier, avec son nom et son code-barres visibles, pour qu'il puisse être recherché.",
+    estimatedDish:
+      "Ces ingrédients sont une estimation d'après l'aspect de l'aliment, et non lus sur une étiquette. La vraie recette peut différer : ne vous y fiez pas en cas d'allergie.",
+    estimatedProduct:
+      "La liste des ingrédients était illisible. Voici les ingrédients habituels de ce produit, de mémoire de l'IA : vérifiez-les sur l'emballage.",
+    database: (product) =>
+      `La liste des ingrédients était illisible sur la photo. Elle a été complétée à partir de la fiche Open Food Facts « ${product} » : vérifiez qu'elle correspond à votre produit.`,
   },
   issues: {
     sugarsOverCarbs: "les sucres dépassent les glucides",
@@ -159,6 +217,33 @@ const fr: AnalysisMessages = {
     mayContain: "Mention « peut contenir »",
     declared: "Déclaré sur l'étiquette",
     listed: "Indiqué sur l'étiquette",
+  },
+  water: {
+    ph_neutral: (v) => `pH ${n(v.ph)} : dans la plage de 6,5 à 9,5 fixée pour l'eau potable dans l'UE.`,
+    ph_acidic: (v) => `pH ${n(v.ph)} : plus acide que la plage de 6,5 à 9,5 fixée pour l'eau potable dans l'UE.`,
+    ph_alkaline: (v) => `pH ${n(v.ph)} : plus alcalin que la plage de 6,5 à 9,5 fixée pour l'eau potable dans l'UE.`,
+    ph_sparkling: (v) => `pH ${n(v.ph)} : acide, ce qui est normal pour une eau gazeuse (gaz carbonique dissous).`,
+    mineral_very_low: (v) => `Très faiblement minéralisée : ${n(v.residue)} mg/L de résidu sec (moins de 50).`,
+    mineral_low: (v) => `Faiblement minéralisée : ${n(v.residue)} mg/L de résidu sec (jusqu'à 500).`,
+    mineral_medium: (v) => `Moyennement minéralisée : ${n(v.residue)} mg/L de résidu sec (de 500 à 1500).`,
+    mineral_high: (v) => `Riche en sels minéraux : ${n(v.residue)} mg/L de résidu sec (plus de 1500).`,
+    hardness_soft: (v) => `Eau douce : dureté d'environ ${n(v.hardness)} mg/L en carbonate de calcium.`,
+    hardness_medium: (v) => `Eau moyennement dure : dureté d'environ ${n(v.hardness)} mg/L en carbonate de calcium.`,
+    hardness_hard: (v) => `Eau dure : dureté d'environ ${n(v.hardness)} mg/L en carbonate de calcium.`,
+    hardness_very_hard: (v) => `Eau très dure : dureté d'environ ${n(v.hardness)} mg/L en carbonate de calcium.`,
+    low_sodium: (v) =>
+      `Pauvre en sodium : ${n(v.minerals.sodium)} mg/L (moins de 20), le seuil de la mention « convient pour un régime pauvre en sodium ».`,
+    sodium_rich: (v) => `Sodique : ${n(v.minerals.sodium)} mg/L de sodium (plus de 200).`,
+    calcium_rich: (v) => `Calcique : ${n(v.minerals.calcium)} mg/L de calcium (plus de 150).`,
+    magnesium_rich: (v) => `Magnésienne : ${n(v.minerals.magnesium)} mg/L de magnésium (plus de 50).`,
+    bicarbonate_rich: (v) => `Bicarbonatée : ${n(v.minerals.bicarbonate)} mg/L de bicarbonates (plus de 600).`,
+    sulphate_rich: (v) => `Sulfatée : ${n(v.minerals.sulphate)} mg/L de sulfates (plus de 200).`,
+    chloride_rich: (v) => `Chlorurée : ${n(v.minerals.chloride)} mg/L de chlorures (plus de 200).`,
+    fluoride_present: (v) => `Fluorée : ${n(v.minerals.fluoride)} mg/L de fluor (plus de 1).`,
+    fluoride_high: (v) =>
+      `Fluor ${n(v.minerals.fluoride)} mg/L (plus de 1,5) : la réglementation européenne impose la mention « ne convient pas aux nourrissons et aux enfants de moins de 7 ans pour une consommation régulière ».`,
+    nitrate_low: (v) => `Pauvre en nitrates : ${n(v.minerals.nitrate)} mg/L (10 ou moins).`,
+    nitrate_high: (v) => `Nitrates ${n(v.minerals.nitrate)} mg/L : au-dessus de la limite européenne de 50 mg/L.`,
   },
   categories: {
     Colour: "Colorant",
@@ -238,6 +323,14 @@ const ar: AnalysisMessages = {
     cutShort: "انقطع التحليل قبل اكتماله؛ قد تكون بعض الأقسام ناقصة.",
     unstructured:
       "لم يتمكن الذكاء الاصطناعي من قراءة هذه الصورة قراءة منظَّمة. جرّب صورة أوضح وجيدة الإضاءة لقائمة المكوّنات أو جدول القيم الغذائية.",
+    needProductPhoto:
+      "تعذّرت قراءة قائمة المكوّنات، لذا فإن فحوص مسببات الحساسية والغلوتين والمضافات غير مكتملة. صوّر المنتج كاملًا بحيث يظهر اسمه والرمز الشريطي ليتسنّى البحث عنه.",
+    estimatedDish:
+      "هذه المكوّنات تقدير من شكل الطعام وليست مقروءة من ملصق. قد تختلف الوصفة الحقيقية، فلا تعتمد عليها إذا كانت لديك حساسية.",
+    estimatedProduct:
+      "لم تكن قائمة المكوّنات مقروءة. هذه هي المكوّنات المعتادة لهذا المنتج كما يتذكّرها الذكاء الاصطناعي، فتحقق منها على العبوة.",
+    database: (product) =>
+      `لم تكن قائمة المكوّنات مقروءة في الصورة، فاستُكملت من صفحة «${product}» في قاعدة بيانات Open Food Facts. تأكد من أنها تطابق منتجك.`,
   },
   issues: {
     sugarsOverCarbs: "السكريات تتجاوز الكربوهيدرات",
@@ -258,6 +351,32 @@ const ar: AnalysisMessages = {
     mayContain: "عبارة «قد يحتوي على»",
     declared: "مصرَّح به على الملصق",
     listed: "مذكور على الملصق",
+  },
+  water: {
+    ph_neutral: (v) => `الرقم الهيدروجيني ${v.ph}: ضمن المجال 6.5–9.5 المحدد لمياه الشرب في الاتحاد الأوروبي.`,
+    ph_acidic: (v) => `الرقم الهيدروجيني ${v.ph}: أكثر حموضة من المجال 6.5–9.5 المحدد لمياه الشرب في الاتحاد الأوروبي.`,
+    ph_alkaline: (v) => `الرقم الهيدروجيني ${v.ph}: أكثر قلوية من المجال 6.5–9.5 المحدد لمياه الشرب في الاتحاد الأوروبي.`,
+    ph_sparkling: (v) => `الرقم الهيدروجيني ${v.ph}: حمضي، وهذا طبيعي في المياه الغازية (ثاني أكسيد الكربون المذاب).`,
+    mineral_very_low: (v) => `تمعدن ضعيف جدًّا: ${v.residue} ملغ/ل من البقايا الجافة (أقل من 50).`,
+    mineral_low: (v) => `تمعدن ضعيف: ${v.residue} ملغ/ل من البقايا الجافة (حتى 500).`,
+    mineral_medium: (v) => `تمعدن متوسط: ${v.residue} ملغ/ل من البقايا الجافة (من 500 إلى 1500).`,
+    mineral_high: (v) => `غنية بالأملاح المعدنية: ${v.residue} ملغ/ل من البقايا الجافة (أكثر من 1500).`,
+    hardness_soft: (v) => `ماء يسير: العسرة نحو ${v.hardness} ملغ/ل مقدَّرة بكربونات الكالسيوم.`,
+    hardness_medium: (v) => `ماء متوسط العسرة: العسرة نحو ${v.hardness} ملغ/ل مقدَّرة بكربونات الكالسيوم.`,
+    hardness_hard: (v) => `ماء عسر: العسرة نحو ${v.hardness} ملغ/ل مقدَّرة بكربونات الكالسيوم.`,
+    hardness_very_hard: (v) => `ماء شديد العسرة: العسرة نحو ${v.hardness} ملغ/ل مقدَّرة بكربونات الكالسيوم.`,
+    low_sodium: (v) => `قليل الصوديوم: ${v.minerals.sodium} ملغ/ل (أقل من 20)، وهو حدّ عبارة «مناسب لحمية قليلة الصوديوم».`,
+    sodium_rich: (v) => `يحتوي على الصوديوم: ${v.minerals.sodium} ملغ/ل (أكثر من 200).`,
+    calcium_rich: (v) => `يحتوي على الكالسيوم: ${v.minerals.calcium} ملغ/ل (أكثر من 150).`,
+    magnesium_rich: (v) => `يحتوي على المغنيسيوم: ${v.minerals.magnesium} ملغ/ل (أكثر من 50).`,
+    bicarbonate_rich: (v) => `يحتوي على البيكربونات: ${v.minerals.bicarbonate} ملغ/ل (أكثر من 600).`,
+    sulphate_rich: (v) => `يحتوي على الكبريتات: ${v.minerals.sulphate} ملغ/ل (أكثر من 200).`,
+    chloride_rich: (v) => `يحتوي على الكلوريد: ${v.minerals.chloride} ملغ/ل (أكثر من 200).`,
+    fluoride_present: (v) => `يحتوي على الفلورايد: ${v.minerals.fluoride} ملغ/ل (أكثر من 1).`,
+    fluoride_high: (v) =>
+      `الفلورايد ${v.minerals.fluoride} ملغ/ل (أكثر من 1.5): تفرض القواعد الأوروبية التنبيه إلى أنه غير مناسب للاستهلاك المنتظم للرضّع والأطفال دون 7 سنوات.`,
+    nitrate_low: (v) => `قليل النترات: ${v.minerals.nitrate} ملغ/ل (10 أو أقل).`,
+    nitrate_high: (v) => `النترات ${v.minerals.nitrate} ملغ/ل: أعلى من الحد الأوروبي البالغ 50 ملغ/ل.`,
   },
   categories: {
     Colour: "ملوّن",

@@ -1,29 +1,94 @@
 @import "tailwindcss";
 
+/*
+ * "The label, re-typeset": warm paper, ink, printed rules, one cobalt stamp colour.
+ * Red / amber / green are reserved for verdicts. Colours are variables that flip
+ * with the colour scheme, so components never need `dark:` variants.
+ * See .claude/skills/ui-design-system.
+ */
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  color-scheme: light dark;
+  --paper: #f4f1e8;
+  --sheet: #fffdf7;
+  --ink: #17150f;
+  --ink-soft: #625c4e;
+  --rule: #dcd6c5;
+  --accent: #2740f5;
+  --on-accent: #ffffff;
+  --bad: #b92d1a;
+  --bad-soft: #fae4dd;
+  --warn: #8f5600;
+  --warn-soft: #f9ebc8;
+  --good: #1c6b3d;
+  --good-soft: #dcefdf;
+  --mute: #6b6557;
+  --mute-soft: #ebe6d8;
+  /* Latin interface: the Latin faces lead, the Arabic one catches label text they lack */
+  --stack-sans: var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
+  --stack-display: var(--font-bricolage), var(--font-arabic), system-ui, sans-serif;
+  --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
+}
+
+/* Arabic interface: the Arabic face must lead, or the Latin faces' metric fallbacks
+   (a local Arial) claim the Arabic characters first. Its own Latin letters match it. */
+:root:lang(ar) {
+  --stack-sans: var(--font-arabic), var(--font-geist-sans), system-ui, sans-serif;
+  --stack-display: var(--font-arabic), var(--font-bricolage), system-ui, sans-serif;
+  --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12110e;
+    --sheet: #1b1a16;
+    --ink: #f2ede1;
+    --ink-soft: #aaa392;
+    --rule: #35322a;
+    --accent: #98a5ff;
+    --on-accent: #10112b;
+    --bad: #ff8f7a;
+    --bad-soft: #3b1a14;
+    --warn: #f3bb5c;
+    --warn-soft: #38290c;
+    --good: #74d49a;
+    --good-soft: #132f1e;
+    --mute: #aaa392;
+    --mute-soft: #2a2822;
+  }
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans), var(--font-arabic);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-mute: var(--mute);
+  --color-mute-soft: var(--mute-soft);
+  --font-sans: var(--stack-sans);
+  --font-display: var(--stack-display);
+  --font-mono: var(--stack-mono);
 }
 
 @theme {
-  --animate-fade-up: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-fade-in: fade-in 0.4s ease-out both;
-  --animate-scan: scan 2.4s ease-in-out infinite;
-  --animate-grow: grow 1s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-flash: flash 1.4s ease-out;
-  --animate-float: float 6s ease-in-out infinite;
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+  --animate-scan: scan 2.2s ease-in-out infinite;
+  --animate-grow: grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-flash: flash 1.2s ease-out;
 
   @keyframes fade-up {
     from {
       opacity: 0;
-      transform: translateY(14px);
+      transform: translateY(10px);
     }
     to {
       opacity: 1;
@@ -41,7 +106,7 @@
       top: 0%;
     }
     50% {
-      top: calc(100% - 3px);
+      top: calc(100% - 2px);
     }
   }
   @keyframes grow {
@@ -51,27 +116,11 @@
   }
   @keyframes flash {
     0% {
-      box-shadow: 0 0 0 0 rgb(16 185 129 / 0.55);
+      background-color: color-mix(in srgb, var(--accent) 16%, transparent);
     }
     100% {
-      box-shadow: 0 0 0 14px rgb(16 185 129 / 0);
+      background-color: transparent;
     }
-  }
-  @keyframes float {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-8px);
-    }
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #000000;
-    --foreground: #ededed;
   }
 }
 
@@ -83,19 +132,46 @@
   }
 }
 
+/* small capitals in the mono face: section numbers, column heads, units */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* room for the fixed dock, including the phone's home indicator */
+@utility pb-dock {
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+}
+@utility bottom-safe {
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), var(--font-arabic), system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
 }
 
-/* Arabic letters join up: letter-spacing and forced capitals break the script */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Arabic letters join up: letter-spacing breaks the script, and it has no capitals */
 :lang(ar) * {
   letter-spacing: 0 !important;
+}
+:lang(ar) .eyebrow {
+  font-size: 0.75rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

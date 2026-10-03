@@ -1,6 +1,12 @@
 # Food Analyzer
 
-An AI food-label analyzer. Upload (or paste) a photo of a packaged food label in any language, and get a single-page breakdown of allergens, gluten and lactose status, nutrition with traffic-light levels, ingredients, additives (E-numbers), dates, storage, manufacturer and the raw label text.
+An AI food-label analyzer, built for phones. Take (or choose, drop, paste) a photo and get a single-page breakdown, in English, French or Arabic:
+
+- **A food label**, in any language: allergens, gluten and lactose status, nutrition with traffic-light levels, ingredients, additives (E-numbers), dates, storage, manufacturer and the raw label text.
+- **A drink**: sugar per 100 ml and in the whole container, colourants, sweeteners, caffeine, then the rest.
+- **A bottled water**: the printed mineral composition, pH on its scale, dry residue, computed hardness, and what the values mean against EU reference levels. No gluten or allergen sections.
+- **A dish with no label** (a slice of cake): an estimate of its ingredients with a confidence for each, and the allergens that are therefore likely. Always marked as an estimate.
+- **A product whose ingredient list can't be read**: it is looked up in [Open Food Facts](https://world.openfoodfacts.org) by barcode or name, and the result says so. If that fails, the app asks for a photo of the whole product.
 
 **The LLM is never trusted blindly.** A vision model reads the label. Its reply is parsed leniently and mapped onto a strict schema, then a deterministic, multilingual knowledge base (EN, FR, ES, IT, DE, AR) cross-checks and corrects it. The API always returns a complete, well-typed object.
 
@@ -42,6 +48,7 @@ Set these in `.env.local` (see `.env.example`). At least one provider key is req
 | `HF_MODEL`           | `Qwen/Qwen3-VL-30B-A3B-Instruct`                       | primary HF model(s)                             |
 | `HF_FALLBACK_MODELS` | `Qwen/Qwen3-VL-235B-A22B-Instruct`                     | HF fallbacks (set empty to disable)             |
 | `NVIDIA_MODEL`       | `google/gemma-4-31b-it`                                | NVIDIA model(s)                                 |
+| `PRODUCT_LOOKUP`     | on                                                     | `off` disables the Open Food Facts lookup       |
 
 ### Free setup
 
@@ -82,9 +89,16 @@ Free tiers are rate-limited per minute and per day, and Gemini's free tier may u
                                               └─ lib/analysis/knowledge.ts  allergens, false friends,
                                                  E-numbers, fortificants, FSA thresholds, may-contain
                                               │
- app/page.tsx (state machine)  ◀──JSON────────┘
+                                           lib/server/lookup.ts       recognised product, no readable
+                                              │                       ingredient list → Open Food Facts
+ app/page.tsx (state machine)  ◀──JSON────────┘                       → normalize() again, marked "database"
  app/Content.tsx (results)
 ```
+
+- **Languages.** `app/lib/i18n/`: the interface follows the device (`Accept-Language`) until a language is picked in the header (cookie `lang`). Arabic is right-to-left. The request carries `lang`; the model writes its free text in it and `normalize()` writes its own sentences from `app/lib/analysis/messages.ts`. Everything the rules match on stays English, so the checks behave the same in every language.
+- **Photo.** "Take a photo" opens the native camera on phones and an in-page viewfinder elsewhere; the photo is analyzed as soon as it is picked.
+- **Estimates and lookups are never passed off as a reading.** `ingredient_source` says whether the list was read on the `label`, came from the `database`, or is `estimated`. Estimated ingredients can make an allergen "may contain" and gluten or lactose "likely" at most, and a warning always says where the list came from.
+- **Product lookup** sends only the barcode or the product's name and brand to Open Food Facts, never the photo. A barcode is used only if its check digit holds, and a name match must be the same product, not merely a similar one.
 
 - `app/lib/analysis/` is pure and shared by client and server. `app/lib/server/` is server-only.
 - Deterministic rules may only **raise** gluten and lactose status; a "gluten-free" or "lactose-free" claim is the only thing that suppresses a raise. Computed data (nutrition levels, per-100 derivation, additive codes, the sugar explanation) wins over model claims.
@@ -95,14 +109,14 @@ Free tiers are rate-limited per minute and per day, and Gemini's free tier may u
 
 ### `POST /api/analyze`
 
-`multipart/form-data` with the photo in an `image` (or `file`) field, up to 12 MB. The format is detected from the file's bytes; the declared MIME type is ignored.
+`multipart/form-data` with the photo in an `image` (or `file`) field, up to 12 MB. The format is detected from the file's bytes; the declared MIME type is ignored. An optional `lang` field (`en`, `fr` or `ar`; default `en`) sets the language of the analysis text.
 
 ```ts
 type AnalyzeResponse =
   | { ok: true; result: LabelAnalysis; meta: AnalyzeMeta }
   | { ok: false; error: string; code: AnalyzeErrorCode; trace?: string[] };
 
-interface AnalyzeMeta { model: string; provider: string; attempts: number; duration_ms: number; trace?: string[] }
+interface AnalyzeMeta { model: string; provider: string; attempts: number; duration_ms: number; locale: "en" | "fr" | "ar"; trace?: string[] }
 ```
 
 `trace` (one line per model attempt) is included only in development.
@@ -125,15 +139,21 @@ interface AnalyzeMeta { model: string; provider: string; attempts: number; durat
 ```ts
 interface LabelAnalysis {
   label_detected: boolean; image_quality: "good" | "fair" | "poor"; language: string | null;
-  product: { name; brand; category; quantity: string | null };
+  kind: "label" | "water" | "drink" | "dish" | "other";
+  product: { name; brand; category; quantity; barcode: string | null };
   summary: string | null; highlights: { tone: "positive" | "neutral" | "caution"; text: string }[];
-  ingredients: { name; name_en; percent; e_number; allergens: AllergenId[]; gluten; dairy }[];
+  ingredients: { name; name_en; name_local; percent; confidence; e_number; allergens: AllergenId[]; gluten; dairy }[];
+  ingredient_source: "label" | "database" | "estimated";
+  database: { name; product; url } | null;
   allergens: { id: AllergenId; name; presence: "contains" | "may_contain"; declared; sources: string[] }[];
   gluten: { status: Presence; confidence: "high" | "medium" | "low"; evidence: string[] };
   lactose: { status: Presence; evidence: string[] };
-  additives: { code; name; category; purpose; explanation }[];
+  additives: { code; name; name_local; category; purpose; explanation }[];
   nutrition: { basis: "100g" | "100ml"; serving_size; per_100; per_100_calculated; per_serving;
                levels: Record<"fat" | "saturated_fat" | "sugars" | "salt", "low" | "medium" | "high" | null> } | null;
+  water: { minerals: Record<MineralKey, number | null>; dry_residue_mg_l; ph; sparkling; hardness_mg_l;
+           facts: { id; tone; text }[] } | null;                       // bottled water only
+  drink: { volume_ml; sugar_per_container_g; colours: string[]; sweeteners: string[]; caffeine } | null;
   sugar: { level: "low" | "medium" | "high" | "unknown"; per_100; basis; explanation };
   claims: string[]; certifications: string[];
   dates: { best_before; expiration; production; lot };
@@ -158,7 +178,7 @@ Health check: `{ ok, providers, models }`.
 
 ## Tests and samples
 
-- `pnpm test` runs Vitest over `app/**/*.test.ts`. The normalizer tests replay raw model outputs from `app/lib/analysis/__fixtures__/` (truncated JSON, Python literals, a US per-serving panel, a French "peut contenir" label, Arabic, a drink, a non-label photo, a may-contain sentence glued to an ingredient).
+- `pnpm test` runs Vitest over `app/**/*.test.ts`. The normalizer tests replay raw model outputs from `app/lib/analysis/__fixtures__/` (truncated JSON, Python literals, a US per-serving panel, a French "peut contenir" label, Arabic, a drink, a bottled water, a dish with no label, a non-label photo, a may-contain sentence glued to an ingredient). `lookup.test.ts` covers the product lookup with a stubbed `fetch`; `locales.test.ts` checks language matching and that the French and Arabic dictionaries keep every placeholder.
 - `samples/` holds real label photos for manual and API checks: a French yogurt with "peut contenir", an Arabic/French cola (per 100 ml), a multilingual chocolate bar with may-contain, a multilingual biscuit pack, a blurry photo and a non-label photo.
 
 ## Disclaimer

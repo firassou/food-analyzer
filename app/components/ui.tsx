@@ -2,102 +2,90 @@ import React from "react";
 
 export type Tone = "red" | "amber" | "green" | "zinc";
 
+/** tinted surface + matching text, for tags and notices */
 export const toneClasses: Record<Tone, string> = {
-  red: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900",
-  amber:
-    "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900",
-  green:
-    "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900",
-  zinc: "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800",
+  red: "bg-bad-soft text-bad",
+  amber: "bg-warn-soft text-warn",
+  green: "bg-good-soft text-good",
+  zinc: "bg-mute-soft text-mute",
+};
+
+export const toneText: Record<Tone, string> = {
+  red: "text-bad",
+  amber: "text-warn",
+  green: "text-good",
+  zinc: "text-mute",
 };
 
 export const dotClasses: Record<Tone, string> = {
-  red: "bg-red-500",
-  amber: "bg-amber-500",
-  green: "bg-emerald-500",
-  zinc: "bg-zinc-400",
+  red: "bg-bad",
+  amber: "bg-warn",
+  green: "bg-good",
+  zinc: "bg-mute",
 };
 
 export function cn(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
-export function Card({
+/**
+ * One block of the result sheet, set like a printed panel: a heavy rule, a numbered
+ * heading, then the content. Sections stack inside a single sheet instead of floating
+ * as separate cards.
+ */
+export function Section({
   id,
+  index,
   title,
-  icon,
   aside,
   flash,
-  delay = 0,
   className,
   children,
 }: {
   id?: string;
-  title?: string;
-  icon?: string;
+  /** position in the sheet, printed before the title ("03") */
+  index?: number;
+  title: string;
   aside?: React.ReactNode;
-  /** changes on every jump to this card; replays the highlight pulse */
+  /** changes on every jump to this section; replays the highlight */
   flash?: number;
-  delay?: number;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section
-      id={id}
-      style={{ animationDelay: `${delay * 70}ms` }}
-      className={cn(
-        "animate-fade-up relative scroll-mt-32 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm transition-[border-color,box-shadow] duration-500 sm:p-6 dark:border-zinc-800 dark:bg-zinc-950",
-        !!flash && "border-emerald-400 dark:border-emerald-600",
-        className,
-      )}
-    >
-      {flash ? (
-        <span
-          key={flash}
-          aria-hidden
-          className="animate-flash pointer-events-none absolute inset-0 rounded-3xl"
-        />
-      ) : null}
-      {title && (
-        <div className="mb-4 flex items-center gap-3">
-          {icon && (
-            <span
-              aria-hidden
-              className="grid size-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-base dark:bg-zinc-900"
-            >
-              {icon}
-            </span>
-          )}
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
-            {title}
-          </h3>
-          {aside && (
-            <div className="ms-auto text-end text-xs text-zinc-500 dark:text-zinc-400">
-              {aside}
-            </div>
-          )}
-        </div>
-      )}
-      {children}
+    <section id={id} className={cn("relative scroll-mt-28 border-t-[3px] border-ink px-5 pt-4 pb-7 sm:px-7", className)}>
+      {flash ? <span key={flash} aria-hidden className="animate-flash pointer-events-none absolute inset-0" /> : null}
+      <div className="relative mb-4 flex items-baseline gap-3">
+        {index !== undefined && (
+          <span aria-hidden dir="ltr" className="eyebrow text-accent tabular-nums">
+            {String(index).padStart(2, "0")}
+          </span>
+        )}
+        <h3 className="font-display text-lg leading-tight font-semibold">{title}</h3>
+        {aside && <div className="eyebrow ms-auto text-end text-ink-soft">{aside}</div>}
+      </div>
+      <div className="relative">{children}</div>
     </section>
   );
 }
 
-export function Pill({
+/** a small rectangular stamp; `tone` colours it, without one it is an outline */
+export function Tag({
   tone,
   className,
   children,
+  ...rest
 }: {
-  tone: Tone;
+  tone?: Tone;
   className?: string;
   children: React.ReactNode;
-}) {
+} & React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
+      {...rest}
       className={cn(
-        "inline-flex items-center rounded-full px-3 py-1 text-sm ring-1 ring-inset",
-        toneClasses[tone],
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm leading-tight font-medium",
+        tone ? toneClasses[tone] : "border border-rule text-ink",
         className,
       )}
     >
@@ -106,34 +94,84 @@ export function Pill({
   );
 }
 
-export function Dot({ tone }: { tone: Tone }) {
+export function Dot({ tone, className }: { tone: Tone; className?: string }) {
+  return <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dotClasses[tone], className)} />;
+}
+
+/** a note set off by a coloured bar on its leading edge */
+export function Notice({
+  tone,
+  role = "note",
+  className,
+  children,
+}: {
+  tone: Tone;
+  role?: "note" | "alert";
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <span className={cn("size-2 shrink-0 rounded-full", dotClasses[tone])} />
+    <div role={role} className={cn("flex gap-3 rounded-xl px-4 py-3 text-sm leading-6", toneClasses[tone], className)}>
+      <span aria-hidden className={cn("mt-1 w-[3px] shrink-0 self-stretch rounded-full", dotClasses[tone])} />
+      <div className="min-w-0 flex-1 text-ink">{children}</div>
+    </div>
+  );
+}
+
+/** a horizontal meter: `value` from 0 to 1 */
+export function Bar({ value, tone, delay = 0 }: { value: number; tone: Tone; delay?: number }) {
+  return (
+    <div className="h-1.5 overflow-hidden rounded-full bg-mute-soft">
+      <div
+        className={cn("animate-grow h-full origin-left rounded-full rtl:origin-right", dotClasses[tone])}
+        style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, animationDelay: `${delay}ms` }}
+      />
+    </div>
   );
 }
 
 export function Spinner({ className }: { className?: string }) {
   return (
-    <svg
-      className={cn("size-4 animate-spin", className)}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="4"
-      />
-      <path
-        d="M22 12a10 10 0 0 0-10-10"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
+    <svg className={cn("size-4 animate-spin", className)} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
+      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const iconProps = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+} as const;
+
+export function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} {...iconProps}>
+      <path d="M4 8a2 2 0 0 1 2-2h1.6l1.1-1.6a1 1 0 0 1 .8-.4h5a1 1 0 0 1 .8.4L16.4 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" />
+      <circle cx="12" cy="12.5" r="3.5" />
+    </svg>
+  );
+}
+
+export function ImageIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} {...iconProps}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m4.5 17 4.8-4.6a1 1 0 0 1 1.4 0L15 16.5m-1.5-1.5 1.8-1.7a1 1 0 0 1 1.4 0l3.3 3.2" />
+    </svg>
+  );
+}
+
+export function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} {...iconProps}>
+      <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   );
 }
