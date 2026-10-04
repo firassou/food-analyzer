@@ -1,5 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import AskAi from "./components/AskAi";
 import { Bar, CameraIcon, cn, Dot, dotClasses, Notice, Section, Spinner, Tag, Tone, toneClasses, toneText } from "./components/ui";
 import { needsExcipients } from "./lib/analysis/medicine";
 import { checkProfile, type ProfileFinding } from "./lib/analysis/profile";
@@ -11,6 +12,7 @@ import { MINERAL_KEYS } from "./lib/analysis/types";
 import type {
   Additive,
   AnalyzeMeta,
+  ChatTurn,
   Confidence,
   HighlightTone,
   Ingredient,
@@ -37,7 +39,8 @@ type SectionId =
   | "ingredients"
   | "additives"
   | "details"
-  | "raw";
+  | "raw"
+  | "ask";
 
 const presenceTone: Record<Presence, Tone> = {
   contains: "red",
@@ -119,6 +122,7 @@ export default function Content({
   otherMedicines,
   onCheckWith,
   adding = null,
+  ask,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
@@ -133,13 +137,15 @@ export default function Content({
   onCheckWith?: (other: HistoryEntry) => void;
   /** that photo is being read ("working") or showed no excipient list ("none") */
   adding?: "working" | "none" | null;
+  /** the saved scan this result belongs to: enables "Ask AI" about it, with its earlier conversation */
+  ask?: { scanId: string; chat?: ChatTurn[] };
 }) {
   // nothing about a food: neither a label, a product, nor an estimate
   const empty =
     result.kind === "other" ||
     (!result.label_detected && result.ingredients.length === 0 && !result.product.name && !result.medicine);
   if (empty) return <NotALabel result={result} />;
-  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} onAddExcipients={onAddExcipients} onEditProfile={onEditProfile} otherMedicines={otherMedicines} onCheckWith={onCheckWith} adding={adding} />;
+  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} onAddExcipients={onAddExcipients} onEditProfile={onEditProfile} otherMedicines={otherMedicines} onCheckWith={onCheckWith} adding={adding} ask={ask} />;
 }
 
 function Results({
@@ -151,6 +157,7 @@ function Results({
   otherMedicines = [],
   onCheckWith,
   adding,
+  ask,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
@@ -160,6 +167,7 @@ function Results({
   otherMedicines?: HistoryEntry[];
   onCheckWith?: (other: HistoryEntry) => void;
   adding: "working" | "none" | null;
+  ask?: { scanId: string; chat?: ChatTurn[] };
 }) {
   const { t, fmt, languageName } = useI18n();
   const r = t.results;
@@ -226,12 +234,13 @@ function Results({
     additives: additives.length > 0,
     details: hasDetails,
     raw: !!result.raw_text,
+    ask: !!ask,
   };
   const order: Exclude<SectionId, "overview">[] =
-    kind === "dish" ? ["ingredients", "allergens", "dietary", "nutrition", "additives", "details", "raw"]
-    : kind === "drink" ? ["drink", "nutrition", "additives", "ingredients", "allergens", "dietary", "details", "raw"]
-    : kind === "medicine" ? ["dose", "medicine", "cautions", "ingredients", "dietary", "nutrition", "additives", "details", "raw"]
-    : ["water", "allergens", "dietary", "nutrition", "ingredients", "additives", "details", "raw"];
+    kind === "dish" ? ["ingredients", "allergens", "dietary", "nutrition", "additives", "details", "raw", "ask"]
+    : kind === "drink" ? ["drink", "nutrition", "additives", "ingredients", "allergens", "dietary", "details", "raw", "ask"]
+    : kind === "medicine" ? ["dose", "medicine", "cautions", "ingredients", "dietary", "nutrition", "additives", "details", "raw", "ask"]
+    : ["water", "allergens", "dietary", "nutrition", "ingredients", "additives", "details", "raw", "ask"];
   const visible = order.filter((id) => shown[id]);
   const numberOf = (id: SectionId) => visible.indexOf(id as (typeof visible)[number]) + 1;
   const titles: Record<SectionId, string> = {
@@ -248,6 +257,7 @@ function Results({
     additives: r.sections.additives,
     details: r.sections.details,
     raw: r.sections.raw,
+    ask: t.ask.title,
   };
   const sections: SectionId[] = ["overview", ...visible];
   const sectionKey = sections.join();
@@ -825,6 +835,11 @@ function Results({
     ),
 
     raw: result.raw_text ? <RawText {...head("raw")} text={result.raw_text} /> : null,
+    ask: ask && (
+      <Section {...head("ask")}>
+        <AskAi key={ask.scanId} scanId={ask.scanId} result={result} initialChat={ask.chat} />
+      </Section>
+    ),
   };
 
   return (

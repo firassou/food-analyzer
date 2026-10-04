@@ -61,3 +61,6 @@ Mobile first. The result reads like a printed spec sheet: warm paper, ink, heavy
 ## Profile and medicine check
 - The profile is optional everywhere: no prompt to create one, no feature that requires it. `ProfileVerdict` renders nothing without a profile.
 - A medical or dietary verdict never says "safe": the green state is "nothing you avoid was found", the empty interaction state is "nothing stood out" with the reminder that the list is short.
+
+## Ask AI
+- Last numbered section (`ask`), shown only when `Content` gets an `ask` prop (a saved scan). Chat lives in `components/AskAi.tsx`; conversations are stored on the history entry through `saveChat` only. An unanswered question goes back into the input, never into the saved chat.

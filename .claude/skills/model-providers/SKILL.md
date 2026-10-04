@@ -18,6 +18,9 @@ Files: `app/lib/server/models.ts` (target chain, `FailureKind`, error classifica
 ## Web search
 - Not available on the free tiers (checked 2026-10-04): Gemini's native `google_search` tool answers 429 "quota exceeded" on a free key while plain requests work, and this Groq account lists no `compound` (search) model. Asked from memory, two Gemini models gave two different excipient lists for the same medicine: don't use recall where a lookup is meant. Medicines use an official database instead (`server/medicines.ts`).
 
+## Ask AI
+- `server/ask.ts` reuses the chain, `classify` and the cooldowns for text-only, non-streamed answers (25 s per attempt, 3 attempts, 50 s total). Budget ordering: **50 s < route `maxDuration` 60 s < client timeout 75 s** (`api/ask/route.ts`, `components/AskAi.tsx`). An empty answer counts as a failed attempt.
+
 ## Every new provider must
 - map its errors onto the existing `FailureKind`s (via `classify`)
 - stream through the shared watchdog (first-token, idle and hard-deadline timers), where reasoning deltas count as progress

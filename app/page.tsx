@@ -396,6 +396,7 @@ export default function Home() {
                   otherMedicines={otherMedicines}
                   onCheckWith={shownEntry ? (other) => setComparing([shownEntry, other]) : undefined}
                   adding={adding}
+                  ask={shownEntry ? { scanId: shownEntry.id, chat: shownEntry.chat } : undefined}
                 />
               )}
               {status === "error" && (

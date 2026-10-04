@@ -346,3 +346,13 @@ export type AnalyzeErrorCode =
 export type AnalyzeResponse =
   | { ok: true; result: LabelAnalysis; meta: AnalyzeMeta }
   | { ok: false; error: string; code: AnalyzeErrorCode; trace?: string[] };
+
+/** one message of an "Ask AI" conversation about a scanned product */
+export interface ChatTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export type AskResponse =
+  | { ok: true; answer: string; model: string; provider: string }
+  | { ok: false; error: string; code: AnalyzeErrorCode };

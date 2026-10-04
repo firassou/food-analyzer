@@ -4,6 +4,9 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.10.0 — 2026-10-04
+- Ask AI: below a result you can ask follow-up questions about the product or its ingredients. Answers rest on what was read on the label, and anything from general knowledge is stamped as such. The conversation is kept with the scan in your history.
+
 ## 0.9.0 — 2026-10-04
 - Two medicines can be checked together: the same active substance in both, two medicines of the same family, and a short list of well-known serious interactions.
 - Optional personal profile (allergens, lactose, sugar, vegetarian, vegan, halal), kept on the device only. With a profile, every result opens with what it means for you. The app works the same without one.

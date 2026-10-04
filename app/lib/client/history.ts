@@ -3,7 +3,7 @@
 // the same without it, just with no history.
 
 import { useSyncExternalStore } from "react";
-import type { AnalyzeMeta, LabelAnalysis } from "../analysis/types";
+import type { AnalyzeMeta, ChatTurn, LabelAnalysis } from "../analysis/types";
 
 export interface HistoryEntry {
   id: string;
@@ -13,7 +13,11 @@ export interface HistoryEntry {
   thumb: string | null;
   result: LabelAnalysis;
   meta: AnalyzeMeta;
+  /** the "Ask AI" conversation about this scan; absent until a question is asked */
+  chat?: ChatTurn[];
 }
+
+const MAX_CHAT_TURNS = 40;
 
 // bump the version when LabelAnalysis changes in a way old entries can't satisfy
 const KEY = "food-analyzer:history:v2";
@@ -88,9 +92,19 @@ export function useHistory(): HistoryEntry[] {
   return useSyncExternalStore(subscribe, snapshot, () => EMPTY);
 }
 
-/** adds a scan, or replaces the one with the same id (the same photo analyzed again) */
+/** adds a scan, or replaces the one with the same id (the same photo analyzed again, or completed); its chat stays */
 export function saveScan(entry: HistoryEntry) {
-  commit([entry, ...snapshot().filter((e) => e.id !== entry.id)].slice(0, MAX_ENTRIES));
+  const previous = snapshot().find((e) => e.id === entry.id);
+  const chat = entry.chat ?? previous?.chat;
+  commit([chat ? { ...entry, chat } : entry, ...snapshot().filter((e) => e.id !== entry.id)].slice(0, MAX_ENTRIES));
+}
+
+/** keeps the conversation of a saved scan; does nothing for a scan that isn't saved */
+export function saveChat(id: string, chat: ChatTurn[]) {
+  const entries = snapshot();
+  if (!entries.some((e) => e.id === id)) return;
+  const kept = chat.slice(-MAX_CHAT_TURNS);
+  commit(entries.map((e) => (e.id === id ? { ...e, chat: kept.length > 0 ? kept : undefined } : e)));
 }
 
 export function removeScan(id: string) {
