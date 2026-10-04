@@ -2,6 +2,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, CameraIcon, cn, Dot, dotClasses, Notice, Section, Spinner, Tag, Tone, toneClasses, toneText } from "./components/ui";
 import { needsExcipients } from "./lib/analysis/medicine";
+import { checkProfile, type ProfileFinding } from "./lib/analysis/profile";
+import type { HistoryEntry } from "./lib/client/history";
+import { useProfile } from "./lib/client/profile";
 import { glutenLikelihood, LEVEL_THRESHOLDS, WATER_LIMITS } from "./lib/analysis/knowledge";
 import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
 import { MINERAL_KEYS } from "./lib/analysis/types";
@@ -112,6 +115,9 @@ export default function Content({
   meta,
   onTakePhoto,
   onAddExcipients,
+  onEditProfile,
+  otherMedicines,
+  onCheckWith,
   adding = null,
 }: {
   result: LabelAnalysis;
@@ -120,6 +126,11 @@ export default function Content({
   onTakePhoto?: () => void;
   /** opens the camera for an optional photo of a medicine's composition, merged into this result */
   onAddExcipients?: () => void;
+  /** opens the profile screen */
+  onEditProfile?: () => void;
+  /** other medicines scanned on this device, and the way to check this one with one of them */
+  otherMedicines?: HistoryEntry[];
+  onCheckWith?: (other: HistoryEntry) => void;
   /** that photo is being read ("working") or showed no excipient list ("none") */
   adding?: "working" | "none" | null;
 }) {
@@ -128,7 +139,7 @@ export default function Content({
     result.kind === "other" ||
     (!result.label_detected && result.ingredients.length === 0 && !result.product.name && !result.medicine);
   if (empty) return <NotALabel result={result} />;
-  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} onAddExcipients={onAddExcipients} adding={adding} />;
+  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} onAddExcipients={onAddExcipients} onEditProfile={onEditProfile} otherMedicines={otherMedicines} onCheckWith={onCheckWith} adding={adding} />;
 }
 
 function Results({
@@ -136,12 +147,18 @@ function Results({
   meta,
   onTakePhoto,
   onAddExcipients,
+  onEditProfile,
+  otherMedicines = [],
+  onCheckWith,
   adding,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
   onTakePhoto?: () => void;
   onAddExcipients?: () => void;
+  onEditProfile?: () => void;
+  otherMedicines?: HistoryEntry[];
+  onCheckWith?: (other: HistoryEntry) => void;
   adding: "working" | "none" | null;
 }) {
   const { t, fmt, languageName } = useI18n();
@@ -888,6 +905,8 @@ function Results({
             </ul>
           )}
 
+          <ProfileVerdict result={result} onEdit={onEditProfile} />
+
           {/* nothing the analysis is unsure about is hidden */}
           {(result.warnings.length > 0 || needsProductPhoto || canAddExcipients || result.database) && (
             <div className="mt-5 space-y-2">
@@ -940,6 +959,29 @@ function Results({
             </div>
           )}
         </header>
+
+        {medicine && medicine.active.length > 0 && onCheckWith && (
+          // two medicines at once: the same substance twice, or a known interaction
+          <div className="border-t border-rule px-5 py-4 sm:px-7">
+            <p className="font-medium">{t.together.checkWith}</p>
+            {otherMedicines.length === 0 ?
+              <p className="mt-1 text-sm leading-6 text-ink-soft">{t.together.checkWithHint}</p>
+            : <div className="mt-2.5 flex flex-wrap gap-2">
+                {otherMedicines.map((other) => (
+                  <button
+                    key={other.id}
+                    onClick={() => onCheckWith(other)}
+                    className="inline-flex min-h-10 max-w-full items-center rounded-full border border-rule px-3.5 py-1.5 text-start text-sm font-medium text-accent transition hover:border-accent active:scale-[0.98]"
+                  >
+                    <span dir="auto" className="truncate">
+                      {format(t.together.checkButton, { name: other.result.product.name ?? t.results.fallbackName })}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            }
+          </div>
+        )}
 
         {/* At a glance */}
         <div className={cn("grid grid-cols-2 gap-px border-t border-rule bg-rule sm:grid-cols-3", tiles.length === 0 && "hidden")}>
@@ -1088,6 +1130,58 @@ function DoseMarksPanel({ marks }: { marks: NonNullable<Medicine["marks"]> }) {
           </span>
         )}
       </p>
+    </div>
+  );
+}
+
+const verdictTone = { avoid: "red", check: "amber", ok: "green", unchecked: "zinc" } as const;
+
+/** what the result means for the reader's own profile; nothing without a profile */
+function ProfileVerdict({ result, onEdit }: { result: LabelAnalysis; onEdit?: () => void }) {
+  const { t } = useI18n();
+  const profile = useProfile();
+  const check = checkProfile(result, profile);
+  if (!check) return null;
+  const v = t.profile.verdict;
+  const tone = verdictTone[check.status];
+  const lineOf = (f: ProfileFinding) =>
+    f.topic.type === "allergen" ? format(v.allergen[f.level], { name: t.results.allergenNames[f.topic.id].toLowerCase() })
+    : f.topic.type === "lactose" ? v.lactose[f.level]
+    : f.topic.type === "sugar" ? v.sugar
+    : (f.level === "avoid" ? v.dietAvoid : v.dietCheck)[f.topic.diet];
+  const note =
+    check.status === "unchecked" ? v.uncheckedText
+    : check.status === "ok" ? v.okText
+    : result.kind === "medicine" ? v.medicineText
+    : result.ingredient_source === "estimated" ? v.estimatedText
+    : null;
+  return (
+    <div className={cn("mt-5 rounded-2xl px-4 py-4", toneClasses[tone])}>
+      <p className="eyebrow opacity-80">{v.eyebrow}</p>
+      <p className="font-display mt-1 text-xl leading-tight font-bold">{v.title[check.status]}</p>
+      {check.findings.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {check.findings.map((f, i) => (
+            <li key={i} className="flex gap-2.5 text-sm leading-6">
+              <Dot tone={f.level === "avoid" ? "red" : "amber"} className="mt-2 shrink-0" />
+              <span className="min-w-0">
+                <span className="font-semibold">{lineOf(f)}</span>
+                {f.because.length > 0 ?
+                  <span dir="auto" className="block wrap-break-word opacity-80">
+                    {f.because.join(" · ")}
+                  </span>
+                : f.topic.type === "diet" && f.level === "check" && <span className="block opacity-80">{v.sourceNotStated}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {note && <p className="mt-3 text-sm leading-6 opacity-90">{note}</p>}
+      {onEdit && (
+        <button onClick={onEdit} className="mt-3 text-sm font-medium underline underline-offset-4">
+          {t.profile.edit}
+        </button>
+      )}
     </div>
   );
 }

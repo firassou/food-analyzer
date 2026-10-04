@@ -27,3 +27,7 @@ description: Use after any change, and before saying a step is done: build, lint
    - No browser tool is needed: drive `/usr/bin/google-chrome` with `playwright-core` installed in a scratch folder, and stub `**/api/analyze` with results made by `normalize()` from the fixtures to see every kind without spending model quota. Check the console for errors and `scrollWidth > clientWidth` for horizontal overflow.
    - Language: `curl -H "Accept-Language: ar" localhost:3000 | grep -o '<html[^>]*>'` should show `lang="ar" dir="rtl"`; a `lang` cookie wins. `-F lang=fr` on the analyze call returns French text.
 5. Report what you actually verified, and say plainly what you skipped (for example, no API key, so there was no live analysis).
+
+## Versioning (Claude's job since 2026-10-04)
+- Every change: bump `version` in `package.json` (0.x: feature → minor, fix → patch), add a `CHANGELOG.md` entry, tag the commit `vX.Y.Z`. The app shows the version at the bottom of the page from `NEXT_PUBLIC_APP_VERSION` (`next.config.ts`).
+- A running `next dev` keeps the old number until it is restarted: the env value is read when the config loads.

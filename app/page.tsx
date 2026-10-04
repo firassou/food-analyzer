@@ -8,9 +8,11 @@ import History from "./components/History";
 import InstallButton from "./components/InstallButton";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import { usePhotoPicker } from "./components/PhotoPicker";
+import ProfileSheet, { ProfileButton } from "./components/ProfileSheet";
 import Scanner from "./components/Scanner";
+import Together from "./components/Together";
 import { BarcodeIcon, CameraIcon, cn, ImageIcon, Notice, Spinner } from "./components/ui";
-import { makeThumb, newScanId, saveScan, type HistoryEntry } from "./lib/client/history";
+import { makeThumb, newScanId, saveScan, useHistory, type HistoryEntry } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
 import { addExcipientPhoto } from "./lib/analysis/medicine";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
@@ -53,6 +55,7 @@ export default function Home() {
   const [source, setSource] = useState<Source | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [comparing, setComparing] = useState<[HistoryEntry, HistoryEntry] | null>(null);
   const [status, setStatus] = useState<Status>("preparing");
   const [result, setResult] = useState<{ result: LabelAnalysis; meta: AnalyzeMeta } | null>(null);
@@ -237,6 +240,11 @@ export default function Home() {
     return () => window.removeEventListener("paste", onPaste);
   }, [selectFile]);
 
+  // the other medicines scanned on this device, to check the one on screen with
+  const history = useHistory();
+  const shownEntry = result ? history.find((e) => e.result === result.result) : undefined;
+  const otherMedicines = shownEntry?.result.kind === "medicine" ? history.filter((e) => e.result.kind === "medicine" && e !== shownEntry).slice(0, 6) : [];
+
   const busy = open && (status === "preparing" || status === "analyzing");
   // a saved scan has no photo to send again
   const canRedo = !!source;
@@ -267,6 +275,7 @@ export default function Home() {
       {picker.elements}
       {excipientPicker.elements}
       {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} />}
+      {editingProfile && <ProfileSheet onClose={() => setEditingProfile(false)} />}
 
       <header className="sticky top-0 z-30 border-b border-rule bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
@@ -276,7 +285,8 @@ export default function Home() {
               Food Analyzer
             </span>
           </button>
-          <div className="ms-auto">
+          <div className="ms-auto flex items-center gap-2">
+            <ProfileButton onClick={() => setEditingProfile(true)} />
             <LanguageSwitcher />
           </div>
         </div>
@@ -285,7 +295,12 @@ export default function Home() {
       <main className="pb-dock mx-auto w-full max-w-5xl flex-1 px-4 pt-7 sm:px-6 sm:pt-12">
         {comparing ? (
           <div className="mx-auto max-w-2xl">
-            <Compare a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
+            {comparing.every((e) => e.result.kind === "medicine") ? (
+              // two medicines aren't compared, they are checked together
+              <Together a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
+            ) : (
+              <Compare a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
+            )}
           </div>
         ) : !open ? (
           <section className="mx-auto max-w-xl">
@@ -377,6 +392,9 @@ export default function Home() {
                   meta={result.meta}
                   onTakePhoto={picker.takePhoto}
                   onAddExcipients={excipientPicker.takePhoto}
+                  onEditProfile={() => setEditingProfile(true)}
+                  otherMedicines={otherMedicines}
+                  onCheckWith={shownEntry ? (other) => setComparing([shownEntry, other]) : undefined}
                   adding={adding}
                 />
               )}
@@ -400,6 +418,10 @@ export default function Home() {
             </div>
           </div>
         )}
+        {/* which version this is: see CHANGELOG.md */}
+        <p dir="ltr" className="eyebrow mt-10 text-center text-ink-soft/70">
+          Food Analyzer v{process.env.NEXT_PUBLIC_APP_VERSION}
+        </p>
       </main>
 
       {/* Dock: the one primary action, where the thumb is */}
