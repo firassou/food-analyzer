@@ -198,10 +198,12 @@ function Results({
     medicine: !!medicine && (medicine.active.length > 0 || medicine.uses.length > 0 || !!medicine.form),
     cautions: !!medicine && (medicine.not_for.length > 0 || medicine.warnings.length > 0 || medicine.side_effects.length > 0),
     water: isWater,
-    drink: kind === "drink",
+    // Nothing is shown for what couldn't be found: no "unknown" tile, row or section.
+    // The warnings at the top say what is missing and how to get it.
+    drink: kind === "drink" && (sugar.per_100 !== null || ingredients.length > 0),
     // a medicine's excipients get their own notes; the food-allergen list would only repeat them
-    allergens: !isWater && !medicine,
-    dietary: !isWater,
+    allergens: !isWater && !medicine && (allergens.length > 0 || ingredients.length > 0),
+    dietary: !isWater && gluten.status !== "unclear",
     nutrition: hasNutrition,
     ingredients: ingredients.length > 0 || (medicine?.excipients.length ?? 0) > 0,
     additives: additives.length > 0,
@@ -302,6 +304,7 @@ function Results({
   const waterTile = (title: string, value: string | null, fact: Water["facts"][number] | undefined): Tile => ({
     title,
     label: value ?? r.water.notPrinted,
+    empty: value === null,
     tone: fact ? highlightTone[fact.tone] : "zinc",
     hint: fact ? r.water.short[fact.id as keyof typeof r.water.short] : undefined,
     target: jump("water"),
@@ -310,13 +313,15 @@ function Results({
     title: r.tiles.gluten,
     label: r.presence[gluten.status],
     tone: presenceTone[gluten.status],
-    hint: gluten.status === "unclear" ? r.tiles.notEnoughInfo : r.tiles.confidence[gluten.confidence],
+    hint: r.tiles.confidence[gluten.confidence],
+    empty: gluten.status === "unclear",
     target: jump("dietary"),
   };
   const kcal = nutrition?.per_serving?.energy_kcal ?? nutrition?.per_100?.energy_kcal ?? null;
   const caloriesTile: Tile = {
     title: r.dish.calories,
     label: kcal !== null ? ltr(`≈ ${fmt(kcal)} kcal`) : r.tiles.unknown,
+    empty: kcal === null,
     tone: "zinc",
     hint: kcal === null ? undefined : nutrition?.per_serving?.energy_kcal != null ? r.dish.perPortion : r.dish.per100,
     target: jump("nutrition"),
@@ -324,6 +329,7 @@ function Results({
   const sugarTile: Tile = {
     title: r.tiles.sugar,
     label: r.level[sugar.level],
+    empty: sugar.level === "unknown",
     tone: levelTone[sugar.level],
     hint: sugar.per_100 !== null ? ltr(`${fmt(sugar.per_100)} g / 100 ${unit}`) : undefined,
     target: jump(kind === "drink" ? "drink" : "nutrition"),
@@ -335,6 +341,7 @@ function Results({
       : estimated && mayContain.length ? found(mayContain.length)
       : ingredients.length ? r.tiles.noneFound
       : r.tiles.unknown,
+    empty: contains.length === 0 && mayContain.length === 0 && ingredients.length === 0,
     tone:
       contains.length ? "red"
       : mayContain.length ? "amber"
@@ -346,12 +353,13 @@ function Results({
   const countTile = (title: string, count: number, target: Exclude<SectionId, "overview">): Tile => ({
     title,
     label: count ? found(count) : ingredients.length ? r.tiles.noneFound : r.tiles.unknown,
+    empty: count === 0 && ingredients.length === 0,
     tone: count ? "amber" : ingredients.length ? "green" : "zinc",
     target: count ? jump(target) : jump("ingredients"),
   });
   const additiveTile = countTile(r.tiles.additives, additives.length, "additives");
 
-  const tiles: Tile[] =
+  const tiles: Tile[] = (
     isWater ?
       [
         waterTile(r.water.ph, water?.ph != null ? ltr(fmt(water.ph)) : null, factOf("ph_neutral", "ph_acidic", "ph_alkaline", "ph_sparkling")),
@@ -386,6 +394,7 @@ function Results({
         {
           title: med.active,
           label: medicine.active.length ? medicine.active.map((a) => capitalize(a.name_local ?? a.name)).join(" + ") : med.notRead,
+          empty: medicine.active.length === 0,
           tone: "zinc",
           hint: medicine.active.map((a) => a.strength).filter(Boolean).join(" + ") || undefined,
           target: jump("medicine"),
@@ -394,9 +403,15 @@ function Results({
           [
             {
               title: med.marked,
-              label: ltr([medicine.marks.morning, medicine.marks.midday, medicine.marks.evening].map(fmt).join(" · ")),
+              // one line across the box: so many a day, no times to list
+              ...(medicine.marks.anytime ?
+                { label: `${ltr(fmt(medicine.marks.anytime))} ${med.anytime}` }
+              : {
+                  label: ltr([medicine.marks.morning, medicine.marks.midday, medicine.marks.evening].map(fmt).join(" · ")),
+                  hint: `${med.morning} · ${med.midday} · ${med.evening}`,
+                }),
+              empty: !medicine.marks.anytime && medicine.marks.morning + medicine.marks.midday + medicine.marks.evening === 0,
               tone: "zinc" as const,
-              hint: `${med.morning} · ${med.midday} · ${med.evening}`,
               target: jump("dose"),
             },
           ]
@@ -404,7 +419,7 @@ function Results({
         glutenTile,
         { ...countTile(med.toNote, medicine.excipients.length, "ingredients"), target: jump("ingredients") },
       ]
-    : [glutenTile, sugarTile, allergenTile, additiveTile];
+    : [glutenTile, sugarTile, allergenTile, additiveTile]).filter((tile) => !tile.empty);
 
   const blocks: Record<Exclude<SectionId, "overview">, React.ReactNode> = {
     dose: medicine && (
@@ -482,9 +497,9 @@ function Results({
 
     drink: (
       <Section {...head("drink")}>
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <div className={cn("flex flex-wrap items-end gap-x-4 gap-y-2", sugar.per_100 === null && "hidden")}>
           <p className="font-display text-5xl leading-none font-bold tabular-nums">
-            {sugar.per_100 !== null ? ltr(`${fmt(sugar.per_100)} g`) : "—"}
+            {sugar.per_100 !== null && ltr(`${fmt(sugar.per_100)} g`)}
           </p>
           <div className="pb-1">
             <p className="eyebrow text-ink-soft">
@@ -492,7 +507,7 @@ function Results({
             </p>
             <Tag tone={levelTone[sugar.level]} className="mt-1">
               <Dot tone={levelTone[sugar.level]} />
-              {sugar.per_100 !== null ? r.level[sugar.level] : r.drink.unknown}
+              {r.level[sugar.level]}
             </Tag>
           </div>
         </div>
@@ -522,7 +537,8 @@ function Results({
             {sugar.explanation}
           </p>
         )}
-        <dl className="mt-5 border-t border-rule">
+        {/* colours, sweeteners and caffeine are only known from a read ingredient list */}
+        <dl className={cn("mt-5 border-t border-rule", ingredients.length === 0 && "hidden")}>
           {(
             [
               [r.drink.colours, drink?.colours ?? []],
@@ -538,7 +554,7 @@ function Results({
                       {capitalize(name)}
                     </Tag>
                   ))
-                : <span className="text-sm text-ink-soft">{ingredients.length ? r.drink.none : r.drink.unknown}</span>}
+                : <span className="text-sm text-ink-soft">{r.drink.none}</span>}
               </dd>
             </div>
           ))}
@@ -547,7 +563,7 @@ function Results({
             <dd className="text-sm">
               {drink?.caffeine ?
                 <Tag tone="amber">{r.drink.present}</Tag>
-              : <span className="text-ink-soft">{ingredients.length ? r.drink.none : r.drink.unknown}</span>}
+              : <span className="text-ink-soft">{r.drink.none}</span>}
             </dd>
           </div>
         </dl>
@@ -599,9 +615,10 @@ function Results({
           )
         }
       >
-        {nutrition?.per_100 && (
-          <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-rule bg-rule sm:grid-cols-4">
-            {meters.map((m, i) => (
+        {nutrition?.per_100 && meters.some((m) => nutrition.per_100![m.nutrient] !== null) && (
+          // only the nutrients that are printed; they share the row whatever their number
+          <div className="mb-6 flex flex-wrap gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
+            {meters.filter((m) => nutrition.per_100![m.nutrient] !== null).map((m, i) => (
               <LevelMeter
                 key={m.key}
                 label={r.nutrition.meters[m.key]}
@@ -924,11 +941,14 @@ function Results({
         </header>
 
         {/* At a glance */}
-        <div className="grid grid-cols-2 gap-px border-t border-rule bg-rule sm:grid-cols-3">
-          {tiles.map(({ target, ...tile }, i) => (
+        <div className={cn("grid grid-cols-2 gap-px border-t border-rule bg-rule sm:grid-cols-3", tiles.length === 0 && "hidden")}>
+          {tiles.map(({ title, label, tone, hint, target }, i) => (
             <StatusTile
-              key={tile.title}
-              {...tile}
+              key={title}
+              title={title}
+              label={label}
+              tone={tone}
+              hint={hint}
               onClick={target ? () => goTo(sid(target)) : undefined}
               // the last tile fills its row instead of leaving a hole (2 columns, 3 from `sm`)
               className={
@@ -1109,22 +1129,22 @@ function WaterPanel({ water }: { water: Water }) {
   const w = t.results.water;
   const printed = MINERAL_KEYS.filter((k) => water.minerals[k] !== null);
   const largest = Math.max(1, ...printed.map((k) => water.minerals[k]!));
-  const stats: [string, string | null][] = [
+  const allStats: [string, string | null][] = [
     [w.ph, water.ph !== null ? fmt(water.ph) : null],
     [w.residue, water.dry_residue_mg_l !== null ? `${fmt(water.dry_residue_mg_l)} mg/L` : null],
     [w.hardness, water.hardness_mg_l !== null ? `${fmt(water.hardness_mg_l)} mg/L` : null],
   ];
+  // only what is printed on the label
+  const stats = allStats.filter((s): s is [string, string] => s[1] !== null);
   const { low, high } = WATER_LIMITS.ph;
 
   return (
     <div className="space-y-6">
-      <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
+      <dl className={cn("flex gap-px overflow-hidden rounded-2xl border border-rule bg-rule", stats.length === 0 && "hidden")}>
         {stats.map(([label, value]) => (
-          <div key={label} className="bg-sheet p-3.5">
+          <div key={label} className="flex-1 bg-sheet p-3.5">
             <dt className="eyebrow text-ink-soft">{label}</dt>
-            <dd className={cn("mt-1 font-display leading-tight font-semibold tabular-nums", value ? "text-xl" : "text-sm text-ink-soft")}>
-              {value ? ltr(value) : w.notPrinted}
-            </dd>
+            <dd className="mt-1 font-display text-xl leading-tight font-semibold tabular-nums">{ltr(value)}</dd>
           </div>
         ))}
       </dl>
@@ -1350,7 +1370,11 @@ interface TileProps {
 }
 
 /** a tile before it is wired up: `target` is the section it jumps to */
-type Tile = Omit<TileProps, "onClick" | "className"> & { target?: Exclude<SectionId, "overview"> };
+type Tile = Omit<TileProps, "onClick" | "className"> & {
+  target?: Exclude<SectionId, "overview">;
+  /** nothing was found for it: the tile is left out */
+  empty?: boolean;
+};
 
 function StatusTile({ title, label, tone, hint, onClick, className }: TileProps) {
   const Root = onClick ? "button" : "div";
@@ -1437,7 +1461,7 @@ function LevelMeter({
   const tone = levelTone[level ?? "unknown"];
   return (
     <div
-      className="bg-sheet p-3.5"
+      className="min-w-[40%] flex-1 bg-sheet p-3.5 sm:min-w-0"
       title={format(t.results.nutrition.thresholds, { low: fmt(threshold.low), high: fmt(threshold.high) })}
     >
       <div className="flex items-baseline justify-between gap-2">

@@ -53,3 +53,7 @@ Mobile first. The result reads like a printed spec sheet: warm paper, ink, heavy
 - Empty and unknown states read clearly; every warning is shown
 - Neutral health wording (informational, not medical advice)
 - Disclaimer kept
+
+## Nothing found → nothing shown
+- The user asked (2026-10-04) for no "Unknown", "Unclear", "Not printed" or "—" anywhere on the sheet. A tile with nothing to say sets `empty: true` and is filtered out; a section whose content is unknown is left out of `shown`; rows and meters render only the values that exist (flex rows, so any count fills the width).
+- What is missing is explained once, by the warnings in the header, with the way to get it (another photo). Don't add a placeholder for a missing value in a new section.
