@@ -1139,7 +1139,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     if (medicine.active.length === 0) warn(m.warnings.medicineNoActive);
     else if (medicine.uses.length || medicine.typical_dose || medicine.not_for.length || medicine.warnings.length)
       warn(m.warnings.medicineGeneral);
-    if (estimated) warn(m.warnings.estimatedProduct);
+    if (opts.database && ingredients.length) warn(m.warnings.medicineDatabase(opts.database.product));
+    else if (estimated) warn(m.warnings.estimatedProduct);
     else if (ingredients.length === 0) warn(m.warnings.medicineNoExcipients);
   } else if (kind === "dish") {
     if (estimated) warn(m.warnings.estimatedDish);

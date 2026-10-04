@@ -12,6 +12,7 @@ description: Use after any change, and before saying a step is done: build, lint
    - `next dev` refuses to start while another dev server runs from this directory: reuse that one (it hot-reloads; its logs are in `.next/dev/logs/next-development.log`).
    - To test a different model chain without editing `.env.local`, run a production server with env overrides, e.g. `pnpm build && HF_TOKEN= NVIDIA_MODEL=moonshotai/kimi-k3 PORT=3100 pnpm start`. Process env wins over `.env.local`.
    - Barcode lookup: `curl -s "localhost:3000/api/product?code=3017620422003&lang=fr" | jq '.result.product, .result.warnings'`; a wrong check digit → 400, an unknown code → 404.
+   - Medicine excipient lookup: a front-of-box photo logs `[analyze] medicine lookup: matched …` and returns `ingredient_source: "database"`. The site's endpoints are undocumented (`/api/options_autocompilation?searchType=medicine&term=&startBy=`, then `/medicament/<id>/extrait` with the `RcpListeExcipients` anchor): if lookups stop matching, check those first. In zsh write `${m}:generateContent`-style URLs with braces (`$m:g…` is a modifier).
    - Error paths: a non-image renamed `.jpg` → 415 `unsupported_image`; a 13 MB body → 413; no `image` field → 400; 13 requests from one `x-forwarded-for` in a minute → 429.
    - Shell gotchas here: `rm` is aliased to `rm -i` (use `\rm -f`), and `pkill -f "<text>"` also kills the shell running it; use `pkill -f "[n]ext start"` or kill by PID.
 3. Keep a `samples/` folder of label photos covering the main cases:

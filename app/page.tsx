@@ -12,6 +12,7 @@ import Scanner from "./components/Scanner";
 import { BarcodeIcon, CameraIcon, cn, ImageIcon, Notice, Spinner } from "./components/ui";
 import { makeThumb, newScanId, saveScan, type HistoryEntry } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
+import { addExcipientPhoto } from "./lib/analysis/medicine";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
 import { format, rich, useI18n } from "./lib/i18n/I18nProvider";
 import type { Locale } from "./lib/i18n/locales";
@@ -56,10 +57,13 @@ export default function Home() {
   const [status, setStatus] = useState<Status>("preparing");
   const [result, setResult] = useState<{ result: LabelAnalysis; meta: AnalyzeMeta } | null>(null);
   const [failure, setFailure] = useState<AppError | null>(null);
+  // an optional second photo (a medicine's composition) being read into the result on screen
+  const [adding, setAdding] = useState<"working" | "none" | null>(null);
   const [dragging, setDragging] = useState(false);
   // bumps on every new file/reset so stale async work is ignored
   const requestId = useRef(0);
   const scanId = useRef("");
+  const thumb = useRef<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
 
   const cancelInFlight = () => {
@@ -84,6 +88,7 @@ export default function Home() {
     setStatus("analyzing");
     setFailure(null);
     setResult(null);
+    setAdding(null);
     try {
       const r = from.type === "photo" ? await analyzeImage(from.image, controller.signal, lang) : await lookupBarcode(from.code, controller.signal, lang);
       if (id !== requestId.current) return;
@@ -92,8 +97,8 @@ export default function Home() {
       window.scrollTo({ top: 0, behavior: "smooth" });
       // remember anything that is about a food; a photo of something else isn't worth keeping
       if (r.result.kind !== "other") {
-        const thumb = from.type === "photo" ? await makeThumb(from.image) : null;
-        saveScan({ id: scanId, at: Date.now(), thumb, result: r.result, meta: r.meta });
+        thumb.current = from.type === "photo" ? await makeThumb(from.image) : null;
+        saveScan({ id: scanId, at: Date.now(), thumb: thumb.current, result: r.result, meta: r.meta });
       }
     } catch (e) {
       if (id !== requestId.current) return;
@@ -139,6 +144,38 @@ export default function Home() {
 
   const picker = usePhotoPicker(selectFile);
 
+  // A medicine's excipients are rarely on the front of the box. A second photo of the
+  // composition is read and merged into the result on screen, which stays as it is
+  // if that photo can't be read: this step is never required.
+  const addExcipients = useCallback(
+    async (f: File) => {
+      if (!result) return;
+      const id = requestId.current;
+      cancelInFlight();
+      const controller = new AbortController();
+      inFlight.current = controller;
+      setAdding("working");
+      try {
+        const prepared = await prepareImage(f);
+        URL.revokeObjectURL(prepared.previewUrl);
+        const lang = result.meta.locale ?? "en";
+        const photo = await analyzeImage(prepared.blob, controller.signal, lang);
+        if (id !== requestId.current) return;
+        const merged = addExcipientPhoto(result.result, photo.result, lang);
+        if (!merged) return setAdding("none");
+        setResult({ result: merged, meta: result.meta });
+        setAdding(null);
+        saveScan({ id: scanId.current, at: Date.now(), thumb: thumb.current, result: merged, meta: result.meta });
+      } catch {
+        if (id === requestId.current) setAdding("none");
+      } finally {
+        if (inFlight.current === controller) inFlight.current = null;
+      }
+    },
+    [result],
+  );
+  const excipientPicker = usePhotoPicker(addExcipients);
+
   // a scanned (or typed) barcode: no photo, the product comes straight from the database
   const selectBarcode = useCallback(
     (code: string) => {
@@ -160,6 +197,8 @@ export default function Home() {
     requestId.current++;
     cancelInFlight();
     scanId.current = entry.id;
+    thumb.current = entry.thumb;
+    setAdding(null);
     setFailure(null);
     setSource(null);
     setImageSrc(entry.thumb);
@@ -226,6 +265,7 @@ export default function Home() {
       }}
     >
       {picker.elements}
+      {excipientPicker.elements}
       {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} />}
 
       <header className="sticky top-0 z-30 border-b border-rule bg-paper/90 backdrop-blur">
@@ -332,7 +372,13 @@ export default function Home() {
                 </Notice>
               )}
               {status === "done" && result && (
-                <Content result={result.result} meta={result.meta} onTakePhoto={picker.takePhoto} />
+                <Content
+                  result={result.result}
+                  meta={result.meta}
+                  onTakePhoto={picker.takePhoto}
+                  onAddExcipients={excipientPicker.takePhoto}
+                  adding={adding}
+                />
               )}
               {status === "error" && (
                 <div role="alert" className="animate-fade-up overflow-hidden rounded-[28px] border border-rule bg-sheet">

@@ -46,6 +46,7 @@ export interface AnalysisMessages {
     medicineGeneral: string;
     medicineNoActive: string;
     medicineNoExcipients: string;
+    medicineDatabase: (product: string) => string;
     /** the pharmacist's pen marks are a reading, not the prescription itself */
     medicineMarks: string;
     medicineMarksUnclear: string;
@@ -207,7 +208,9 @@ const en: AnalysisMessages = {
     medicineNoActive:
       "The active substance couldn't be read, so no general information is shown. Photograph the side of the box that names the substance and its strength.",
     medicineNoExcipients:
-      "The excipients aren't listed on this photo, so gluten and other sensitive ingredients can't be checked. Photograph the composition on the box or on the leaflet.",
+      "The excipients aren't on this photo and weren't found in the official medicines database, so gluten and other sensitive ingredients couldn't be checked. If that matters to you, add a photo of the composition (on the side of the box or in the leaflet).",
+    medicineDatabase: (product) =>
+      `The excipients weren't on the photo. They come from the official French medicines database, entry “${product}”. A box made for another country can differ: the leaflet in your box has the final word.`,
     medicineMarks:
       "The pen marks on the box were read by an AI. If this reading doesn't match what your doctor or pharmacist told you, follow what they told you and ask them to confirm.",
     medicineMarksUnclear:
@@ -399,7 +402,9 @@ const fr: AnalysisMessages = {
     medicineNoActive:
       "La substance active n'a pas pu être lue : aucune information générale n'est affichée. Photographiez le côté de la boîte qui indique la substance et son dosage.",
     medicineNoExcipients:
-      "Les excipients ne figurent pas sur cette photo : le gluten et les autres ingrédients sensibles ne peuvent pas être vérifiés. Photographiez la composition sur la boîte ou sur la notice.",
+      "Les excipients ne figurent pas sur cette photo et n'ont pas été trouvés dans la base officielle des médicaments : le gluten et les autres ingrédients sensibles n'ont pas pu être vérifiés. Si c'est important pour vous, ajoutez une photo de la composition (sur le côté de la boîte ou dans la notice).",
+    medicineDatabase: (product) =>
+      `Les excipients ne figuraient pas sur la photo. Ils viennent de la base de données publique des médicaments (France), fiche « ${product} ». Une boîte fabriquée pour un autre pays peut être différente : la notice de votre boîte fait foi.`,
     medicineMarks:
       "Les traits au stylo sur la boîte ont été lus par une IA. Si cette lecture ne correspond pas à ce que votre médecin ou votre pharmacien vous a dit, suivez ce qu'ils vous ont dit et demandez-leur de confirmer.",
     medicineMarksUnclear:
@@ -617,7 +622,9 @@ const ar: AnalysisMessages = {
     medicineNoActive:
       "تعذّرت قراءة المادة الفعّالة، لذا لا تُعرض أي معلومات عامة. صوّر جانب العلبة الذي يذكر المادة وتركيزها.",
     medicineNoExcipients:
-      "السواغات غير مذكورة في هذه الصورة، لذا يتعذّر التحقق من الغلوتين والمكوّنات الحساسة الأخرى. صوّر التركيبة على العلبة أو في النشرة.",
+      "السواغات غير ظاهرة في هذه الصورة ولم نجدها في قاعدة البيانات الرسمية للأدوية، لذا تعذّر التحقق من الغلوتين والمكوّنات الحساسة الأخرى. إن كان ذلك يهمّك فأضف صورة للتركيبة (على جانب العلبة أو في النشرة).",
+    medicineDatabase: (product) =>
+      `السواغات لم تكن ظاهرة في الصورة، وقد أُخذت من قاعدة البيانات الرسمية للأدوية في فرنسا، صفحة «${product}». قد تختلف العلبة المصنوعة لبلد آخر: النشرة الموجودة في علبتك هي المرجع.`,
     medicineMarks:
       "الخطوط المرسومة بالقلم على العلبة قرأها ذكاء اصطناعي. إذا لم تطابق هذه القراءة ما قاله لك طبيبك أو الصيدلي فاتبع ما قالاه واطلب منهما التأكيد.",
     medicineMarksUnclear:

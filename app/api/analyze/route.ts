@@ -1,6 +1,8 @@
 import { AnalyzeError, analyzeLabel } from "@/app/lib/server/analyze";
 import { ImageError, MAX_UPLOAD_BYTES, prepareImage, TOO_LARGE_MESSAGE } from "@/app/lib/server/image";
 import { completeFromDatabase, findProduct, lookupEnabled, needsLookup } from "@/app/lib/server/lookup";
+import { needsExcipients } from "@/app/lib/analysis/medicine";
+import { completeMedicine, findMedicine, wantedMedicine } from "@/app/lib/server/medicines";
 import { getTargets } from "@/app/lib/server/models";
 import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
@@ -53,6 +55,17 @@ export async function POST(req: Request) {
       } catch (error) {
         // the photo's own reading (and its "couldn't read the ingredients" warning) still stands
         console.warn("[analyze] product lookup failed:", error instanceof Error ? error.message : error);
+      }
+    }
+    // a medicine whose composition isn't in view (it rarely is on the front of the box):
+    // look its excipients up in the official database. Optional: the reading stands without it.
+    if (lookupEnabled() && needsExcipients(result) && result.product.name) {
+      try {
+        const found = await findMedicine(wantedMedicine(result), req.signal);
+        if (found) result = completeMedicine(result, found, locale);
+        console.log(`[analyze] medicine lookup: ${found ? `matched ${found.url}` : "no match"}`);
+      } catch (error) {
+        console.warn("[analyze] medicine lookup failed:", error instanceof Error ? error.message : error);
       }
     }
     return Response.json({ ok: true, result, meta } satisfies AnalyzeResponse);

@@ -15,6 +15,9 @@ Files: `app/lib/server/models.ts` (target chain, `FailureKind`, error classifica
 - GitHub Models was retired on 2026-07-30; don't add it.
 - Live (2026-09-27): `gemini-3.8-flash` often answers 503 "high demand"; `gemini-3.5-flash-lite` and Groq `qwen/qwen3.8-27b` (≈1–4 s) are the reliable ones. OpenRouter `:free` models intermittently 429 ("Provider returned error") when shared capacity is full; `thinkingmachines/inkling*:free` are 403 outside agent harnesses.
 
+## Web search
+- Not available on the free tiers (checked 2026-10-04): Gemini's native `google_search` tool answers 429 "quota exceeded" on a free key while plain requests work, and this Groq account lists no `compound` (search) model. Asked from memory, two Gemini models gave two different excipient lists for the same medicine: don't use recall where a lookup is meant. Medicines use an official database instead (`server/medicines.ts`).
+
 ## Every new provider must
 - map its errors onto the existing `FailureKind`s (via `classify`)
 - stream through the shared watchdog (first-token, idle and hard-deadline timers), where reasoning deltas count as progress

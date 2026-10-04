@@ -352,6 +352,10 @@ export const en = {
       confidence: "Confidence",
     },
     medicine: {
+      addPhoto: "Add a photo of the composition",
+      addPhotoWorking: "Reading the composition…",
+      addPhotoNone: "No excipient list could be read on that photo. Nothing was changed; you can try again closer and in good light.",
+      optional: "Optional",
       about: "About this medicine",
       active: "Active substance",
       form: "Form",

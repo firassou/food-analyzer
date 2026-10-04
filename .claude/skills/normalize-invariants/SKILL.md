@@ -38,6 +38,7 @@ Files: `app/lib/analysis/types.ts` (contract), `prompt.ts` (SYSTEM_PROMPT / USER
 - The model's general fields (uses, typical dose, not for, warnings, side effects) are dropped when no active substance was identified, and always come with the `medicineGeneral` warning.
 - `medicine.marks` (pen marks) are clamped to 0–6 units in halves; all zeros with no note is `null` ("no marks"), never "take nothing". They always add a warning; low confidence adds the stronger one.
 - A medicine gets no sugar note, no drink or water block, and is never looked up in Open Food Facts.
+- Missing excipients are completed through `withExcipients()` (`app/lib/analysis/medicine.ts`), which re-runs `normalize()`: from the French public medicines database (`server/medicines.ts`, `opts.database` → `medicineDatabase` warning) or from a second photo (`addExcipientPhoto`, client side). Both are optional: a failed lookup or an unreadable second photo leaves the result untouched. `pickEntry` must stay strict (same brand, same strength, form decides, ties → null): a wrong product's excipients are worse than none.
 
 ## Rules that are easy to get wrong
 - Gluten escalates to "contains" for a strong gluten ingredient or a **declared** gluten allergen, never for "gluten is contains in the allergen map": oats alone put it there too, and oats only mean "likely".

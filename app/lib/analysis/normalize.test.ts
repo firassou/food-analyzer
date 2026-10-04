@@ -696,7 +696,7 @@ describe("fixture: a medicine with pen marks", () => {
     expect(blind.warnings).toEqual([
       "The label was hard to read, so some details may be missing or inaccurate. A sharper, closer photo will help.",
       "The active substance couldn't be read, so no general information is shown. Photograph the side of the box that names the substance and its strength.",
-      "The excipients aren't listed on this photo, so gluten and other sensitive ingredients can't be checked. Photograph the composition on the box or on the leaflet.",
+      "The excipients aren't on this photo and weren't found in the official medicines database, so gluten and other sensitive ingredients couldn't be checked. If that matters to you, add a photo of the composition (on the side of the box or in the leaflet).",
     ]);
     expect(blind.gluten.status).toBe("unclear");
   });

@@ -347,6 +347,10 @@ export const fr: Messages = {
       confidence: "Confiance",
     },
     medicine: {
+      addPhoto: "Ajouter une photo de la composition",
+      addPhotoWorking: "Lecture de la composition…",
+      addPhotoNone: "Aucune liste d'excipients n'a pu être lue sur cette photo. Rien n'a été modifié ; vous pouvez réessayer de plus près, avec une bonne lumière.",
+      optional: "Facultatif",
       about: "À propos de ce médicament",
       active: "Substance active",
       form: "Forme",

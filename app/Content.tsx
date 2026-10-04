@@ -1,6 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bar, CameraIcon, cn, Dot, dotClasses, Notice, Section, Tag, Tone, toneClasses, toneText } from "./components/ui";
+import { Bar, CameraIcon, cn, Dot, dotClasses, Notice, Section, Spinner, Tag, Tone, toneClasses, toneText } from "./components/ui";
+import { needsExcipients } from "./lib/analysis/medicine";
 import { glutenLikelihood, LEVEL_THRESHOLDS, WATER_LIMITS } from "./lib/analysis/knowledge";
 import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
 import { MINERAL_KEYS } from "./lib/analysis/types";
@@ -110,28 +111,38 @@ export default function Content({
   result,
   meta,
   onTakePhoto,
+  onAddExcipients,
+  adding = null,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
   /** opens the camera, for results that ask for another photo */
   onTakePhoto?: () => void;
+  /** opens the camera for an optional photo of a medicine's composition, merged into this result */
+  onAddExcipients?: () => void;
+  /** that photo is being read ("working") or showed no excipient list ("none") */
+  adding?: "working" | "none" | null;
 }) {
   // nothing about a food: neither a label, a product, nor an estimate
   const empty =
     result.kind === "other" ||
     (!result.label_detected && result.ingredients.length === 0 && !result.product.name && !result.medicine);
   if (empty) return <NotALabel result={result} />;
-  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} />;
+  return <Results result={result} meta={meta} onTakePhoto={onTakePhoto} onAddExcipients={onAddExcipients} adding={adding} />;
 }
 
 function Results({
   result,
   meta,
   onTakePhoto,
+  onAddExcipients,
+  adding,
 }: {
   result: LabelAnalysis;
   meta?: AnalyzeMeta;
   onTakePhoto?: () => void;
+  onAddExcipients?: () => void;
+  adding: "working" | "none" | null;
 }) {
   const { t, fmt, languageName } = useI18n();
   const r = t.results;
@@ -157,6 +168,8 @@ function Results({
     : (i.name_local ?? null);
   // a packaged product whose ingredient list is still missing or only recalled
   const needsProductPhoto = (kind === "label" || kind === "drink") && (ingredients.length === 0 || estimated);
+  // a medicine whose excipients weren't read on the photo: a second photo can add them, if the user wants
+  const canAddExcipients = needsExcipients(result) && !!onAddExcipients;
 
   const details = {
     dates: [
@@ -858,7 +871,7 @@ function Results({
           )}
 
           {/* nothing the analysis is unsure about is hidden */}
-          {(result.warnings.length > 0 || needsProductPhoto || result.database) && (
+          {(result.warnings.length > 0 || needsProductPhoto || canAddExcipients || result.database) && (
             <div className="mt-5 space-y-2">
               {result.warnings.map((w) => (
                 <Notice key={w} tone="amber">
@@ -884,6 +897,27 @@ function Results({
                   <CameraIcon className="size-5" />
                   {r.retake.button}
                 </button>
+              )}
+              {canAddExcipients && (
+                // optional: the result stands without it
+                <div className="space-y-2">
+                  {adding === "none" && (
+                    <Notice tone="zinc">
+                      <span role="status">{med.addPhotoNone}</span>
+                    </Notice>
+                  )}
+                  <button
+                    onClick={onAddExcipients}
+                    disabled={adding === "working"}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-rule px-5 py-2 text-start text-sm font-semibold text-ink transition active:scale-[0.98] disabled:opacity-70"
+                  >
+                    {adding === "working" ? <Spinner className="text-accent" /> : <CameraIcon className="size-5 shrink-0 text-accent" />}
+                    <span>
+                      {adding === "working" ? med.addPhotoWorking : med.addPhoto}
+                      {adding !== "working" && <span className="ms-2 eyebrow text-ink-soft">{med.optional}</span>}
+                    </span>
+                  </button>
+                </div>
               )}
             </div>
           )}
