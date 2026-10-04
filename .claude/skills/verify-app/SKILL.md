@@ -5,7 +5,7 @@ description: Use after any change, and before saying a step is done: build, lint
 
 # Verify the app
 
-1. Run `pnpm lint`, `pnpm test` and `pnpm build`. All three must pass.
+1. Run `pnpm lint`, `pnpm test` and `pnpm build`. All three must pass. Check the build by its exit code, not by grepping its output: "Compiled successfully" is printed before the type check, which can still fail (a broken build was pushed this way on 2026-10-04).
 2. Run `pnpm dev` (needs `.env.local`, see `.env.example`), then:
    - Health check: `curl -s localhost:3000/api/analyze | jq`
    - Analyze a sample: `curl -s -F image=@samples/<file>.jpg localhost:3000/api/analyze | jq '.result.warnings, .meta'`

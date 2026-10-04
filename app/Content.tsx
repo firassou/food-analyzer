@@ -359,7 +359,7 @@ function Results({
   });
   const additiveTile = countTile(r.tiles.additives, additives.length, "additives");
 
-  const tiles: Tile[] = (
+  const allTiles: Tile[] =
     isWater ?
       [
         waterTile(r.water.ph, water?.ph != null ? ltr(fmt(water.ph)) : null, factOf("ph_neutral", "ph_acidic", "ph_alkaline", "ph_sparkling")),
@@ -419,7 +419,8 @@ function Results({
         glutenTile,
         { ...countTile(med.toNote, medicine.excipients.length, "ingredients"), target: jump("ingredients") },
       ]
-    : [glutenTile, sugarTile, allergenTile, additiveTile]).filter((tile) => !tile.empty);
+    : [glutenTile, sugarTile, allergenTile, additiveTile];
+  const tiles = allTiles.filter((tile) => !tile.empty);
 
   const blocks: Record<Exclude<SectionId, "overview">, React.ReactNode> = {
     dose: medicine && (
