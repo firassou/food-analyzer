@@ -1011,31 +1011,51 @@ function DoseMarksPanel({ marks }: { marks: NonNullable<Medicine["marks"]> }) {
     [med.midday, marks.midday],
     [med.evening, marks.evening],
   ];
-  const total = marks.morning + marks.midday + marks.evening;
+  // results saved before "anytime" existed don't have it
+  const anytime = marks.anytime ?? 0;
+  const timed = marks.morning + marks.midday + marks.evening;
   return (
     <div>
       <p className="font-display text-base font-semibold">{med.marksTitle}</p>
       <p className="mt-1 text-sm leading-6 text-ink-soft">{med.marksText}</p>
-      <dl className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
-        {times.map(([label, count]) => (
-          <div key={label} className={cn("flex flex-col items-center bg-sheet px-2 py-4", count === 0 && "text-ink-soft/60")}>
-            <dt className="eyebrow">{label}</dt>
-            {/* the strokes as drawn on the box; a half unit is a short stroke */}
-            <dd className="mt-3 flex flex-col items-center">
-              <span aria-hidden dir="ltr" className="flex h-9 items-end gap-1.5">
-                {Array.from({ length: Math.floor(count) }, (_, i) => (
-                  <span key={i} className="h-9 w-1 rounded-full bg-accent" />
-                ))}
-                {count % 1 !== 0 && <span className="h-4 w-1 rounded-full bg-accent" />}
-                {count === 0 && <span className="mb-4 h-0.5 w-4 rounded-full bg-rule" />}
-              </span>
-              <span className="font-display mt-2 text-3xl leading-none font-bold tabular-nums">{ltr(fmt(count))}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {anytime > 0 && (
+        // one line across the box: so many a day, at no set time
+        <div className="mt-3 flex items-center gap-4 rounded-2xl border border-rule bg-sheet px-4 py-4">
+          <span aria-hidden dir="ltr" className="flex h-9 shrink-0 items-end gap-1.5">
+            {Array.from({ length: Math.floor(anytime) }, (_, i) => (
+              <span key={i} className="h-9 w-1 rotate-12 rounded-full bg-accent" />
+            ))}
+            {anytime % 1 !== 0 && <span className="h-4 w-1 rotate-12 rounded-full bg-accent" />}
+          </span>
+          <span className="font-display text-3xl leading-none font-bold tabular-nums">{ltr(fmt(anytime))}</span>
+          <span className="min-w-0">
+            <span className="block font-medium">{med.anytime}</span>
+            <span className="block text-sm leading-5 text-ink-soft">{med.anytimeHint}</span>
+          </span>
+        </div>
+      )}
+      {(timed > 0 || anytime === 0) && (
+        <dl className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
+          {times.map(([label, count]) => (
+            <div key={label} className={cn("flex flex-col items-center bg-sheet px-2 py-4", count === 0 && "text-ink-soft/60")}>
+              <dt className="eyebrow">{label}</dt>
+              {/* the strokes as drawn on the box; a half unit is a short stroke */}
+              <dd className="mt-3 flex flex-col items-center">
+                <span aria-hidden dir="ltr" className="flex h-9 items-end gap-1.5">
+                  {Array.from({ length: Math.floor(count) }, (_, i) => (
+                    <span key={i} className="h-9 w-1 rounded-full bg-accent" />
+                  ))}
+                  {count % 1 !== 0 && <span className="h-4 w-1 rounded-full bg-accent" />}
+                  {count === 0 && <span className="mb-4 h-0.5 w-4 rounded-full bg-rule" />}
+                </span>
+                <span className="font-display mt-2 text-3xl leading-none font-bold tabular-nums">{ltr(fmt(count))}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {total > 0 && <span className="font-medium">{format(med.perDay, { count: ltr(fmt(total)) })}</span>}
+        {timed > 0 && <span className="font-medium">{format(med.perDay, { count: ltr(fmt(timed + anytime)) })}</span>}
         {marks.duration && (
           <span className="text-ink-soft">
             {med.duration} <span dir="auto">{marks.duration}</span>

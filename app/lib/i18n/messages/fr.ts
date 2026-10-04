@@ -347,6 +347,8 @@ export const fr: Messages = {
       confidence: "Confiance",
     },
     medicine: {
+      anytime: "par jour",
+      anytimeHint: "Aucun moment de la journée n'est indiqué sur la boîte.",
       addPhoto: "Ajouter une photo de la composition",
       addPhotoWorking: "Lecture de la composition…",
       addPhotoNone: "Aucune liste d'excipients n'a pu être lue sur cette photo. Rien n'a été modifié ; vous pouvez réessayer de plus près, avec une bonne lumière.",

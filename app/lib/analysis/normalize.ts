@@ -539,11 +539,20 @@ function buildMedicine(raw: unknown, compositionText: string, m: AnalysisMessage
     const morning = units(pick(marksRaw, "morning", "matin", "am"));
     const midday = units(pick(marksRaw, "midday", "noon", "afternoon", "midi", "lunch"));
     const evening = units(pick(marksRaw, "evening", "night", "soir", "pm", "bedtime"));
+    const anytime = units(pick(marksRaw, "anytime", "any_time", "daily", "per_day", "once_daily", "unspecified"));
     const note = str(pick(marksRaw, "note", "text", "raw"), 120);
     const duration = str(pick(marksRaw, "duration", "days"), 40);
     // nothing readable is "no marks", not "take nothing"
-    if (morning + midday + evening > 0 || note) {
-      marks = { morning, midday, evening, duration, note, confidence: confidence(pick(marksRaw, "confidence", "certainty")) };
+    const strokes = num(pick(marksRaw, "strokes", "stroke_count", "lines"));
+    if (strokes === 1) {
+      // one pen stroke is one unit a day, wherever it is drawn: a line's two ends are
+      // not "morning and evening", whatever the model made of them
+      marks = { morning: 0, midday: 0, evening: 0, anytime: 1, duration, note: null, confidence: confidence(pick(marksRaw, "confidence", "certainty")) };
+    } else if (morning + midday + evening + anytime > 0 || note) {
+      // more units than strokes drawn: the reading doesn't add up
+      const total = morning + midday + evening + anytime;
+      const doubtful = strokes !== null && strokes >= 1 && total > strokes;
+      marks = { morning, midday, evening, anytime, duration, note, confidence: doubtful ? "low" : confidence(pick(marksRaw, "confidence", "certainty")) };
     }
   }
 

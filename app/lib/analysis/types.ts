@@ -116,6 +116,8 @@ export interface DoseMarks {
   morning: number;
   midday: number;
   evening: number;
+  /** units a day at no particular time: one line drawn across the box means "once a day" */
+  anytime: number;
   /** written next to the marks, e.g. "7 jours" */
   duration: string | null;
   /** any other handwritten note, as read */

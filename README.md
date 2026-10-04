@@ -166,7 +166,7 @@ interface LabelAnalysis {
            facts: { id; tone; text; tip; source }[] } | null;                       // bottled water only
   drink: { volume_ml; sugar_per_container_g; colours: string[]; sweeteners: string[]; caffeine } | null;
   medicine: { form; active: { name; name_local; strength }[];
-              marks: { morning; midday; evening; duration; note; confidence } | null;   // pharmacist's pen marks
+              marks: { morning; midday; evening; anytime; duration; note; confidence } | null;   // pharmacist's pen marks
               uses: string[]; typical_dose; how_to_take; not_for: string[]; warnings: string[]; side_effects: string[];  // general
               excipients: { id; matched; note; source }[] } | null;   // computed; the excipient list itself is in `ingredients`
   sugar: { level: "low" | "medium" | "high" | "unknown"; per_100; basis; explanation };

@@ -663,7 +663,7 @@ describe("fixture: a medicine with pen marks", () => {
     expect(r.kind).toBe("medicine");
     expect(r.label_detected).toBe(true);
     expect(r.medicine?.active).toEqual([{ name: "paracetamol", name_local: null, strength: "500 mg" }]);
-    expect(r.medicine?.marks).toEqual({ morning: 1, midday: 0, evening: 1, duration: "5 jours", note: null, confidence: "high" });
+    expect(r.medicine?.marks).toEqual({ morning: 1, midday: 0, evening: 1, anytime: 0, duration: "5 jours", note: null, confidence: "high" });
     expect(r.medicine?.typical_dose).toMatch(/no more than 3 g a day/);
     expect([r.water, r.drink, r.nutrition]).toEqual([null, null, null]);
     expect(r.sugar.explanation).toBeNull();
@@ -706,6 +706,12 @@ describe("fixture: a medicine with pen marks", () => {
       normalize({ kind: "medicine", image_quality: "good", medicine: { active: ["ibuprofen"], marks: v } });
     expect(marks({ morning: "2", midday: 0.5, evening: 40 }).medicine?.marks).toMatchObject({ morning: 2, midday: 0.5, evening: 0 });
     expect(marks({ morning: 0, midday: 0, evening: 0 }).medicine?.marks).toBeNull();
+    expect(marks({ morning: 0, midday: 0, evening: 0, anytime: 1 }).medicine?.marks).toMatchObject({ morning: 0, anytime: 1, note: null });
+    // one line across the box is one a day, never "morning and evening"
+    expect(marks({ strokes: 1, morning: 1, evening: 1, confidence: "medium" }).medicine?.marks).toMatchObject({ morning: 0, evening: 0, anytime: 1, confidence: "medium" });
+    expect(marks({ strokes: 2, morning: 1, evening: 1, confidence: "high" }).medicine?.marks).toMatchObject({ morning: 1, evening: 1, anytime: 0, confidence: "high" });
+    expect(marks({ strokes: 2, morning: 2, midday: 2, evening: 2, confidence: "high" }).medicine?.marks?.confidence).toBe("low");
+    expect(marks({ strokes: null, morning: 1, evening: 1, note: "1-0-1", confidence: "high" }).medicine?.marks).toMatchObject({ morning: 1, evening: 1, confidence: "high" });
     expect(marks({ note: "1-0-1" }).medicine?.marks).toMatchObject({ morning: 0, note: "1-0-1" });
     expect(marks({ morning: 1, confidence: "low" }).warnings[0]).toMatch(/hard to read: don't rely on this reading/);
   });

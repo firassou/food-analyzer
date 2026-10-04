@@ -352,6 +352,8 @@ export const en = {
       confidence: "Confidence",
     },
     medicine: {
+      anytime: "a day",
+      anytimeHint: "No time of day is marked on the box.",
       addPhoto: "Add a photo of the composition",
       addPhotoWorking: "Reading the composition…",
       addPhotoNone: "No excipient list could be read on that photo. Nothing was changed; you can try again closer and in good light.",
