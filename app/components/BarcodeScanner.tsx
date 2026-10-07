@@ -27,7 +27,7 @@ type State = "starting" | "live" | "manual";
  * and on desktop); everywhere else, and whenever the camera fails, the digits can be
  * typed. Only codes whose check digit holds are accepted.
  */
-export default function BarcodeScanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
+export default function BarcodeScanner({ onCode, onClose, onAisle }: { onCode: (code: string) => void; onClose: () => void; onAisle?: () => void }) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   // no detector in this browser: straight to typing, without asking for the camera
@@ -130,6 +130,15 @@ export default function BarcodeScanner({ onCode, onClose }: { onCode: (code: str
             <p className="pointer-events-none absolute inset-x-6 bottom-6 mx-auto w-fit max-w-full rounded-full bg-black/60 px-4 py-1.5 text-center text-xs backdrop-blur">
               {t.barcode.tip}
             </p>
+            {onAisle && (
+              <button
+                type="button"
+                onClick={onAisle}
+                className="absolute inset-x-6 bottom-16 mx-auto min-h-11 w-fit max-w-full rounded-full bg-black/60 px-5 text-sm font-semibold backdrop-blur transition hover:bg-black/75 active:scale-[0.98]"
+              >
+                {t.aisle.open}
+              </button>
+            )}
           </>
         )}
         {state === "starting" && (

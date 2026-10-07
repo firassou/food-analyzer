@@ -367,6 +367,90 @@ test.describe("better choices", () => {
   });
 });
 
+test.describe("shelf mode", () => {
+  // a camera and a barcode reader the test controls: two barcodes are always in view
+  const fakeCamera = (page: Page) =>
+    page.addInitScript(() => {
+      const w = window as unknown as { BarcodeDetector: unknown };
+      w.BarcodeDetector = class {
+        async detect() {
+          return [
+            { rawValue: "3017620422003", boundingBox: { x: 60, y: 80, width: 200, height: 70 } },
+            { rawValue: "5449000000996", boundingBox: { x: 320, y: 260, width: 200, height: 70 } },
+          ];
+        }
+      };
+      navigator.mediaDevices.getUserMedia = async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext("2d")!;
+        setInterval(() => {
+          ctx.fillStyle = "#335";
+          ctx.fillRect(0, 0, 640, 480);
+        }, 50);
+        return canvas.captureStream(20);
+      };
+    });
+  const known = (name: string, fixture: string) => ({
+    ok: true,
+    result: fromFixture("p", fixture, { product: { name } }).result,
+    meta: { model: "open-food-facts", provider: "database", attempts: 1, duration_ms: 1, locale: "en" },
+  });
+
+  test("puts a verdict on every barcode in view, and a tap opens the product", async ({ page }) => {
+    await fakeCamera(page);
+    await page.addInitScript(() =>
+      localStorage.setItem("food-analyzer:profile:v2", JSON.stringify({ active: "me", profiles: [{ id: "me", name: "", allergens: ["milk"], lactose: false, sugar: false, diets: [] }] })),
+    );
+    const asked: string[] = [];
+    await page.route("**/api/product*", async (route) => {
+      const code = new URL(route.request().url()).searchParams.get("code")!;
+      asked.push(code);
+      await route.fulfill({ json: code === "3017620422003" ? known("Hazelnut spread", "eu-biscuit.txt") : known("Orange soda", "drink.txt") });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Scan", exact: false }).first().click();
+    await page.getByRole("button", { name: "Scan a whole shelf" }).click();
+    await expect(page.getByRole("dialog", { name: "Shelf mode" })).toBeVisible();
+    // the milk in the first one is not in the second
+    await expect(page.getByRole("button", { name: /Check|Avoid/ }).filter({ hasText: "Hazelnut spread" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Nothing found/ }).filter({ hasText: "Orange soda" })).toBeVisible();
+    // each barcode is asked for once, however long it stays in view
+    await page.waitForTimeout(1200);
+    expect([...asked].sort()).toEqual(["3017620422003", "5449000000996"]);
+    await page.getByRole("button", { name: /Hazelnut spread/ }).click();
+    await expect(page.getByRole("dialog", { name: "Shelf mode" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Ingredients" })).toBeVisible();
+  });
+
+  test("offers no shelf mode, only typing, when the camera is refused", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { BarcodeDetector: unknown }).BarcodeDetector = class {
+        async detect() {
+          return [];
+        }
+      };
+      navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("denied", "NotAllowedError"));
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Scan", exact: false }).first().click();
+    // the barcode scanner falls back to typing, and shelf mode is only offered over a live camera
+    await expect(page.getByLabel("Or type the digits under the barcode")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Scan a whole shelf" })).toHaveCount(0);
+  });
+
+  test("without a profile it names the products and says how to get verdicts", async ({ page }) => {
+    await fakeCamera(page);
+    await page.route("**/api/product*", (route) => route.fulfill({ json: known("Orange soda", "drink.txt") }));
+    await page.goto("/");
+    await page.getByRole("button", { name: "Scan", exact: false }).first().click();
+    await page.getByRole("button", { name: "Scan a whole shelf" }).click();
+    await expect(page.getByRole("button", { name: "Orange soda" }).first()).toBeVisible();
+    await expect(page.getByText("Add what you avoid in your profile")).toBeVisible();
+  });
+});
+
 test("the app opens offline once it has been visited", async ({ page, context }) => {
   await page.goto("/");
   await page.evaluate(() => navigator.serviceWorker.ready);

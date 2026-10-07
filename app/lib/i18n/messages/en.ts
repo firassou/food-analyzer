@@ -108,6 +108,17 @@ export const en = {
     invalid: "Those digits aren't a valid barcode. Check them and try again.",
     looking: "Looking up the product…",
   },
+  aisle: {
+    open: "Scan a whole shelf",
+    title: "Shelf mode",
+    tip: "Point the camera along a shelf. Each barcode gets a badge for your profile; tap one to open the product.",
+    noProfile: "Add what you avoid in your profile to see which products suit you.",
+    looking: "Looking…",
+    missing: "Not in the database",
+    later: "Try again in a moment",
+    cameraFailed: "The camera couldn't be opened. Allow camera access in your browser and try again.",
+    unsupported: "This browser can't read barcodes with the camera, so shelf mode isn't available here.",
+  },
   profile: {
     title: "My profile",
     lead: "Optional. Say what you avoid, and every result will open with what it means for you.",

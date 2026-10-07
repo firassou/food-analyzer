@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Content from "./Content";
 import Analyzing from "./components/Analyzing";
+import AisleScanner from "./components/AisleScanner";
 import BarcodeScanner from "./components/BarcodeScanner";
 import Compare from "./components/Compare";
 import History from "./components/History";
@@ -72,6 +73,7 @@ export default function Home() {
   const [source, setSource] = useState<Source | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [aisle, setAisle] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [comparing, setComparing] = useState<[HistoryEntry, HistoryEntry] | null>(null);
@@ -235,6 +237,19 @@ export default function Home() {
     [locale, run, startScan],
   );
   const closeScanner = useCallback(() => setScanning(false), []);
+  const closeAisle = useCallback(() => setAisle(false), []);
+  const openAisle = useCallback(() => {
+    setScanning(false);
+    setAisle(true);
+  }, []);
+  // a badge was tapped: that product opens as if its barcode had been scanned
+  const openFromAisle = useCallback(
+    (code: string) => {
+      setAisle(false);
+      selectBarcode(code);
+    },
+    [selectBarcode],
+  );
 
   const openSaved = (entry: HistoryEntry) => {
     requestId.current++;
@@ -324,7 +339,8 @@ export default function Home() {
     >
       {picker.elements}
       {excipientPicker.elements}
-      {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} />}
+      {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} onAisle={openAisle} />}
+      {aisle && <AisleScanner onOpen={openFromAisle} onClose={closeAisle} />}
       {editingProfile && <ProfileSheet onClose={() => setEditingProfile(false)} />}
 
       <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur-md print:hidden">

@@ -103,6 +103,17 @@ export const fr: Messages = {
     invalid: "Ces chiffres ne forment pas un code-barres valide. Vérifiez-les et réessayez.",
     looking: "Recherche du produit…",
   },
+  aisle: {
+    open: "Scanner tout un rayon",
+    title: "Mode rayon",
+    tip: "Passez la caméra le long d'un rayon. Chaque code-barres reçoit une pastille selon votre profil ; touchez-en une pour ouvrir le produit.",
+    noProfile: "Indiquez ce que vous évitez dans votre profil pour voir quels produits vous conviennent.",
+    looking: "Recherche…",
+    missing: "Absent de la base",
+    later: "Réessayez dans un instant",
+    cameraFailed: "La caméra n'a pas pu s'ouvrir. Autorisez l'accès à la caméra dans votre navigateur puis réessayez.",
+    unsupported: "Ce navigateur ne lit pas les codes-barres avec la caméra : le mode rayon n'est pas disponible ici.",
+  },
   profile: {
     title: "Mon profil",
     lead: "Facultatif. Indiquez ce que vous évitez : chaque résultat commencera par ce qu'il signifie pour vous.",
