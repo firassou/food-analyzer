@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cleanTurns, MAX_QUESTION_CHARS, splitAnswer } from "../lib/analysis/ask";
 import type { AnalyzeErrorCode, AskResponse, ChatTurn, LabelAnalysis } from "../lib/analysis/types";
 import { saveChat } from "../lib/client/history";
+import { SPEECH_LANG, speechSupported, startSpeech } from "../lib/client/speech";
 import { useI18n } from "../lib/i18n/I18nProvider";
 import type { Messages } from "../lib/i18n/messages";
-import { Notice, SendIcon, SparkleIcon, Spinner } from "./ui";
+import { MicIcon, Notice, SendIcon, SparkleIcon, Spinner } from "./ui";
 import { GeneralChip } from "./result/bits";
 
 // must stay above the server's deadline and maxDuration (60 s) in api/ask/route.ts
@@ -17,19 +18,16 @@ class AskFailure extends Error {
   }
 }
 
-async function ask(
-  question: string,
-  history: ChatTurn[],
-  result: LabelAnalysis,
-  lang: string,
-  signal: AbortSignal,
-): Promise<string> {
+/** what the question is about: one scanned product, or the medicines on the shelf */
+type Subject = { result: LabelAnalysis } | { cabinet: LabelAnalysis[] };
+
+async function ask(question: string, history: ChatTurn[], subject: Subject, lang: string, signal: AbortSignal): Promise<string> {
   let response: Response;
   try {
     response = await fetch("/api/ask", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ question, history, result, lang }),
+      body: JSON.stringify({ question, history, ...subject, lang }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(CLIENT_TIMEOUT_MS)]),
     });
   } catch (e) {
@@ -56,31 +54,72 @@ function errorText(code: AskFailure["code"], t: Messages): string {
 export default function AskAi({
   scanId,
   result,
+  cabinet,
+  persist,
   initialChat,
   request,
 }: {
   scanId: string;
-  result: LabelAnalysis;
+  /** the scanned product the questions are about… */
+  result?: LabelAnalysis;
+  /** …or the medicines on the shelf, when the conversation is about all of them */
+  cabinet?: LabelAnalysis[];
+  /** where the conversation is kept; by default with the saved scan `scanId` */
+  persist?: (turns: ChatTurn[]) => void;
   initialChat?: ChatTurn[];
   /** a question asked from elsewhere on the sheet (an additive's "Ask AI"): sent once per `n` */
   request?: { text: string; n: number } | null;
 }) {
   const { t, locale } = useI18n();
   const a = t.ask;
-  const medicine = result.kind === "medicine";
-  const suggestions = medicine ? a.suggestionsMedicine : a.suggestions;
+  const shelf = !!cabinet;
+  const medicine = shelf || result?.kind === "medicine";
+  const suggestions =
+    shelf ? a.suggestionsShelf
+    : medicine ? a.suggestionsMedicine
+    : a.suggestions;
+  const save = persist ?? ((turns: ChatTurn[]) => saveChat(scanId, turns));
+  const subject: Subject | null =
+    cabinet ? { cabinet }
+    : result ? { result }
+    : null;
   const [turns, setTurns] = useState<ChatTurn[]>(() => cleanTurns(initialChat));
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<AskFailure["code"] | null>(null);
   const inFlight = useRef<AbortController | null>(null);
+  // dictation: only where the browser can do it; what is heard goes into the box to be read before it is sent
+  const canSpeak = useSyncExternalStore(
+    () => () => undefined,
+    speechSupported,
+    () => false,
+  );
+  const [listening, setListening] = useState(false);
+  const stopListening = useRef<(() => void) | null>(null);
+  const toggleListening = () => {
+    if (listening) {
+      stopListening.current?.();
+      return;
+    }
+    setListening(true);
+    stopListening.current = startSpeech(SPEECH_LANG[locale], setDraft, () => {
+      stopListening.current = null;
+      setListening(false);
+    });
+  };
   const log = useRef<HTMLDivElement>(null);
 
-  useEffect(() => () => inFlight.current?.abort(), []);
+  useEffect(
+    () => () => {
+      inFlight.current?.abort();
+      stopListening.current?.();
+    },
+    [],
+  );
 
   const send = async (raw: string) => {
     const question = raw.trim();
-    if (!question || pending) return;
+    if (!question || pending || !subject) return;
     const controller = new AbortController();
     inFlight.current = controller;
     setPending(true);
@@ -89,10 +128,10 @@ export default function AskAi({
     const asked: ChatTurn[] = [...turns, { role: "user", text: question }];
     setTurns(asked);
     try {
-      const answer = await ask(question, turns, result, locale, controller.signal);
+      const answer = await ask(question, turns, subject, locale, controller.signal);
       const next: ChatTurn[] = [...asked, { role: "assistant", text: answer }];
       setTurns(next);
-      saveChat(scanId, next);
+      save(next);
       requestAnimationFrame(() => log.current?.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -123,12 +162,18 @@ export default function AskAi({
     setPending(false);
     setFailure(null);
     setTurns([]);
-    saveChat(scanId, []);
+    save([]);
   };
 
   return (
     <div>
-      <p className="text-sm leading-6 text-ink-soft">{medicine ? a.introMedicine : a.intro}</p>
+      <p className="text-sm leading-6 text-ink-soft">
+        {shelf ?
+          a.introShelf
+        : medicine ?
+          a.introMedicine
+        : a.intro}
+      </p>
 
       {turns.length > 0 && (
         <div ref={log} role="log" aria-live="polite" className="mt-4 space-y-4">
@@ -136,7 +181,10 @@ export default function AskAi({
             turn.role === "user" ?
               <div key={i} className="flex flex-col items-end gap-1">
                 <span className="eyebrow text-ink-soft">{a.you}</span>
-                <p dir="auto" className="max-w-[85%] rounded-3xl rounded-ee-lg bg-accent px-4 py-2.5 text-[15px] leading-6 wrap-break-word text-on-accent">
+                <p
+                  dir="auto"
+                  className="max-w-[85%] rounded-3xl rounded-ee-lg bg-accent px-4 py-2.5 text-[15px] leading-6 wrap-break-word text-on-accent"
+                >
                   {turn.text}
                 </p>
               </div>
@@ -207,10 +255,37 @@ export default function AskAi({
           dir="auto"
           enterKeyHint="send"
           autoComplete="off"
-          placeholder={medicine ? a.placeholderMedicine : a.placeholder}
-          aria-label={medicine ? a.placeholderMedicine : a.placeholder}
+          placeholder={
+            shelf ? a.placeholderShelf
+            : medicine ?
+              a.placeholderMedicine
+            : a.placeholder
+          }
+          aria-label={
+            shelf ? a.placeholderShelf
+            : medicine ?
+              a.placeholderMedicine
+            : a.placeholder
+          }
           className="h-12 min-w-0 flex-1 rounded-full bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
         />
+        {canSpeak && (
+          <button
+            type="button"
+            onClick={toggleListening}
+            aria-pressed={listening}
+            aria-label={listening ? a.micListening : a.mic}
+            title={listening ? a.micListening : a.mic}
+            className={
+              listening ?
+                "relative grid size-12 shrink-0 place-items-center rounded-full bg-bad-soft text-bad ring-2 ring-bad transition active:scale-[0.96]"
+              : "grid size-12 shrink-0 place-items-center rounded-full bg-mute-soft transition hover:bg-rule active:scale-[0.96]"
+            }
+          >
+            {listening && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-bad/25" />}
+            <MicIcon className="relative size-5" />
+          </button>
+        )}
         <button
           type="submit"
           disabled={pending || !draft.trim()}
@@ -218,12 +293,14 @@ export default function AskAi({
           title={a.send}
           className="grid size-12 shrink-0 place-items-center rounded-full bg-accent text-on-accent transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent hover:brightness-110 active:scale-[0.96] disabled:opacity-50"
         >
-          {pending ? <Spinner /> : <SendIcon className="size-5 rtl:-scale-x-100" />}
+          {pending ?
+            <Spinner />
+          : <SendIcon className="size-5 rtl:-scale-x-100" />}
         </button>
       </form>
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <p className="min-w-0 flex-1 text-xs leading-5 text-ink-soft">{medicine ? a.disclaimerMedicine : a.disclaimer}</p>
+        <p className="min-w-0 flex-1 text-xs leading-5 text-ink-soft">{medicine ? a.disclaimerMedicine : a.disclaimer}{canSpeak && ` ${a.micNote}`}</p>
         {turns.length > 0 && (
           <button
             type="button"

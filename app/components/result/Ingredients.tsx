@@ -12,7 +12,10 @@ export function AllergenGroup({ title, tone, items }: { title: string; tone: Ton
       <SubLabel>{title}</SubLabel>
       <ul className="space-y-2">
         {items.map((a) => (
-          <li key={a.id} className={cn("flex flex-col gap-1.5 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:gap-4", toneClasses[tone])}>
+          <li
+            key={a.id}
+            className={cn("flex flex-col gap-1.5 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:gap-4", toneClasses[tone])}
+          >
             <span className="flex shrink-0 items-center gap-2 sm:w-44">
               <Dot tone={tone} />
               <span className="font-semibold text-ink">{t.results.allergenNames[a.id] ?? a.name}</span>
@@ -47,12 +50,17 @@ export function IngredientPill({
     : additive ? "amber"
     : undefined;
   const title = [
-    ing.allergens.length ? format(t.results.ingredients.allergensTitle, { list: ing.allergens.map((a) => t.results.allergenNames[a]).join(", ") }) : null,
+    ing.allergens.length ?
+      format(t.results.ingredients.allergensTitle, { list: ing.allergens.map((a) => t.results.allergenNames[a]).join(", ") })
+    : null,
     additive ? `${additive.code} · ${additive.name_local ?? additive.name}` : null,
   ]
     .filter(Boolean)
     .join("\n");
-  const className = cn("inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-start text-sm", tone ? toneClasses[tone] : "bg-mute-soft");
+  const className = cn(
+    "inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-start text-sm",
+    tone ? toneClasses[tone] : "bg-mute-soft",
+  );
   const content = (
     <span className="flex flex-col leading-tight">
       <span dir="auto" className={cn(tone && "font-medium text-ink")}>
@@ -96,7 +104,10 @@ export function EstimatedIngredient({ ingredient: ing, translation }: { ingredie
         </span>
         {flagged && <span className="block text-xs text-bad">{ing.allergens.map((a) => t.results.allergenNames[a]).join(", ")}</span>}
       </span>
-      <span className="flex shrink-0 items-center gap-2" title={`${t.results.dish.confidence}: ${t.results.dietary.confidenceLevel[level]}`}>
+      <span
+        className="flex shrink-0 items-center gap-2"
+        title={`${t.results.dish.confidence}: ${t.results.dietary.confidenceLevel[level]}`}
+      >
         <span className="eyebrow text-ink-soft">{t.results.dietary.confidenceLevel[level]}</span>
         <span aria-hidden className="flex gap-0.5">
           {[1, 2, 3].map((n) => (
@@ -107,4 +118,3 @@ export function EstimatedIngredient({ ingredient: ing, translation }: { ingredie
     </li>
   );
 }
-

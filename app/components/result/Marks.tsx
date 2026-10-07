@@ -106,7 +106,10 @@ export function DoseMarksPanel({
       {(timed > 0 || anytime === 0) && (
         <dl className="mt-3 grid grid-cols-3 gap-2">
           {times.map(([label, count]) => (
-            <div key={label} className={cn("flex flex-col items-center rounded-2xl bg-mute-soft/70 px-2 py-4", count === 0 && "text-ink-soft/60")}>
+            <div
+              key={label}
+              className={cn("flex flex-col items-center rounded-2xl bg-mute-soft/70 px-2 py-4", count === 0 && "text-ink-soft/60")}
+            >
               <dt className="eyebrow">{label}</dt>
               <dd className="mt-3 flex flex-col items-center">
                 <Strokes count={count} />
@@ -143,13 +146,25 @@ function Stepper({ label, hint, value, onChange }: { label: string; hint?: strin
         <p className="font-medium">{label}</p>
         {hint && <p className="text-xs leading-4 text-ink-soft">{hint}</p>}
       </div>
-      <button type="button" className={button} disabled={value <= 0} onClick={() => onChange(Math.max(0, value - STEP))} aria-label={format(med.fewer, { label })}>
+      <button
+        type="button"
+        className={button}
+        disabled={value <= 0}
+        onClick={() => onChange(Math.max(0, value - STEP))}
+        aria-label={format(med.fewer, { label })}
+      >
         <MinusIcon className="size-4.5" />
       </button>
       <span aria-live="polite" className="font-display w-9 text-center text-2xl font-bold tabular-nums">
         {ltr(fmt(value))}
       </span>
-      <button type="button" className={button} disabled={value >= MAX_UNITS} onClick={() => onChange(Math.min(MAX_UNITS, value + STEP))} aria-label={format(med.more, { label })}>
+      <button
+        type="button"
+        className={button}
+        disabled={value >= MAX_UNITS}
+        onClick={() => onChange(Math.min(MAX_UNITS, value + STEP))}
+        aria-label={format(med.more, { label })}
+      >
         <PlusIcon className="size-4.5" />
       </button>
     </div>
@@ -187,11 +202,17 @@ function DoseEditor({ start, onSave, onCancel }: { start: DoseMarks | null; onSa
         >
           {med.save}
         </button>
-        <button onClick={onCancel} className="inline-flex h-11 items-center rounded-full px-4 text-sm font-medium text-ink-soft transition hover:bg-rule/60">
+        <button
+          onClick={onCancel}
+          className="inline-flex h-11 items-center rounded-full px-4 text-sm font-medium text-ink-soft transition hover:bg-rule/60"
+        >
           {t.actions.cancel}
         </button>
         {start && (
-          <button onClick={() => onSave(null)} className="ms-auto inline-flex h-11 items-center rounded-full px-4 text-sm font-medium text-bad transition hover:bg-bad-soft">
+          <button
+            onClick={() => onSave(null)}
+            className="ms-auto inline-flex h-11 items-center rounded-full px-4 text-sm font-medium text-bad transition hover:bg-bad-soft"
+          >
             {med.remove}
           </button>
         )}
@@ -221,7 +242,10 @@ export function GeneralList({
       <ul className="space-y-2.5">
         {items.map((item) => (
           <li key={item} className="flex items-start gap-3 text-sm leading-6">
-            <span aria-hidden className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold", toneClasses[tone])}>
+            <span
+              aria-hidden
+              className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold", toneClasses[tone])}
+            >
               {mark}
             </span>
             <span dir="auto">{item}</span>

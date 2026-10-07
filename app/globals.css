@@ -201,3 +201,18 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* "Save as PDF" goes through the print dialog: just the sheet, on white, cards kept whole */
+@media print {
+  body {
+    background: #fff;
+  }
+  section,
+  header,
+  article {
+    break-inside: avoid;
+  }
+  * {
+    box-shadow: none !important;
+  }
+}

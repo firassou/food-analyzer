@@ -1,4 +1,4 @@
-import { cleanQuestion, cleanTurns } from "@/app/lib/analysis/ask";
+import { cleanCabinet, cleanQuestion, cleanTurns } from "@/app/lib/analysis/ask";
 import type { AnalyzeErrorCode, AskResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 import { AnalyzeError } from "@/app/lib/server/analyze";
@@ -35,12 +35,15 @@ export async function POST(req: Request) {
 
   const question = cleanQuestion(body.question);
   if (!question) return fail("Ask a question.", "bad_request", 400);
-  if (!body.result || typeof body.result !== "object") return fail("The scanned product is missing.", "bad_request", 400);
+  // a conversation about the whole shelf of medicines carries them instead of one result
+  const cabinet = body.cabinet === undefined ? undefined : cleanCabinet(body.cabinet);
+  if (cabinet !== undefined && cabinet.length === 0) return fail("The medicines are missing.", "bad_request", 400);
+  if (cabinet === undefined && (!body.result || typeof body.result !== "object")) return fail("The scanned product is missing.", "bad_request", 400);
   const locale: Locale = isLocale(body.lang) ? body.lang : DEFAULT_LOCALE;
 
   try {
     const { answer, model, provider } = await askAboutProduct(
-      { question, history: cleanTurns(body.history), result: body.result, locale },
+      { question, history: cleanTurns(body.history), result: body.result, locale, cabinet },
       req.signal,
     );
     return Response.json({ ok: true, answer, model, provider } satisfies AskResponse);

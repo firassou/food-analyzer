@@ -287,3 +287,9 @@ export const UserIcon = icon(<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8.5
 export const SendIcon = icon(<path d="M4.500 12 20 4.500 15.500 20l-3.800-6.200L4.500 12Zm7.200 1.800L20 4.500" />);
 export const TrashIcon = icon(<path d="M5 7h14M10 7V4.500h4V7m-7 0 .8 12.500h8.400L17 7M10 11v5m4-5v5" />);
 export const ArrowLeftIcon = icon(<path d="M19 12H5m6-6-6 6 6 6" />);
+export const ShelfIcon = icon(<path d="M4 20V5.500A1.500 1.500 0 0 1 5.500 4h13A1.500 1.500 0 0 1 20 5.500V20M4 12h16M4 20h16M8 4v4m4-4v4m4-4v4M8 12v4m4-4v4m4-4v4" />);
+export const BellIcon = icon(<path d="M6 16.500V11a6 6 0 1 1 12 0v5.500l1.500 1.500h-15L6 16.500ZM10 20.500a2 2 0 0 0 4 0" />);
+export const ShareIcon = icon(<path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v5.500A1.500 1.500 0 0 0 6.500 20h11a1.500 1.500 0 0 0 1.500-1.500V13" />);
+export const MicIcon = icon(<path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm-6-3a6 6 0 0 0 12 0m-6 6v3" />);
+export const PrinterIcon = icon(<path d="M7 9V4h10v5M7 17H5.500A1.500 1.500 0 0 1 4 15.500v-5A1.500 1.500 0 0 1 5.500 9h13a1.500 1.500 0 0 1 1.500 1.500v5a1.500 1.500 0 0 1-1.500 1.500H17M7 14h10v6H7v-6Z" />);
+export const SwapIcon = icon(<path d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3-3m-3 3 3 3" />);

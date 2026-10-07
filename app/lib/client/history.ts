@@ -132,3 +132,25 @@ export async function makeThumb(image: Blob): Promise<string | null> {
     return null;
   }
 }
+
+// The conversation about the whole shelf of medicines isn't tied to one scan, so it has a key of its own.
+const SHELF_CHAT_KEY = "food-analyzer:shelf-chat:v1";
+
+export function loadShelfChat(): ChatTurn[] {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(SHELF_CHAT_KEY) ?? "[]");
+    return Array.isArray(parsed) ? (parsed.filter((t) => (t?.role === "user" || t?.role === "assistant") && typeof t.text === "string") as ChatTurn[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveShelfChat(chat: ChatTurn[]) {
+  try {
+    const kept = chat.slice(-MAX_CHAT_TURNS);
+    if (kept.length === 0) window.localStorage.removeItem(SHELF_CHAT_KEY);
+    else window.localStorage.setItem(SHELF_CHAT_KEY, JSON.stringify(kept));
+  } catch {
+    // storage unavailable: the conversation lasts until the page is closed
+  }
+}

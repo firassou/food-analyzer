@@ -14,7 +14,9 @@ export default function DrinkPanel({ result }: { result: LabelAnalysis }) {
   return (
     <>
       <div className={cn("flex flex-wrap items-end gap-x-4 gap-y-2", sugar.per_100 === null && "hidden")}>
-        <p className="font-display text-6xl leading-none font-bold tabular-nums">{sugar.per_100 !== null && ltr(`${fmt(sugar.per_100)} g`)}</p>
+        <p className="font-display text-6xl leading-none font-bold tabular-nums">
+          {sugar.per_100 !== null && ltr(`${fmt(sugar.per_100)} g`)}
+        </p>
         <div className="pb-1">
           <p className="eyebrow text-ink-soft">
             {r.drink.sugars} · {r.drink.per100}
@@ -39,7 +41,10 @@ export default function DrinkPanel({ result }: { result: LabelAnalysis }) {
             })}
           </span>
           {drink.sugar_per_container_g >= SUGAR_CUBE_G && (
-            <span className="text-ink-soft"> · {format(r.drink.cubes, { count: Math.round(drink.sugar_per_container_g / SUGAR_CUBE_G) })}</span>
+            <span className="text-ink-soft">
+              {" "}
+              · {format(r.drink.cubes, { count: Math.round(drink.sugar_per_container_g / SUGAR_CUBE_G) })}
+            </span>
           )}
         </p>
       )}
@@ -71,7 +76,11 @@ export default function DrinkPanel({ result }: { result: LabelAnalysis }) {
         ))}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule/70 px-4 py-3">
           <dt className="eyebrow w-28 shrink-0 text-ink-soft">{r.drink.caffeine}</dt>
-          <dd className="text-sm">{drink?.caffeine ? <Tag tone="amber">{r.drink.present}</Tag> : <span className="text-ink-soft">{r.drink.none}</span>}</dd>
+          <dd className="text-sm">
+            {drink?.caffeine ?
+              <Tag tone="amber">{r.drink.present}</Tag>
+            : <span className="text-ink-soft">{r.drink.none}</span>}
+          </dd>
         </div>
       </dl>
     </>

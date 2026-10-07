@@ -35,7 +35,9 @@ export const SUGAR_CUBE_G = 4;
 function cellValue(n: Nutrients | null, key: NutrientKey | "energy", unit: string, fmt: (n: number) => string): string | null {
   if (!n) return null;
   if (key === "energy") {
-    const parts = [n.energy_kj !== null && `${fmt(n.energy_kj)} kJ`, n.energy_kcal !== null && `${fmt(n.energy_kcal)} kcal`].filter(Boolean);
+    const parts = [n.energy_kj !== null && `${fmt(n.energy_kj)} kJ`, n.energy_kcal !== null && `${fmt(n.energy_kcal)} kcal`].filter(
+      Boolean,
+    );
     return parts.length ? parts.join(" / ") : null;
   }
   const v = n[key];
@@ -137,7 +139,9 @@ function LevelMeter({
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="eyebrow text-ink-soft">{label}</span>
-        <span className={cn("eyebrow font-semibold", toneText[tone])}>{level ? t.results.level[level] : t.results.nutrition.notAvailable}</span>
+        <span className={cn("eyebrow font-semibold", toneText[tone])}>
+          {level ? t.results.level[level] : t.results.nutrition.notAvailable}
+        </span>
       </div>
       <p className="font-display mt-1 mb-2.5 text-xl font-semibold tabular-nums">{value !== null ? ltr(`${fmt(value)} g`) : "—"}</p>
       <Bar value={value == null ? 0 : value / (threshold.high * 1.4)} tone={tone} delay={150 + delay * 80} />
@@ -184,7 +188,10 @@ export function GlutenPanel({ status, confidence, evidence }: { status: Presence
             </li>
           ))}
         </ul>
-      : <p className="mt-3 text-sm leading-6 text-ink-soft">{status === "unclear" ? t.results.dietary.unclear : t.results.dietary.noEvidence}</p>}
+      : <p className="mt-3 text-sm leading-6 text-ink-soft">
+          {status === "unclear" ? t.results.dietary.unclear : t.results.dietary.noEvidence}
+        </p>
+      }
     </div>
   );
 }

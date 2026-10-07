@@ -8,9 +8,11 @@ import { AllergenGroup, EstimatedIngredient, IngredientPill } from "./components
 import { DoseMarksPanel, GeneralList } from "./components/result/Marks";
 import { GlutenPanel, NutritionPanel } from "./components/result/Nutrition";
 import ProfileVerdict from "./components/result/ProfileVerdict";
+import ShareButtons from "./components/result/ShareButtons";
 import RawText from "./components/result/RawText";
 import { capitalize, highlightMark, highlightTone, levelTone, presenceTone } from "./components/result/tones";
 import WaterPanel from "./components/result/WaterPanel";
+import WhyPanel from "./components/result/WhyPanel";
 import {
   AlertIcon,
   BottleIcon,
@@ -136,8 +138,7 @@ export default function Content({
 }) {
   // nothing about a food: neither a label, a product, nor an estimate
   const empty =
-    result.kind === "other" ||
-    (!result.label_detected && result.ingredients.length === 0 && !result.product.name && !result.medicine);
+    result.kind === "other" || (!result.label_detected && result.ingredients.length === 0 && !result.product.name && !result.medicine);
   if (empty) return <NotALabel result={result} />;
   return (
     <Results
@@ -262,7 +263,10 @@ function Results({
     allergens: estimated && kind === "dish" ? r.dish.allergens : r.sections.allergens,
     dietary: r.sections.dietary,
     nutrition: r.sections.nutrition,
-    ingredients: medicine ? med.excipients : estimated ? r.dish.ingredients : r.sections.ingredients,
+    ingredients:
+      medicine ? med.excipients
+      : estimated ? r.dish.ingredients
+      : r.sections.ingredients,
     additives: r.sections.additives,
     details: r.sections.details,
     raw: r.sections.raw,
@@ -373,7 +377,10 @@ function Results({
     empty: kcal === null,
     tone: "zinc",
     icon: <FlameIcon />,
-    hint: kcal === null ? undefined : nutrition?.per_serving?.energy_kcal != null ? r.dish.perPortion : r.dish.per100,
+    hint:
+      kcal === null ? undefined
+      : nutrition?.per_serving?.energy_kcal != null ? r.dish.perPortion
+      : r.dish.per100,
     target: jump("nutrition"),
   };
   const sugarTile: Tile = {
@@ -399,14 +406,25 @@ function Results({
       : ingredients.length ? "green"
       : "zinc",
     icon: <AlertIcon />,
-    hint: contains.length || !estimated ? (mayContain.length ? format(r.tiles.mayContain, { count: mayContain.length }) : undefined) : undefined,
+    hint:
+      contains.length || !estimated ?
+        mayContain.length ?
+          format(r.tiles.mayContain, { count: mayContain.length })
+        : undefined
+      : undefined,
     target: jump("allergens"),
   };
   const countTile = (title: string, count: number, target: Exclude<SectionId, "overview">, icon: React.ReactNode): Tile => ({
     title,
-    label: count ? found(count) : ingredients.length ? r.tiles.noneFound : r.tiles.unknown,
+    label:
+      count ? found(count)
+      : ingredients.length ? r.tiles.noneFound
+      : r.tiles.unknown,
     empty: count === 0 && ingredients.length === 0,
-    tone: count ? "amber" : ingredients.length ? "green" : "zinc",
+    tone:
+      count ? "amber"
+      : ingredients.length ? "green"
+      : "zinc",
     icon,
     target: count ? jump(target) : jump("ingredients"),
   });
@@ -415,7 +433,11 @@ function Results({
   const allTiles: Tile[] =
     isWater ?
       [
-        waterTile(r.water.ph, water?.ph != null ? ltr(fmt(water.ph)) : null, factOf("ph_neutral", "ph_acidic", "ph_alkaline", "ph_sparkling")),
+        waterTile(
+          r.water.ph,
+          water?.ph != null ? ltr(fmt(water.ph)) : null,
+          factOf("ph_neutral", "ph_acidic", "ph_alkaline", "ph_sparkling"),
+        ),
         waterTile(
           r.water.mineralContent,
           water?.dry_residue_mg_l != null ? ltr(`${fmt(water.dry_residue_mg_l)} mg/L`) : null,
@@ -450,7 +472,11 @@ function Results({
           empty: medicine.active.length === 0,
           tone: "zinc",
           icon: <PillIcon />,
-          hint: medicine.active.map((a) => a.strength).filter(Boolean).join(" + ") || undefined,
+          hint:
+            medicine.active
+              .map((a) => a.strength)
+              .filter(Boolean)
+              .join(" + ") || undefined,
           target: jump("medicine"),
         },
         ...(medicine.marks ?
@@ -563,7 +589,9 @@ function Results({
           <p className="text-sm leading-6 text-ink-soft">{ingredients.length ? r.allergens.none : r.allergens.unreadable}</p>
         : <div className="space-y-6">
             {contains.length > 0 && <AllergenGroup title={r.allergens.contains} tone="red" items={contains} />}
-            {mayContain.length > 0 && <AllergenGroup title={estimated ? r.dish.likely : r.allergens.mayContain} tone="amber" items={mayContain} />}
+            {mayContain.length > 0 && (
+              <AllergenGroup title={estimated ? r.dish.likely : r.allergens.mayContain} tone="amber" items={mayContain} />
+            )}
           </div>
         }
       </Section>
@@ -688,7 +716,7 @@ function Results({
 
     raw: result.raw_text ? <RawText id={sid("raw")} title={titles.raw} text={result.raw_text} flash={flashFor(sid("raw"))} /> : null,
     ask: ask && (
-      <Section {...head("ask")}>
+      <Section {...head("ask")} className="print:hidden">
         <AskAi key={ask.scanId} scanId={ask.scanId} result={result} initialChat={ask.chat} request={askRequest} />
       </Section>
     ),
@@ -700,7 +728,7 @@ function Results({
       <nav
         ref={navRef}
         aria-label={r.nav}
-        className="animate-fade-in scrollbar-none sticky top-16 z-20 -mx-4 flex gap-2 overflow-x-auto bg-paper/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0"
+        className="animate-fade-in scrollbar-none sticky top-16 z-20 print:hidden -mx-4 flex gap-2 overflow-x-auto bg-paper/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0"
       >
         {sections.map((id) => (
           <button
@@ -719,7 +747,10 @@ function Results({
       </nav>
 
       {/* Overview */}
-      <header id={sid("overview")} className="animate-fade-up scroll-mt-32 rounded-[28px] bg-sheet px-5 pt-6 pb-6 ring-1 ring-rule sm:px-7 sm:pt-7">
+      <header
+        id={sid("overview")}
+        className="animate-fade-up scroll-mt-32 rounded-[28px] bg-sheet px-5 pt-6 pb-6 ring-1 ring-rule sm:px-7 sm:pt-7"
+      >
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip icon={kindIcons[kind]}>{t.kinds[kind]}</Chip>
           {estimated && <Chip tone="amber">{r.source.estimated}</Chip>}
@@ -758,7 +789,10 @@ function Results({
               <li key={h.text} className="flex items-start gap-3 text-sm leading-6">
                 <span
                   aria-hidden
-                  className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold", toneClasses[highlightTone[h.tone]])}
+                  className={cn(
+                    "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold",
+                    toneClasses[highlightTone[h.tone]],
+                  )}
                 >
                   {highlightMark[h.tone]}
                 </span>
@@ -770,16 +804,19 @@ function Results({
 
         <ProfileVerdict result={result} onEdit={onEditProfile} />
 
-        {ask && (
-          // the way to put a question about this product, from the top of the sheet
-          <button
-            onClick={() => goTo(sid("ask"))}
-            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-accent-soft px-5 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.98]"
-          >
-            <SparkleIcon className="size-4.5" />
-            {medicine ? t.ask.placeholderMedicine : t.ask.placeholder}
-          </button>
-        )}
+        <div className="mt-5 flex flex-wrap gap-2 print:hidden">
+          {ask && (
+            // the way to put a question about this product, from the top of the sheet
+            <button
+              onClick={() => goTo(sid("ask"))}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-accent-soft px-5 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.98]"
+            >
+              <SparkleIcon className="size-4.5" />
+              {medicine ? t.ask.placeholderMedicine : t.ask.placeholder}
+            </button>
+          )}
+          <ShareButtons result={result} name={product.name ?? product.category ?? r.fallbackName} />
+        </div>
 
         {/* nothing the analysis is unsure about is hidden */}
         {(result.warnings.length > 0 || needsProductPhoto || canAddExcipients || result.database) && (
@@ -788,7 +825,12 @@ function Results({
               <Notice key={w} tone="amber">
                 <span dir="auto">{w}</span>
                 {result.database && w.includes(result.database.product) && (
-                  <a href={result.database.url} target="_blank" rel="noreferrer" className="ms-1 font-medium text-accent underline underline-offset-2">
+                  <a
+                    href={result.database.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ms-1 font-medium text-accent underline underline-offset-2"
+                  >
                     {r.source.viewEntry}
                   </a>
                 )}
@@ -817,7 +859,9 @@ function Results({
                   disabled={adding === "working"}
                   className="inline-flex min-h-11 items-center gap-2 rounded-full px-5 py-2 text-start text-sm font-semibold text-ink ring-1 ring-rule transition hover:bg-mute-soft active:scale-[0.98] disabled:opacity-70"
                 >
-                  {adding === "working" ? <Spinner className="text-accent" /> : <CameraIcon className="size-5 shrink-0 text-accent" />}
+                  {adding === "working" ?
+                    <Spinner className="text-accent" />
+                  : <CameraIcon className="size-5 shrink-0 text-accent" />}
                   <span>
                     {adding === "working" ? med.addPhotoWorking : med.addPhoto}
                     {adding !== "working" && <span className="eyebrow ms-2 text-ink-soft">{med.optional}</span>}
@@ -873,13 +917,19 @@ function Results({
         ))}
       </div>
 
+      <WhyPanel result={result} />
+
       {visible.map((id) => (
         <React.Fragment key={id}>{blocks[id]}</React.Fragment>
       ))}
 
       <footer className="px-2 py-4 text-xs leading-5 text-ink-soft">
         {r.disclaimer}
-        {meta && <span className="eyebrow mt-2 block tabular-nums">{format(r.duration, { seconds: fmt(Math.round(meta.duration_ms / 100) / 10) })}</span>}
+        {meta && (
+          <span className="eyebrow mt-2 block tabular-nums">
+            {format(r.duration, { seconds: fmt(Math.round(meta.duration_ms / 100) / 10) })}
+          </span>
+        )}
       </footer>
     </div>
   );
@@ -921,7 +971,15 @@ function NotALabel({ result }: { result: LabelAnalysis }) {
         {n.tips.map((tip) => (
           <li key={tip} className="flex gap-3 rounded-2xl bg-mute-soft/60 px-4 py-3 text-sm leading-6">
             <span aria-hidden className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-on-accent-soft">
-              <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                viewBox="0 0 24 24"
+                className="size-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="m5 12.500 4.500 4.500L19 7.500" />
               </svg>
             </span>

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Content from "./Content";
 import Analyzing from "./components/Analyzing";
 import BarcodeScanner from "./components/BarcodeScanner";
@@ -10,6 +10,7 @@ import LanguageSwitcher from "./components/LanguageSwitcher";
 import { usePhotoPicker } from "./components/PhotoPicker";
 import ProfileSheet, { ProfileButton } from "./components/ProfileSheet";
 import Scanner from "./components/Scanner";
+import Shelf from "./components/Shelf";
 import Together from "./components/Together";
 import RotatingWord from "./components/RotatingWord";
 import {
@@ -22,12 +23,15 @@ import {
   Notice,
   PillIcon,
   PlateIcon,
+  ShelfIcon,
   SparkleIcon,
   Spinner,
 } from "./components/ui";
 import { makeThumb, newScanId, saveScan, useHistory, type HistoryEntry } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
+import { attentionCount, datedEntries } from "./lib/analysis/cabinet";
 import { addExcipientPhoto, withUserMarks } from "./lib/analysis/medicine";
+import { remindIfDue } from "./lib/client/reminders";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
 import { format, useI18n } from "./lib/i18n/I18nProvider";
 import type { Locale } from "./lib/i18n/locales";
@@ -69,6 +73,7 @@ export default function Home() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [shelfOpen, setShelfOpen] = useState(false);
   const [comparing, setComparing] = useState<[HistoryEntry, HistoryEntry] | null>(null);
   const [status, setStatus] = useState<Status>("preparing");
   const [result, setResult] = useState<{ result: LabelAnalysis; meta: AnalyzeMeta } | null>(null);
@@ -142,6 +147,7 @@ export default function Home() {
       setFailure(null);
       setResult(null);
       setComparing(null);
+      setShelfOpen(false);
       setOpen(true);
       setSource(null);
       setImageSrc(null);
@@ -217,6 +223,7 @@ export default function Home() {
     (code: string) => {
       setScanning(false);
       setComparing(null);
+      setShelfOpen(false);
       setOpen(true);
       setImageSrc(null);
       const from: Source = { type: "barcode", code };
@@ -236,6 +243,7 @@ export default function Home() {
     thumb.current = entry.thumb;
     setAdding(null);
     setFailure(null);
+    setShelfOpen(false);
     setSource(null);
     setImageSrc(entry.thumb);
     setResult({ result: entry.result, meta: entry.meta });
@@ -249,6 +257,7 @@ export default function Home() {
     cancelInFlight();
     setOpen(false);
     setComparing(null);
+    setShelfOpen(false);
     setSource(null);
     setImageSrc(null);
     setResult(null);
@@ -275,6 +284,13 @@ export default function Home() {
 
   // the other medicines scanned on this device, to check the one on screen with
   const history = useHistory();
+  // what has expired or is about to, across everything saved: the shelf's badge and the reminder
+  const [today] = useState(() => new Date());
+  const attention = useMemo(() => attentionCount(datedEntries(history, today)), [history, today]);
+  const reminderText = format(t.shelf.notifyBody, { count: attention });
+  useEffect(() => {
+    void remindIfDue(attention, t.meta.title, reminderText);
+  }, [attention, reminderText, t.meta.title]);
   const shownEntry = result ? history.find((e) => e.result === result.result) : undefined;
   const otherMedicines =
     shownEntry?.result.kind === "medicine" ? history.filter((e) => e.result.kind === "medicine" && e !== shownEntry).slice(0, 6) : [];
@@ -311,15 +327,37 @@ export default function Home() {
       {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} />}
       {editingProfile && <ProfileSheet onClose={() => setEditingProfile(false)} />}
 
-      <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur-md print:hidden">
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-6">
           <button onClick={reset} className="-ms-1 flex min-w-0 items-center gap-3 rounded-2xl p-1">
             <Logo />
-            <span dir="ltr" className="font-display truncate text-lg font-bold tracking-tight">
+            <span dir="ltr" className="font-display hidden truncate text-lg font-bold tracking-tight min-[430px]:inline">
               Food Analyzer
             </span>
           </button>
           <div className="ms-auto flex items-center gap-2">
+            {history.length > 0 && (
+              <button
+                onClick={() => {
+                  setShelfOpen(true);
+                  setComparing(null);
+                  window.scrollTo({ top: 0 });
+                }}
+                aria-label={t.shelf.open}
+                title={t.shelf.open}
+                className="relative grid size-11 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
+              >
+                <ShelfIcon className="size-5" />
+                {attention > 0 && (
+                  <span
+                    aria-hidden
+                    className="absolute -end-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full border-2 border-paper bg-bad px-1 text-[10px] leading-4 font-bold text-white"
+                  >
+                    {attention}
+                  </span>
+                )}
+              </button>
+            )}
             <ProfileButton onClick={() => setEditingProfile(true)} />
             <LanguageSwitcher />
           </div>
@@ -327,7 +365,11 @@ export default function Home() {
       </header>
 
       <main className="pb-dock mx-auto w-full max-w-5xl flex-1 px-4 pt-7 sm:px-6 sm:pt-12">
-        {comparing ?
+        {shelfOpen ?
+          <div className="mx-auto max-w-2xl">
+            <Shelf onBack={() => setShelfOpen(false)} onOpen={openSaved} />
+          </div>
+        : comparing ?
           <div className="mx-auto max-w-2xl">
             {comparing.every((e) => e.result.kind === "medicine") ?
               // two medicines aren't compared, they are checked together
@@ -377,6 +419,16 @@ export default function Home() {
                   </button>
                 </div>
 
+                {attention > 0 && (
+                  <button
+                    onClick={() => setShelfOpen(true)}
+                    className="animate-fade-up mt-6 flex w-full items-center gap-3 rounded-3xl bg-warn-soft px-4 py-3.5 text-start text-sm text-ink transition hover:brightness-95 active:scale-[0.99]"
+                  >
+                    <ShelfIcon className="size-5 shrink-0 text-warn" />
+                    <span className="min-w-0 flex-1 font-medium">{format(t.shelf.banner, { count: attention })}</span>
+                    <span className="shrink-0 font-semibold text-warn">{t.shelf.bannerOpen}</span>
+                  </button>
+                )}
                 {error && (
                   <Notice tone="red" role="alert" className="animate-fade-up mt-6">
                     {error}
@@ -384,7 +436,7 @@ export default function Home() {
                 )}
 
                 {/* dropping and pasting need a mouse and a keyboard */}
-                <p className="mt-5 hidden text-sm text-ink-soft [@media(pointer:fine)]:block">
+                <p className="mt-5 hidden text-sm text-ink-soft lg:[@media(hover:hover)_and_(pointer:fine)]:block">
                   {t.uploader.hint}{" "}
                   <kbd dir="ltr" className="rounded-md bg-mute-soft px-1.5 py-0.5 font-mono text-xs">
                     Ctrl V
@@ -500,7 +552,7 @@ export default function Home() {
       </main>
 
       {/* Dock: the one primary action, where the thumb is */}
-      <div className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4", !open && "sm:hidden")}>
+      <div className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 print:hidden", !open && "sm:hidden")}>
         <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-[28px] bg-sheet/90 p-2 shadow-[0_8px_32px_-8px_rgb(0_0_0/0.35)] ring-1 ring-rule backdrop-blur-md">
           {busy ?
             <>

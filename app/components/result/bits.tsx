@@ -79,7 +79,13 @@ export function StatusTile({ title, label, tone, icon, hint, onClick, className 
     >
       <span className="flex w-full items-center gap-2">
         {icon && (
-          <span aria-hidden className={cn("grid size-8 shrink-0 place-items-center rounded-xl bg-white/55 dark:bg-white/10 [&>svg]:size-4.5", tone !== "zinc" && toneText[tone])}>
+          <span
+            aria-hidden
+            className={cn(
+              "grid size-8 shrink-0 place-items-center rounded-xl bg-white/55 dark:bg-white/10 [&>svg]:size-4.5",
+              tone !== "zinc" && toneText[tone],
+            )}
+          >
             {icon}
           </span>
         )}

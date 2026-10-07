@@ -36,7 +36,10 @@ export default function WaterPanel({ water }: { water: Water }) {
         // the scale reads 0 → 14 left to right in every language
         <div dir="ltr" aria-hidden>
           <div className="relative h-3 rounded-full bg-mute-soft">
-            <div className="absolute inset-y-0 rounded-full bg-good/35" style={{ left: `${(low / 14) * 100}%`, width: `${((high - low) / 14) * 100}%` }} />
+            <div
+              className="absolute inset-y-0 rounded-full bg-good/35"
+              style={{ left: `${(low / 14) * 100}%`, width: `${((high - low) / 14) * 100}%` }}
+            />
             <div
               className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-sheet bg-accent shadow"
               style={{ left: `${(Math.min(14, Math.max(0, water.ph)) / 14) * 100}%` }}
@@ -81,7 +84,13 @@ export default function WaterPanel({ water }: { water: Water }) {
           <ul className="space-y-4">
             {water.facts.map((f) => (
               <li key={f.id} className="flex items-start gap-3 text-sm leading-6">
-                <span aria-hidden className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold", toneClasses[highlightTone[f.tone]])}>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold",
+                    toneClasses[highlightTone[f.tone]],
+                  )}
+                >
                   {highlightMark[f.tone]}
                 </span>
                 <span className="min-w-0">

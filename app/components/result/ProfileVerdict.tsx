@@ -52,7 +52,10 @@ export default function ProfileVerdict({ result, onEdit }: { result: LabelAnalys
       )}
       {note && <p className="mt-3 text-sm leading-6 opacity-90">{note}</p>}
       {onEdit && (
-        <button onClick={onEdit} className="mt-3 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium underline underline-offset-4">
+        <button
+          onClick={onEdit}
+          className="mt-3 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium underline underline-offset-4"
+        >
           <PencilIcon className="size-4" />
           {t.profile.edit}
         </button>

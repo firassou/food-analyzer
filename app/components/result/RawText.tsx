@@ -27,7 +27,10 @@ export default function RawText({ id, title, text, flash }: { id: string; title:
       title={title}
       flash={flash}
       aside={
-        <button onClick={copy} className="rounded-full bg-mute-soft px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-rule active:scale-95">
+        <button
+          onClick={copy}
+          className="rounded-full bg-mute-soft px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-rule active:scale-95"
+        >
           {copied ? t.results.raw.copied : t.results.raw.copy}
         </button>
       }
@@ -42,7 +45,9 @@ export default function RawText({ id, title, text, flash }: { id: string; title:
         >
           {text}
         </pre>
-        {!open && long && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-2xl bg-linear-to-t from-mute-soft/90" />}
+        {!open && long && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-2xl bg-linear-to-t from-mute-soft/90" />
+        )}
       </div>
       {long && (
         <button onClick={() => setOpen((o) => !o)} className="mt-3 min-h-10 text-sm font-medium text-accent underline underline-offset-4">

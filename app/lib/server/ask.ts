@@ -1,5 +1,5 @@
 import "server-only";
-import { askSystemPrompt, cleanAnswer, digestForAsk, kindOf } from "../analysis/ask";
+import { askSystemPrompt, cleanAnswer, digestForAsk, digestForCabinet, kindOf } from "../analysis/ask";
 import type { ChatTurn } from "../analysis/types";
 import type { Locale } from "../i18n/locales";
 import { AnalyzeError } from "./analyze";
@@ -19,14 +19,16 @@ const INSTANT_FAILURES = new Set<FailureKind | "empty">(["auth", "quota", "rate_
  * the analysis. Text only: the photo isn't sent, the analysis stands in for it.
  */
 export async function askAboutProduct(
-  input: { question: string; history: ChatTurn[]; result: unknown; locale: Locale },
+  input: { question: string; history: ChatTurn[]; result: unknown; locale: Locale; cabinet?: unknown[] },
   signal: AbortSignal,
 ): Promise<{ answer: string; model: string; provider: string }> {
   const targets = getTargets();
   if (targets.length === 0) {
     throw new AnalyzeError("The server has no AI provider configured.", "not_configured", 503);
   }
-  const system = askSystemPrompt(input.locale, digestForAsk(input.result), kindOf(input.result));
+  const system = input.cabinet
+    ? askSystemPrompt(input.locale, digestForCabinet(input.cabinet), "cabinet")
+    : askSystemPrompt(input.locale, digestForAsk(input.result), kindOf(input.result));
   const started = Date.now();
   const kinds: (FailureKind | "empty")[] = [];
   const deadProviders = new Set<string>();

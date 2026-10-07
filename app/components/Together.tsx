@@ -2,10 +2,19 @@
 import { checkTogether, type TogetherFinding } from "../lib/analysis/interactions";
 import type { HistoryEntry } from "../lib/client/history";
 import { format, useI18n } from "../lib/i18n/I18nProvider";
+import type { Messages } from "../lib/i18n/messages";
 import { ScanThumb, useScanName } from "./History";
 import { Notice } from "./ui";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** the sentence for one finding of the two-medicine check, in the interface language */
+export function togetherText(f: TogetherFinding, c: Messages["together"]): string {
+  const [x, y] = f.substances.map(capitalize);
+  if (f.type === "duplicate") return f.paracetamol ? c.duplicateParacetamol : format(c.duplicate, { a: x });
+  if (f.type === "same_family") return format(c.sameFamily, { a: x, b: y, family: c.families[f.family] });
+  return format(c.interactions[f.id], { a: x, b: y });
+}
 
 /** two saved medicines checked against each other: same substance, same family, known interactions */
 export default function Together({ a, b, onBack }: { a: HistoryEntry; b: HistoryEntry; onBack: () => void }) {
@@ -14,12 +23,7 @@ export default function Together({ a, b, onBack }: { a: HistoryEntry; b: History
   const nameOf = useScanName();
   const check = checkTogether(a.result.medicine, b.result.medicine);
 
-  const textOf = (f: TogetherFinding) => {
-    const [x, y] = f.substances.map(capitalize);
-    if (f.type === "duplicate") return f.paracetamol ? c.duplicateParacetamol : format(c.duplicate, { a: x });
-    if (f.type === "same_family") return format(c.sameFamily, { a: x, b: y, family: c.families[f.family] });
-    return format(c.interactions[f.id], { a: x, b: y });
-  };
+  const textOf = (f: TogetherFinding) => togetherText(f, c);
 
   return (
     <div className="animate-fade-up">
