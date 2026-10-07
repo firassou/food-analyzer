@@ -4,13 +4,13 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 import { AnalyzeError } from "@/app/lib/server/analyze";
 import { askAboutProduct } from "@/app/lib/server/ask";
 import { crossSite, readText } from "@/app/lib/server/guard";
-import { clientKey, globalLimiter, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
+import { clientKey, globalLimiter, makeLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 
 // must stay above DEADLINE_MS in server/ask.ts
 export const maxDuration = 60;
 
 const MAX_BODY_BYTES = 256 * 1024;
-const limiter: RateLimiter = new MemoryRateLimiter(20, 60_000);
+const limiter: RateLimiter = makeLimiter("ask", 20, 60_000);
 
 function fail(error: string, code: AnalyzeErrorCode, status: number) {
   return Response.json({ ok: false, error, code } satisfies AskResponse, { status });

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies, headers } from "next/headers";
+import ServiceWorker from "./components/ServiceWorker";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
 import { dirOf, isLocale, LOCALE_COOKIE, matchLocale, type Locale } from "./lib/i18n/locales";
 import { MESSAGES } from "./lib/i18n/messages";
@@ -64,6 +65,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+        <ServiceWorker />
       </body>
     </html>
   );

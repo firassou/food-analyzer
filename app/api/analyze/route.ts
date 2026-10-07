@@ -5,7 +5,7 @@ import { needsExcipients } from "@/app/lib/analysis/medicine";
 import { completeMedicine, findMedicine, wantedMedicine } from "@/app/lib/server/medicines";
 import { getTargets } from "@/app/lib/server/models";
 import { crossSite } from "@/app/lib/server/guard";
-import { clientKey, globalLimiter, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
+import { clientKey, globalLimiter, makeLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 
@@ -13,7 +13,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 export const maxDuration = 120;
 
 // light per-IP limiter so a stuck client can't burn through API credits
-const limiter: RateLimiter = new MemoryRateLimiter(12, 60_000);
+const limiter: RateLimiter = makeLimiter("analyze", 12, 60_000);
 
 function fail(error: string, code: AnalyzeErrorCode, status: number, trace?: string[]) {
   return Response.json({ ok: false, error, code, ...(trace && { trace }) } satisfies AnalyzeResponse, { status });

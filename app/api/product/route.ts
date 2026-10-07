@@ -2,12 +2,12 @@ import { barcodeDigits } from "@/app/lib/analysis/knowledge";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale } from "@/app/lib/i18n/locales";
 import { findProduct, fromDatabase, lookupEnabled } from "@/app/lib/server/lookup";
-import { clientKey, globalLimiter, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
+import { clientKey, globalLimiter, makeLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 
 // Barcode lookup: GET /api/product?code=<digits>&lang=<en|fr|ar>. No model is involved:
 // the Open Food Facts entry goes through the same deterministic checks as a photo.
 
-const limiter: RateLimiter = new MemoryRateLimiter(30, 60_000);
+const limiter: RateLimiter = makeLimiter("product", 30, 60_000);
 
 function fail(error: string, code: AnalyzeErrorCode, status: number) {
   return Response.json({ ok: false, error, code } satisfies AnalyzeResponse, { status });
