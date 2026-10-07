@@ -1,0 +1,31 @@
+{
+  "enabledPlugins": {
+    "superpowers@anthropic-plugin-directory": true,
+    "context7@anthropic-plugin-directory": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "vercel@claude-plugins-official": true,
+    "playwright@anthropic-plugin-directory": true,
+    "security-guidance@anthropic-plugin-directory": true,
+    "code-review@anthropic-plugin-directory": true,
+    "code-simplifier@anthropic-plugin-directory": true,
+    "frontend-design@anthropic-plugin-directory": true,
+    "claude-md-management@anthropic-plugin-directory": true,
+    "github@claude-plugins-official": true,
+    "kotlin-lsp@claude-plugins-official": false,
+    "figma@claude-plugins-official": false,
+    "feature-dev@anthropic-plugin-directory": false
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.mjs\"" }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/typecheck.mjs\"", "timeout": 180 }]
+      }
+    ]
+  }
+}

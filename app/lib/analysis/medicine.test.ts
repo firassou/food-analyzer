@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addExcipientPhoto, needsExcipients, withExcipients } from "./medicine";
+import { addExcipientPhoto, needsExcipients, withExcipients, withUserMarks } from "./medicine";
 import { analysisMessages } from "./messages";
 import { normalize } from "./normalize";
 
@@ -88,5 +88,40 @@ describe("addExcipientPhoto", () => {
     expect(addExcipientPhoto(front, front, "en")).toBeNull();
     expect(addExcipientPhoto(front, normalize({}), "en")).toBeNull();
     expect(addExcipientPhoto(front, normalize({ kind: "dish", estimated_ingredients: [{ name: "flour" }] }), "en")).toBeNull();
+  });
+});
+
+describe("withUserMarks", () => {
+  const mine = { morning: 0, midday: 1, evening: 1, anytime: 0, duration: "5 days", note: null };
+
+  it("replaces what the photo showed and drops the 'an AI read this' warnings", () => {
+    expect(front.warnings).toContain(w.medicineMarks);
+    const r = withUserMarks(front, mine, "en");
+    expect(r.medicine?.marks).toMatchObject({ midday: 1, evening: 1, confidence: "high", source: "you" });
+    expect(r.warnings).not.toContain(w.medicineMarks);
+    expect(r.warnings).not.toContain(w.medicineMarksUnclear);
+    // everything else stays
+    expect(r.warnings).toContain(w.medicineNoExcipients);
+    expect(r.medicine?.active).toEqual(front.medicine?.active);
+  });
+
+  it("adds marks to a box where none were found", () => {
+    const bare = normalize({ kind: "medicine", product: { name: "X" }, medicine: { active: [{ name: "x" }] } });
+    expect(bare.medicine?.marks).toBeNull();
+    expect(withUserMarks(bare, mine, "en").medicine?.marks?.evening).toBe(1);
+  });
+
+  it("removes the marks when nothing is set, and ignores a result that isn't a medicine", () => {
+    expect(withUserMarks(front, { ...mine, midday: 0, evening: 0, duration: null }, "en").medicine?.marks).toBeNull();
+    expect(withUserMarks(front, null, "en").medicine?.marks).toBeNull();
+    const food = normalize({ kind: "label", product: { name: "Biscuits" } });
+    expect(withUserMarks(food, mine, "en")).toBe(food);
+  });
+
+  it("survives a second normalization (a composition photo added afterwards)", () => {
+    const edited = withUserMarks(front, mine, "en");
+    const completed = withExcipients(edited, { ingredients: ["lactose", "talc"], raw_text: null }, "en");
+    expect(completed.medicine?.marks).toMatchObject({ midday: 1, evening: 1, source: "you", confidence: "high" });
+    expect(completed.warnings).not.toContain(w.medicineMarks);
   });
 });

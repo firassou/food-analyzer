@@ -34,7 +34,7 @@ export default function InstallButton() {
 
   if (!prompt) return null;
   return (
-    <div className="animate-fade-up mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-rule p-4">
+    <div className="animate-fade-up mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-3xl bg-sheet p-4 ring-1 ring-rule">
       <p className="min-w-0 flex-1 basis-48 text-sm leading-6 text-ink-soft">{t.install.hint}</p>
       <button
         onClick={async () => {
@@ -42,7 +42,7 @@ export default function InstallButton() {
           // the event can only be used once
           setPrompt(null);
         }}
-        className="h-11 shrink-0 rounded-full bg-ink px-5 text-sm font-semibold text-paper transition active:scale-[0.98]"
+        className="h-11 shrink-0 rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
       >
         {t.install.button}
       </button>

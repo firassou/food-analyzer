@@ -11,12 +11,25 @@ import { usePhotoPicker } from "./components/PhotoPicker";
 import ProfileSheet, { ProfileButton } from "./components/ProfileSheet";
 import Scanner from "./components/Scanner";
 import Together from "./components/Together";
-import { BarcodeIcon, CameraIcon, cn, ImageIcon, Notice, Spinner } from "./components/ui";
+import RotatingWord from "./components/RotatingWord";
+import {
+  BarcodeIcon,
+  BottleIcon,
+  CameraIcon,
+  cn,
+  ImageIcon,
+  LabelIcon,
+  Notice,
+  PillIcon,
+  PlateIcon,
+  SparkleIcon,
+  Spinner,
+} from "./components/ui";
 import { makeThumb, newScanId, saveScan, useHistory, type HistoryEntry } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
-import { addExcipientPhoto } from "./lib/analysis/medicine";
+import { addExcipientPhoto, withUserMarks } from "./lib/analysis/medicine";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
-import { format, rich, useI18n } from "./lib/i18n/I18nProvider";
+import { format, useI18n } from "./lib/i18n/I18nProvider";
 import type { Locale } from "./lib/i18n/locales";
 import type { Messages } from "./lib/i18n/messages";
 
@@ -66,6 +79,12 @@ export default function Home() {
   // bumps on every new file/reset so stale async work is ignored
   const requestId = useRef(0);
   const scanId = useRef("");
+  // the same id as state, because the page renders from it (a ref can't be read while rendering)
+  const [shownScanId, setShownScanId] = useState("");
+  const startScan = useCallback((id: string) => {
+    scanId.current = id;
+    setShownScanId(id);
+  }, []);
   const thumb = useRef<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
 
@@ -93,7 +112,10 @@ export default function Home() {
     setResult(null);
     setAdding(null);
     try {
-      const r = from.type === "photo" ? await analyzeImage(from.image, controller.signal, lang) : await lookupBarcode(from.code, controller.signal, lang);
+      const r =
+        from.type === "photo" ?
+          await analyzeImage(from.image, controller.signal, lang)
+        : await lookupBarcode(from.code, controller.signal, lang);
       if (id !== requestId.current) return;
       setResult(r);
       setStatus("done");
@@ -132,7 +154,7 @@ export default function Home() {
           return;
         }
         const from: Source = { type: "photo", image: prepared.blob };
-        scanId.current = newScanId();
+        startScan(newScanId());
         setSource(from);
         setImageSrc(prepared.previewUrl);
         void run(from, locale, scanId.current);
@@ -142,7 +164,7 @@ export default function Home() {
         setFailure({ kind: "client", key: e instanceof ImagePrepError ? e.code : "damaged" });
       }
     },
-    [locale, run],
+    [locale, run, startScan],
   );
 
   const picker = usePhotoPicker(selectFile);
@@ -179,6 +201,17 @@ export default function Home() {
   );
   const excipientPicker = usePhotoPicker(addExcipients);
 
+  // the reader's own dose replaces what the photo showed (or adds what it missed), and is kept with the scan
+  const changeMarks = useCallback(
+    (dose: Parameters<typeof withUserMarks>[1]) => {
+      if (!result) return;
+      const next = withUserMarks(result.result, dose, result.meta.locale ?? "en");
+      setResult({ result: next, meta: result.meta });
+      saveScan({ id: scanId.current, at: Date.now(), thumb: thumb.current, result: next, meta: result.meta });
+    },
+    [result],
+  );
+
   // a scanned (or typed) barcode: no photo, the product comes straight from the database
   const selectBarcode = useCallback(
     (code: string) => {
@@ -187,19 +220,19 @@ export default function Home() {
       setOpen(true);
       setImageSrc(null);
       const from: Source = { type: "barcode", code };
-      scanId.current = newScanId();
+      startScan(newScanId());
       setSource(from);
       window.scrollTo({ top: 0 });
       void run(from, locale, scanId.current);
     },
-    [locale, run],
+    [locale, run, startScan],
   );
   const closeScanner = useCallback(() => setScanning(false), []);
 
   const openSaved = (entry: HistoryEntry) => {
     requestId.current++;
     cancelInFlight();
-    scanId.current = entry.id;
+    startScan(entry.id);
     thumb.current = entry.thumb;
     setAdding(null);
     setFailure(null);
@@ -243,7 +276,8 @@ export default function Home() {
   // the other medicines scanned on this device, to check the one on screen with
   const history = useHistory();
   const shownEntry = result ? history.find((e) => e.result === result.result) : undefined;
-  const otherMedicines = shownEntry?.result.kind === "medicine" ? history.filter((e) => e.result.kind === "medicine" && e !== shownEntry).slice(0, 6) : [];
+  const otherMedicines =
+    shownEntry?.result.kind === "medicine" ? history.filter((e) => e.result.kind === "medicine" && e !== shownEntry).slice(0, 6) : [];
 
   const busy = open && (status === "preparing" || status === "analyzing");
   // a saved scan has no photo to send again
@@ -277,11 +311,11 @@ export default function Home() {
       {scanning && <BarcodeScanner onCode={selectBarcode} onClose={closeScanner} />}
       {editingProfile && <ProfileSheet onClose={() => setEditingProfile(false)} />}
 
-      <header className="sticky top-0 z-30 border-b border-rule bg-paper/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
-          <button onClick={reset} className="flex min-w-0 items-center gap-2.5 rounded-lg">
+      <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-6">
+          <button onClick={reset} className="-ms-1 flex min-w-0 items-center gap-3 rounded-2xl p-1">
             <Logo />
-            <span dir="ltr" className="font-display truncate text-[17px] font-bold tracking-tight">
+            <span dir="ltr" className="font-display truncate text-lg font-bold tracking-tight">
               Food Analyzer
             </span>
           </button>
@@ -293,70 +327,108 @@ export default function Home() {
       </header>
 
       <main className="pb-dock mx-auto w-full max-w-5xl flex-1 px-4 pt-7 sm:px-6 sm:pt-12">
-        {comparing ? (
+        {comparing ?
           <div className="mx-auto max-w-2xl">
-            {comparing.every((e) => e.result.kind === "medicine") ? (
+            {comparing.every((e) => e.result.kind === "medicine") ?
               // two medicines aren't compared, they are checked together
               <Together a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
-            ) : (
-              <Compare a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
-            )}
+            : <Compare a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />}
           </div>
-        ) : !open ? (
-          <section className="mx-auto max-w-xl">
-            <p className="animate-fade-up eyebrow text-accent">{t.hero.badge}</p>
-            <h1 className="animate-fade-up font-display mt-3 text-[2.6rem] leading-[1.02] font-bold tracking-tight text-balance sm:text-6xl">
-              {rich(t.hero.title, (word) => (
-                <span className="relative inline-block">
-                  {/* a highlighter stroke under the word */}
-                  <span aria-hidden className="absolute inset-x-[-0.06em] bottom-[0.1em] h-[0.32em] -skew-x-6 rounded-sm bg-accent/25" />
-                  <span className="relative">{word}</span>
-                </span>
-              ))}
-            </h1>
-            <p className="animate-fade-up mt-4 max-w-md text-base leading-7 text-ink-soft" style={{ animationDelay: "60ms" }}>
-              {t.hero.lead}
-            </p>
+        : !open ?
+          <section className="mx-auto max-w-2xl lg:max-w-5xl">
+            <div className="lg:grid lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-14">
+              <div>
+                <p className="animate-fade-up inline-flex items-center gap-2 rounded-full bg-accent-soft px-3.5 py-1.5 text-sm font-medium text-on-accent-soft">
+                  <SparkleIcon className="size-4" />
+                  {t.hero.badge}
+                </p>
+                <h1 className="animate-fade-up font-display mt-5 text-[2.6rem] leading-[1.06] font-bold tracking-tight text-balance sm:text-6xl">
+                  {t.hero.title} <RotatingWord words={t.hero.words} className="text-accent" />
+                </h1>
+                <p
+                  className="animate-fade-up mt-5 max-w-lg text-base leading-7 text-ink-soft sm:text-lg sm:leading-8"
+                  style={{ animationDelay: "60ms" }}
+                >
+                  {t.hero.lead}
+                </p>
 
-            {error && (
-              <Notice tone="red" role="alert" className="animate-fade-up mt-6">
-                {error}
-              </Notice>
-            )}
+                {/* on a phone the dock holds these; a bigger screen gets them under the headline */}
+                <div className="animate-fade-up mt-7 hidden flex-wrap gap-3 sm:flex" style={{ animationDelay: "90ms" }}>
+                  <button
+                    onClick={picker.takePhoto}
+                    className="inline-flex h-14 items-center gap-2.5 rounded-[20px] bg-accent px-7 text-base font-semibold text-on-accent shadow-sm transition hover:brightness-110 active:scale-[0.98]"
+                  >
+                    <CameraIcon className="size-6" />
+                    {t.uploader.takePhoto}
+                  </button>
+                  <button
+                    onClick={picker.choosePhoto}
+                    className="inline-flex h-14 items-center gap-2.5 rounded-[20px] bg-mute-soft px-6 text-base font-semibold transition hover:bg-rule active:scale-[0.98]"
+                  >
+                    <ImageIcon className="size-5" />
+                    {t.uploader.choosePhoto}
+                  </button>
+                  <button
+                    onClick={() => setScanning(true)}
+                    className="inline-flex h-14 items-center gap-2.5 rounded-[20px] bg-mute-soft px-6 text-base font-semibold transition hover:bg-rule active:scale-[0.98]"
+                  >
+                    <BarcodeIcon className="size-5" />
+                    {t.dock.scan}
+                  </button>
+                </div>
 
-            <ol className="animate-fade-up mt-9 border-t-[3px] border-ink" style={{ animationDelay: "120ms" }}>
-              {t.modes.map((mode, i) => (
-                <li key={mode.title} className="flex gap-4 border-b border-rule py-4">
-                  <span aria-hidden dir="ltr" className="eyebrow pt-1 text-accent tabular-nums">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <div>
-                    <p className="font-display text-lg leading-tight font-semibold">{mode.title}</p>
-                    <p className="mt-1 text-sm leading-6 text-ink-soft">{mode.text}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+                {error && (
+                  <Notice tone="red" role="alert" className="animate-fade-up mt-6">
+                    {error}
+                  </Notice>
+                )}
 
-            {/* dropping and pasting need a mouse and a keyboard */}
-            <p className="mt-5 hidden text-sm text-ink-soft [@media(pointer:fine)]:block">
-              {t.uploader.hint}{" "}
-              <kbd dir="ltr" className="rounded-md border border-rule bg-sheet px-1.5 py-0.5 font-mono text-xs">
-                Ctrl V
-              </kbd>
-            </p>
+                {/* dropping and pasting need a mouse and a keyboard */}
+                <p className="mt-5 hidden text-sm text-ink-soft [@media(pointer:fine)]:block">
+                  {t.uploader.hint}{" "}
+                  <kbd dir="ltr" className="rounded-md bg-mute-soft px-1.5 py-0.5 font-mono text-xs">
+                    Ctrl V
+                  </kbd>
+                </p>
+              </div>
 
-            <History onOpen={openSaved} onCompare={(a, b) => setComparing([a, b])} />
-            <InstallButton />
+              {/* what it reads: one wide tile for the everyday case, three narrower ones */}
+              <ul className="animate-fade-up mt-10 grid grid-cols-2 gap-3 lg:mt-0" style={{ animationDelay: "120ms" }}>
+                {t.modes.map((mode, i) => {
+                  const Icon = [LabelIcon, BottleIcon, PlateIcon, PillIcon][i] ?? LabelIcon;
+                  return (
+                    <li
+                      key={mode.title}
+                      className={cn(
+                        "rounded-3xl bg-sheet p-4 ring-1 ring-rule sm:p-5",
+                        i === 0 || i === t.modes.length - 1 ? "col-span-2 flex items-center gap-4" : "flex flex-col gap-3",
+                      )}
+                    >
+                      <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-on-accent-soft">
+                        <Icon className="size-6" />
+                      </span>
+                      <div>
+                        <p className="font-display text-base leading-tight font-semibold sm:text-lg">{mode.title}</p>
+                        <p className="mt-1 text-sm leading-5 text-ink-soft">{mode.text}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <div className="mx-auto max-w-2xl">
+              <History onOpen={openSaved} onCompare={(a, b) => setComparing([a, b])} />
+              <InstallButton />
+            </div>
           </section>
-        ) : (
-          <div className={cn("grid gap-4", hasPhoto ? "lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10" : "mx-auto max-w-2xl")}>
+        : <div className={cn("grid gap-4", hasPhoto ? "lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10" : "mx-auto max-w-2xl")}>
             <aside className="lg:sticky lg:top-20 lg:self-start">
               {hasPhoto && <Scanner src={imageSrc} scanning={busy} compact={!busy} />}
               {status === "done" && canRedo && (
                 <button
                   onClick={analyze}
-                  className="mt-2 inline-flex h-10 items-center rounded-full px-1 text-sm font-medium text-accent underline underline-offset-4"
+                  className="mt-2 inline-flex h-11 items-center rounded-full px-1 text-sm font-medium text-accent underline underline-offset-4"
                 >
                   {t.actions.analyzeAgain}
                 </button>
@@ -365,17 +437,18 @@ export default function Home() {
 
             <div className="min-w-0">
               {busy &&
-                (source?.type === "barcode" ? (
-                  <p aria-live="polite" className="animate-fade-up flex items-center gap-3 rounded-[28px] border border-rule bg-sheet px-5 py-6 text-sm font-medium">
+                (source?.type === "barcode" ?
+                  <p
+                    aria-live="polite"
+                    className="animate-fade-up flex items-center gap-3 rounded-[28px] bg-sheet px-5 py-6 text-sm font-medium ring-1 ring-rule"
+                  >
                     <Spinner className="text-accent" />
                     {t.barcode.looking}
-                    <span dir="ltr" className="eyebrow ms-auto text-ink-soft">
+                    <span dir="ltr" className="eyebrow ms-auto tabular-nums text-ink-soft">
                       {source.code}
                     </span>
                   </p>
-                ) : (
-                  <Analyzing />
-                ))}
+                : <Analyzing />)}
               {status === "done" && result && resultLocale !== locale && (
                 <Notice tone="zinc" className="animate-fade-up mb-3">
                   {format(t.status.otherLanguage, { language: languageName(resultLocale) })}{" "}
@@ -393,15 +466,16 @@ export default function Home() {
                   onTakePhoto={picker.takePhoto}
                   onAddExcipients={excipientPicker.takePhoto}
                   onEditProfile={() => setEditingProfile(true)}
+                  onMarksChange={changeMarks}
                   otherMedicines={otherMedicines}
                   onCheckWith={shownEntry ? (other) => setComparing([shownEntry, other]) : undefined}
                   adding={adding}
-                  ask={shownEntry ? { scanId: shownEntry.id, chat: shownEntry.chat } : undefined}
+                  ask={{ scanId: shownScanId, chat: history.find((e) => e.id === shownScanId)?.chat }}
                 />
               )}
               {status === "error" && (
-                <div role="alert" className="animate-fade-up overflow-hidden rounded-[28px] border border-rule bg-sheet">
-                  <div className="border-t-[3px] border-bad px-5 pt-5 pb-6 sm:px-7">
+                <div role="alert" className="animate-fade-up overflow-hidden rounded-[28px] bg-bad-soft ring-1 ring-bad/20">
+                  <div className="px-5 pt-5 pb-6 sm:px-7">
                     <p className="font-display text-xl font-bold">{t.status.failed}</p>
                     <p className="mt-2 text-sm leading-6 wrap-break-word text-ink-soft">{error}</p>
                     {/* an unknown barcode won't be found by asking again */}
@@ -418,17 +492,17 @@ export default function Home() {
               )}
             </div>
           </div>
-        )}
+        }
         {/* which version this is: see CHANGELOG.md */}
-        <p dir="ltr" className="eyebrow mt-10 text-center text-ink-soft/70">
+        <p dir="ltr" className="eyebrow mt-10 text-center text-ink-soft/70 tabular-nums">
           Food Analyzer v{process.env.NEXT_PUBLIC_APP_VERSION}
         </p>
       </main>
 
       {/* Dock: the one primary action, where the thumb is */}
-      <div className="bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4">
-        <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-full border border-rule bg-sheet/95 p-2 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.4)] backdrop-blur">
-          {busy ? (
+      <div className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4", !open && "sm:hidden")}>
+        <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-[28px] bg-sheet/90 p-2 shadow-[0_8px_32px_-8px_rgb(0_0_0/0.35)] ring-1 ring-rule backdrop-blur-md">
+          {busy ?
             <>
               <p className="flex min-w-0 flex-1 items-center gap-3 ps-4 text-sm font-medium" aria-live="polite">
                 <Spinner className="shrink-0 text-accent" />
@@ -436,16 +510,15 @@ export default function Home() {
               </p>
               <button
                 onClick={reset}
-                className="h-12 shrink-0 rounded-full border border-rule px-5 text-sm font-semibold transition hover:border-ink active:scale-[0.98]"
+                className="h-14 shrink-0 rounded-[20px] bg-mute-soft px-6 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
               >
                 {t.actions.cancel}
               </button>
             </>
-          ) : (
-            <>
+          : <>
               <button
                 onClick={picker.takePhoto}
-                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-3 text-[15px] font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-[20px] bg-accent px-3 text-[15px] font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
               >
                 <CameraIcon className="size-6 shrink-0" />
                 <span className="truncate">{open ? t.uploader.retake : t.uploader.takePhoto}</span>
@@ -454,7 +527,7 @@ export default function Home() {
                 onClick={picker.choosePhoto}
                 aria-label={open ? t.uploader.replace : t.uploader.choosePhoto}
                 title={open ? t.uploader.replace : t.uploader.choosePhoto}
-                className="grid size-12 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink active:scale-[0.98]"
+                className="grid size-14 shrink-0 place-items-center rounded-[20px] bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
               >
                 <ImageIcon className="size-5" />
               </button>
@@ -462,12 +535,12 @@ export default function Home() {
                 onClick={() => setScanning(true)}
                 aria-label={t.dock.scan}
                 title={t.dock.scan}
-                className="grid size-12 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink active:scale-[0.98]"
+                className="grid size-14 shrink-0 place-items-center rounded-[20px] bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
               >
                 <BarcodeIcon className="size-5" />
               </button>
             </>
-          )}
+          }
         </div>
       </div>
 
@@ -480,22 +553,21 @@ export default function Home() {
   );
 }
 
-/** a label with its printed lines */
+/** a leaf inside a scanner's corner marks: the same mark as the app icon */
 function Logo() {
   return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-ink text-paper">
-      <svg viewBox="0 0 24 24" className="size-4.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
-        <path d="M5 7h14M5 12h9M5 17h12" />
-      </svg>
-    </span>
+    <svg viewBox="0 0 64 64" className="size-9 shrink-0" aria-hidden>
+      <rect width="64" height="64" rx="16" className="fill-accent" />
+      <g fill="none" className="stroke-on-accent" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M13 23v-5a5 5 0 0 1 5-5h5M41 13h5a5 5 0 0 1 5 5v5M51 41v5a5 5 0 0 1-5 5h-5M23 51h-5a5 5 0 0 1-5-5v-5" />
+      </g>
+      <path d="M22.5 41.5C22.5 30 30 22.5 42 22.5c0 12-7.5 19-19.5 19Z" className="fill-on-accent" />
+      <path d="M24 40 35 29" className="stroke-accent" strokeWidth="3" strokeLinecap="round" fill="none" />
+    </svg>
   );
 }
 
-async function lookupBarcode(
-  code: string,
-  signal: AbortSignal,
-  locale: Locale,
-): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
+async function lookupBarcode(code: string, signal: AbortSignal, locale: Locale): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
   let response: Response;
   try {
     response = await fetch(`/api/product?code=${code}&lang=${locale}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
@@ -510,11 +582,7 @@ async function lookupBarcode(
   throw new AnalysisFailure({ kind: "status", status: response.status });
 }
 
-async function analyzeImage(
-  image: Blob,
-  signal: AbortSignal,
-  locale: Locale,
-): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
+async function analyzeImage(image: Blob, signal: AbortSignal, locale: Locale): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
   const formData = new FormData();
   formData.append("image", image, "label.jpg");
   // the language the summary, warnings and explanations are written in

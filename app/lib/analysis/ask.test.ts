@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { askSystemPrompt, cleanAnswer, cleanQuestion, cleanTurns, digestForAsk, MAX_QUESTION_CHARS, MAX_TURNS, splitAnswer } from "./ask";
+import { askSystemPrompt, cleanAnswer, cleanQuestion, cleanTurns, digestForAsk, kindOf, MAX_QUESTION_CHARS, MAX_TURNS, splitAnswer } from "./ask";
 import { normalize } from "./normalize";
 import { parseModelJson } from "./parse";
 
@@ -38,6 +38,44 @@ describe("askSystemPrompt", () => {
     expect(p).toContain("French");
     expect(p).toContain("<product_data>\nName: Biscuit\n</product_data>");
     expect(p).toMatch(/never call a product "safe"/);
+  });
+});
+
+describe("medicines", () => {
+  const medicine = normalize({
+    kind: "medicine",
+    product: { name: "Paradol 500 mg" },
+    medicine: {
+      active: [{ name: "paracetamol", strength: "500 mg" }],
+      marks: { morning: 1, midday: 0, evening: 1, confidence: "high", note: "two strokes" },
+      typical_dose: "1 to 2 tablets",
+      side_effects: ["rare skin reactions"],
+      uses: ["pain"],
+    },
+  });
+
+  it("puts the pharmacist's marks, the dose and the side effects in what the model sees", () => {
+    const digest = digestForAsk(medicine);
+    expect(digest).toMatch(/Handwritten marks on the box \(pharmacist's note\): morning 1, evening 1/);
+    expect(digest).toContain("Usual dose (general information): 1 to 2 tablets");
+    expect(digest).toContain("Side effects (general information): rare skin reactions");
+  });
+
+  it("answers medicine questions instead of refusing, but never advises on a dose", () => {
+    const p = askSystemPrompt("en", "Kind: medicine", kindOf(medicine));
+    expect(p).toContain("This is a MEDICINE");
+    expect(p).toMatch(/Never tell the reader to start, stop, skip or change a dose/);
+    expect(p).toMatch(/emergency number/);
+    expect(p).toContain("[G]");
+    // a food keeps the neutral wording and the shorter answer
+    const food = askSystemPrompt("en", "Kind: label", kindOf(analyzed("eu-biscuit.txt")));
+    expect(food).not.toContain("This is a MEDICINE");
+    expect(food).toMatch(/About 120 words|at most about 120 words/i);
+  });
+
+  it("reads the kind of whatever the client sent without throwing", () => {
+    expect(kindOf(medicine)).toBe("medicine");
+    for (const x of [null, 3, "x", [], {}, { kind: 7 }]) expect(kindOf(x)).toBe("label");
   });
 });
 

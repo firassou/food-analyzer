@@ -5,7 +5,8 @@ import type { AnalyzeErrorCode, AskResponse, ChatTurn, LabelAnalysis } from "../
 import { saveChat } from "../lib/client/history";
 import { useI18n } from "../lib/i18n/I18nProvider";
 import type { Messages } from "../lib/i18n/messages";
-import { cn, Notice, Spinner, toneClasses } from "./ui";
+import { Notice, SendIcon, SparkleIcon, Spinner } from "./ui";
+import { GeneralChip } from "./result/bits";
 
 // must stay above the server's deadline and maxDuration (60 s) in api/ask/route.ts
 const CLIENT_TIMEOUT_MS = 75_000;
@@ -56,13 +57,18 @@ export default function AskAi({
   scanId,
   result,
   initialChat,
+  request,
 }: {
   scanId: string;
   result: LabelAnalysis;
   initialChat?: ChatTurn[];
+  /** a question asked from elsewhere on the sheet (an additive's "Ask AI"): sent once per `n` */
+  request?: { text: string; n: number } | null;
 }) {
   const { t, locale } = useI18n();
   const a = t.ask;
+  const medicine = result.kind === "medicine";
+  const suggestions = medicine ? a.suggestionsMedicine : a.suggestions;
   const [turns, setTurns] = useState<ChatTurn[]>(() => cleanTurns(initialChat));
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
@@ -102,6 +108,15 @@ export default function AskAi({
     }
   };
 
+  // a question from another part of the sheet is asked as if it had been typed here
+  const handled = useRef(0);
+  useEffect(() => {
+    if (!request || request.n === handled.current) return;
+    handled.current = request.n;
+    void send(request.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `send` is rebuilt every render; only a new request should fire it
+  }, [request]);
+
   const clear = () => {
     inFlight.current?.abort();
     inFlight.current = null;
@@ -113,7 +128,7 @@ export default function AskAi({
 
   return (
     <div>
-      <p className="text-sm leading-6 text-ink-soft">{a.intro}</p>
+      <p className="text-sm leading-6 text-ink-soft">{medicine ? a.introMedicine : a.intro}</p>
 
       {turns.length > 0 && (
         <div ref={log} role="log" aria-live="polite" className="mt-4 space-y-4">
@@ -121,18 +136,21 @@ export default function AskAi({
             turn.role === "user" ?
               <div key={i} className="flex flex-col items-end gap-1">
                 <span className="eyebrow text-ink-soft">{a.you}</span>
-                <p dir="auto" className="max-w-[85%] rounded-2xl rounded-ee-md bg-ink px-4 py-2.5 text-[15px] leading-6 wrap-break-word text-paper">
+                <p dir="auto" className="max-w-[85%] rounded-3xl rounded-ee-lg bg-accent px-4 py-2.5 text-[15px] leading-6 wrap-break-word text-on-accent">
                   {turn.text}
                 </p>
               </div>
             : <div key={i} className="flex flex-col items-start gap-1">
-                <span className="eyebrow text-ink-soft">{a.answer}</span>
-                <div className="w-full max-w-[92%] space-y-2 rounded-2xl rounded-es-md border border-rule px-4 py-3">
+                <span className="eyebrow inline-flex items-center gap-1.5 text-ink-soft">
+                  <SparkleIcon className="size-3.5 text-accent" />
+                  {a.answer}
+                </span>
+                <div className="w-full max-w-[94%] space-y-3 rounded-3xl rounded-es-lg bg-mute-soft/70 px-4 py-3.5">
                   {splitAnswer(turn.text).map((block, j) => (
                     <div key={j}>
                       {block.general && (
-                        <span title={a.generalHint} className={cn("eyebrow mb-1 inline-flex rounded-md px-2 py-1", toneClasses.amber)}>
-                          {a.general}
+                        <span title={a.generalHint} className="mb-1.5 inline-flex">
+                          <GeneralChip>{a.general}</GeneralChip>
                         </span>
                       )}
                       <p dir="auto" className="text-[15px] leading-7 wrap-break-word">
@@ -153,14 +171,15 @@ export default function AskAi({
 
       {turns.length === 0 && (
         <ul className="mt-4 flex flex-wrap gap-2">
-          {a.suggestions.map((s) => (
+          {suggestions.map((s) => (
             <li key={s}>
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => send(s)}
-                className="min-h-11 rounded-full border border-rule px-4 py-2 text-start text-sm transition hover:border-ink focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.98] disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-sheet px-4 py-2 text-start text-sm font-medium ring-1 ring-rule transition hover:bg-accent-soft hover:text-on-accent-soft hover:ring-accent focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.98] disabled:opacity-50"
               >
+                <SparkleIcon className="size-4 shrink-0 text-accent" />
                 {s}
               </button>
             </li>
@@ -188,22 +207,23 @@ export default function AskAi({
           dir="auto"
           enterKeyHint="send"
           autoComplete="off"
-          placeholder={a.placeholder}
-          aria-label={a.placeholder}
-          className="h-11 min-w-0 flex-1 rounded-full border border-rule bg-paper px-4 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
+          placeholder={medicine ? a.placeholderMedicine : a.placeholder}
+          aria-label={medicine ? a.placeholderMedicine : a.placeholder}
+          className="h-12 min-w-0 flex-1 rounded-full bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
         />
         <button
           type="submit"
           disabled={pending || !draft.trim()}
-          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98] disabled:opacity-50"
+          aria-label={a.send}
+          title={a.send}
+          className="grid size-12 shrink-0 place-items-center rounded-full bg-accent text-on-accent transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent hover:brightness-110 active:scale-[0.96] disabled:opacity-50"
         >
-          {pending && <Spinner />}
-          {a.send}
+          {pending ? <Spinner /> : <SendIcon className="size-5 rtl:-scale-x-100" />}
         </button>
       </form>
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <p className="min-w-0 flex-1 text-xs leading-5 text-ink-soft">{a.disclaimer}</p>
+        <p className="min-w-0 flex-1 text-xs leading-5 text-ink-soft">{medicine ? a.disclaimerMedicine : a.disclaimer}</p>
         {turns.length > 0 && (
           <button
             type="button"

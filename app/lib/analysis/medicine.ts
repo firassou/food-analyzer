@@ -6,7 +6,7 @@
 import type { Locale } from "../i18n/locales";
 import { analysisMessages } from "./messages";
 import { normalize, type NormalizeOptions } from "./normalize";
-import type { LabelAnalysis } from "./types";
+import type { DoseMarks, LabelAnalysis } from "./types";
 
 /** a medicine that was identified but whose composition isn't in view */
 export function needsExcipients(r: LabelAnalysis): boolean {
@@ -79,4 +79,27 @@ export function addExcipientPhoto(result: LabelAnalysis, photo: LabelAnalysis, l
     },
     locale,
   );
+}
+
+/**
+ * The medicine with pen marks the reader typed in (or none: `null` removes them). Their
+ * own entry replaces what the photo showed, and the "an AI read these" warnings go with
+ * it: nobody is guessing any more.
+ */
+export function withUserMarks(
+  result: LabelAnalysis,
+  marks: Pick<DoseMarks, "morning" | "midday" | "evening" | "anytime" | "duration" | "note"> | null,
+  locale: Locale,
+): LabelAnalysis {
+  if (!result.medicine) return result;
+  const w = analysisMessages(locale).warnings;
+  const total = marks ? marks.morning + marks.midday + marks.evening + marks.anytime : 0;
+  return {
+    ...result,
+    medicine: {
+      ...result.medicine,
+      marks: marks && (total > 0 || marks.note) ? { ...marks, confidence: "high", source: "you" } : null,
+    },
+    warnings: result.warnings.filter((x) => x !== w.medicineMarks && x !== w.medicineMarksUnclear),
+  };
 }

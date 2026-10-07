@@ -29,14 +29,14 @@ export default function Compare({ a, b, onBack }: { a: HistoryEntry; b: HistoryE
 
   return (
     <div className="animate-fade-up">
-      <button onClick={onBack} className="mb-3 inline-flex h-10 items-center gap-1.5 rounded-full text-sm font-medium text-accent">
+      <button onClick={onBack} className="mb-3 inline-flex h-11 items-center gap-1.5 rounded-full bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule">
         <span aria-hidden className="inline-block rtl:-scale-x-100">
           ←
         </span>
         {c.back}
       </button>
-      <article className="overflow-hidden rounded-[28px] border border-rule bg-sheet">
-        <div className="border-t-[3px] border-ink px-5 pt-5 pb-6 sm:px-7">
+      <article className="overflow-hidden rounded-[28px] bg-sheet ring-1 ring-rule">
+        <div className="px-5 pt-6 pb-6 sm:px-7">
           <h2 className="font-display text-2xl font-bold">{c.title}</h2>
           {!sameBasis && (
             <Notice tone="amber" className="mt-4">
@@ -45,7 +45,7 @@ export default function Compare({ a, b, onBack }: { a: HistoryEntry; b: HistoryE
           )}
           <table className="mt-4 w-full table-fixed">
             <thead>
-              <tr className="border-b-2 border-ink align-bottom">
+              <tr className="border-b border-rule align-bottom">
                 <td />
                 {pair.map((e) => (
                   <th key={e.id} scope="col" className="pe-2 pb-3 text-start font-normal last:pe-0">
@@ -66,7 +66,7 @@ export default function Compare({ a, b, onBack }: { a: HistoryEntry; b: HistoryE
                 {(e) => {
                   const kcal = e.result.nutrition?.per_100?.energy_kcal;
                   return kcal != null ? (
-                    <span className="font-mono tabular-nums">
+                    <span className="font-medium tabular-nums">
                       {ltr(`${fmt(kcal)} kcal`)}
                       <span className="block text-xs text-ink-soft">{format(c.per100, { unit: unitOf(e) })}</span>
                     </span>
@@ -84,7 +84,7 @@ export default function Compare({ a, b, onBack }: { a: HistoryEntry; b: HistoryE
                     const rival = other.result.nutrition?.per_100?.[nutrient];
                     return (
                       <span>
-                        <span className={cn("font-mono tabular-nums", level && toneText[levelTone[level]])}>{ltr(`${fmt(value)} g`)}</span>
+                        <span className={cn("font-medium tabular-nums", level && toneText[levelTone[level]])}>{ltr(`${fmt(value)} g`)}</span>
                         {level && <span className="block text-xs text-ink-soft">{t.results.level[level]}</span>}
                         {/* only where the two are measured the same way */}
                         {sameBasis && rival != null && value < rival && (
@@ -103,7 +103,7 @@ export default function Compare({ a, b, onBack }: { a: HistoryEntry; b: HistoryE
                     <span className="text-ink-soft">{c.unknown}</span>
                   ) : e.result.additives.length ? (
                     <span>
-                      <span className="font-mono tabular-nums text-warn">{e.result.additives.length}</span>
+                      <span className="font-medium tabular-nums text-warn">{e.result.additives.length}</span>
                       <span dir="ltr" className="block text-xs text-ink-soft">
                         {e.result.additives
                           .map((x) => x.code)
@@ -148,7 +148,7 @@ export default function Compare({ a, b, onBack }: { a: HistoryEntry; b: HistoryE
             </tbody>
           </table>
         </div>
-        <footer className="border-t border-rule px-5 py-5 text-xs leading-5 text-ink-soft sm:px-7">{t.results.disclaimer}</footer>
+        <footer className="border-t border-rule/70 px-5 py-5 text-xs leading-5 text-ink-soft sm:px-7">{t.results.disclaimer}</footer>
       </article>
     </div>
   );
@@ -167,7 +167,7 @@ function Row({
   children: (entry: HistoryEntry, other: HistoryEntry) => React.ReactNode;
 }) {
   return (
-    <tr className="border-b border-rule align-top">
+    <tr className="border-b border-rule/70 align-top">
       <th scope="row" className="eyebrow w-[26%] py-3 pe-2 text-start font-medium text-ink-soft">
         {label}
       </th>

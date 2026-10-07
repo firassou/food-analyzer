@@ -3,7 +3,8 @@ import type { AnalyzeErrorCode, AskResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 import { AnalyzeError } from "@/app/lib/server/analyze";
 import { askAboutProduct } from "@/app/lib/server/ask";
-import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
+import { crossSite, readText } from "@/app/lib/server/guard";
+import { clientKey, globalLimiter, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 
 // must stay above DEADLINE_MS in server/ask.ts
 export const maxDuration = 60;
@@ -16,17 +17,15 @@ function fail(error: string, code: AnalyzeErrorCode, status: number) {
 }
 
 export async function POST(req: Request) {
-  if (await limiter.hit(clientKey(req))) {
+  if (crossSite(req)) return fail("This request did not come from the app.", "bad_request", 403);
+  if ((await limiter.hit(clientKey(req))) || (await globalLimiter.hit("*"))) {
     return fail("Too many questions in a short time. Please wait a minute and try again.", "rate_limited", 429);
-  }
-  if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) {
-    return fail("That request is too large.", "too_large", 413);
   }
 
   let body: Record<string, unknown>;
   try {
-    const text = await req.text();
-    if (text.length > MAX_BODY_BYTES) return fail("That request is too large.", "too_large", 413);
+    const text = await readText(req, MAX_BODY_BYTES);
+    if (text === null) return fail("That request is too large.", "too_large", 413);
     const parsed: unknown = JSON.parse(text);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
     body = parsed as Record<string, unknown>;

@@ -40,9 +40,18 @@ export class MemoryRateLimiter implements RateLimiter {
 }
 
 /**
- * Best-effort client key. `x-forwarded-for` is client-controlled unless a trusted
- * proxy overwrites it, so this is a cost guard, not a security boundary.
+ * Best-effort client key. Headers a platform sets itself win over `x-forwarded-for`, which
+ * a client can write: when it is the only one, the *last* hop is used (the one the nearest
+ * proxy appended), never the first. Still a cost guard, not a security boundary: see
+ * `globalLimiter` for the ceiling that holds even when a key is spoofed.
  */
 export function clientKey(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "local";
+  const h = req.headers;
+  const trusted = h.get("x-vercel-forwarded-for") ?? h.get("cf-connecting-ip") ?? h.get("x-real-ip");
+  if (trusted) return trusted.trim().slice(0, 64);
+  const hops = h.get("x-forwarded-for")?.split(",").map((x) => x.trim()).filter(Boolean);
+  return hops?.at(-1)?.slice(0, 64) || "local";
 }
+
+/** one shared bucket for every client of an instance: the limit that spoofed keys can't dodge */
+export const globalLimiter: RateLimiter = new MemoryRateLimiter(240, 60_000, 1);

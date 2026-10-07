@@ -1,31 +1,33 @@
 @import "tailwindcss";
 
 /*
- * "The label, re-typeset": warm paper, ink, printed rules, one cobalt stamp colour.
+ * Calm utility: a cool off-white page, white surfaces, tonal containers and one blue.
  * Red / amber / green are reserved for verdicts. Colours are variables that flip
  * with the colour scheme, so components never need `dark:` variants.
  * See .claude/skills/ui-design-system.
  */
 :root {
   color-scheme: light dark;
-  --paper: #f4f1e8;
-  --sheet: #fffdf7;
-  --ink: #17150f;
-  --ink-soft: #625c4e;
-  --rule: #dcd6c5;
-  --accent: #2740f5;
+  --paper: #f5f7fa;
+  --sheet: #ffffff;
+  --ink: #12161c;
+  --ink-soft: #526070;
+  --rule: #dfe5ec;
+  --accent: #0b57d0;
   --on-accent: #ffffff;
-  --bad: #b92d1a;
-  --bad-soft: #fae4dd;
-  --warn: #8f5600;
-  --warn-soft: #f9ebc8;
-  --good: #1c6b3d;
-  --good-soft: #dcefdf;
-  --mute: #6b6557;
-  --mute-soft: #ebe6d8;
+  --accent-soft: #d9e6fc;
+  --on-accent-soft: #0a2f6b;
+  --bad: #b3261e;
+  --bad-soft: #fbe3e0;
+  --warn: #8a4f00;
+  --warn-soft: #fdefc9;
+  --good: #146c2e;
+  --good-soft: #d9f1df;
+  --mute: #566272;
+  --mute-soft: #eaeef4;
   /* Latin interface: the Latin faces lead, the Arabic one catches label text they lack */
   --stack-sans: var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
-  --stack-display: var(--font-bricolage), var(--font-arabic), system-ui, sans-serif;
+  --stack-display: var(--font-figtree), var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
   --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
 }
 
@@ -33,27 +35,29 @@
    (a local Arial) claim the Arabic characters first. Its own Latin letters match it. */
 :root:lang(ar) {
   --stack-sans: var(--font-arabic), var(--font-geist-sans), system-ui, sans-serif;
-  --stack-display: var(--font-arabic), var(--font-bricolage), system-ui, sans-serif;
+  --stack-display: var(--font-arabic), var(--font-figtree), system-ui, sans-serif;
   --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #12110e;
-    --sheet: #1b1a16;
-    --ink: #f2ede1;
-    --ink-soft: #aaa392;
-    --rule: #35322a;
-    --accent: #98a5ff;
-    --on-accent: #10112b;
-    --bad: #ff8f7a;
-    --bad-soft: #3b1a14;
-    --warn: #f3bb5c;
-    --warn-soft: #38290c;
-    --good: #74d49a;
-    --good-soft: #132f1e;
-    --mute: #aaa392;
-    --mute-soft: #2a2822;
+    --paper: #0d1015;
+    --sheet: #161a21;
+    --ink: #e8ebf0;
+    --ink-soft: #a2adbb;
+    --rule: #2a313b;
+    --accent: #a8c7fa;
+    --on-accent: #062e6f;
+    --accent-soft: #1c3a6b;
+    --on-accent-soft: #d3e3fd;
+    --bad: #f2b8b5;
+    --bad-soft: #471814;
+    --warn: #f2c35b;
+    --warn-soft: #3a2a08;
+    --good: #82d99c;
+    --good-soft: #12301c;
+    --mute: #a2adbb;
+    --mute-soft: #212730;
   }
 }
 
@@ -65,6 +69,8 @@
   --color-rule: var(--rule);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent-soft: var(--on-accent-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
   --color-warn: var(--warn);
@@ -84,6 +90,8 @@
   --animate-scan: scan 2.2s ease-in-out infinite;
   --animate-grow: grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-flash: flash 1.2s ease-out;
+  --animate-word-in: word-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-word-out: word-out 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 
   @keyframes fade-up {
     from {
@@ -114,6 +122,18 @@
       transform: scaleX(0);
     }
   }
+  @keyframes word-in {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+  }
+  @keyframes word-out {
+    to {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
   @keyframes flash {
     0% {
       background-color: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -132,14 +152,12 @@
   }
 }
 
-/* small capitals in the mono face: section numbers, column heads, units */
+/* the small label above a value or a list: medium weight, sentence case */
 @utility eyebrow {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 /* room for the fixed dock, including the phone's home indicator */
@@ -169,9 +187,6 @@ body {
 /* Arabic letters join up: letter-spacing breaks the script, and it has no capitals */
 :lang(ar) * {
   letter-spacing: 0 !important;
-}
-:lang(ar) .eyebrow {
-  font-size: 0.75rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

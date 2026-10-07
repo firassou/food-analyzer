@@ -16,31 +16,30 @@ export default function Analyzing() {
   }, [stepCount]);
 
   return (
-    <div aria-live="polite" className="animate-fade-up overflow-hidden rounded-[28px] border border-rule bg-sheet">
-      <div className="border-t-[3px] border-ink px-5 pt-4 pb-6 sm:px-7">
+    <div aria-live="polite" className="animate-fade-up overflow-hidden rounded-[28px] bg-sheet ring-1 ring-rule">
+      <div className="px-5 pt-5 pb-5 sm:px-7">
         <p className="font-display text-lg font-semibold">{t.analyzing.title}</p>
         <ol className="mt-4">
           {steps.map((label, i) => (
             <li
               key={label}
               className={cn(
-                "flex items-center gap-3 border-t border-rule py-3 text-sm transition-colors duration-500 first:border-t-0",
+                "flex items-center gap-3 py-2.5 text-sm transition-colors duration-500",
                 i === step ? "font-medium text-ink" : i < step ? "text-ink-soft" : "text-ink-soft/50",
               )}
             >
-              <span dir="ltr" className="eyebrow w-5 tabular-nums">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="flex-1">{label}</span>
-              <span className="grid size-5 place-items-center">
+              <span className="grid size-6 place-items-center">
                 {i < step ? (
                   <svg viewBox="0 0 20 20" className="animate-fade-in size-4 text-good" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="m4.5 10.5 3.5 3.5 7.5-8" />
                   </svg>
                 ) : i === step ? (
                   <Spinner className="text-accent" />
-                ) : null}
+                ) : (
+                  <span aria-hidden className={cn("size-2 rounded-full", i === step ? "bg-accent" : "bg-rule")} />
+                )}
               </span>
+              <span className="flex-1">{label}</span>
             </li>
           ))}
         </ol>

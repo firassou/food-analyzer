@@ -24,7 +24,7 @@ export function ProfileButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       aria-label={t.profile.title}
       title={t.profile.title}
-      className="relative grid size-10 place-items-center rounded-full border border-rule transition hover:border-ink"
+      className="relative grid size-11 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
     >
       <ProfileIcon className="size-5" />
       {active && <span aria-hidden className="absolute end-0 top-0 size-3 rounded-full border-2 border-paper bg-accent" />}
@@ -59,9 +59,9 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
         if (e.target === ref.current) ref.current?.close();
       }}
       aria-labelledby="profile-title"
-      className="animate-fade-up m-auto max-h-[92dvh] w-[min(34rem,calc(100vw-1.5rem))] overflow-y-auto rounded-[28px] border border-rule bg-sheet p-0 text-ink backdrop:bg-ink/50"
+      className="animate-fade-up m-auto max-h-[92dvh] w-[min(34rem,calc(100vw-1.5rem))] overflow-y-auto rounded-[28px] bg-sheet p-0 text-ink ring-1 ring-rule backdrop:bg-ink/50"
     >
-      <div className="border-t-[3px] border-ink px-5 pt-5 pb-6 sm:px-7">
+      <div className="px-5 pt-5 pb-6 sm:px-7">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 id="profile-title" className="font-display text-2xl font-bold">
@@ -72,7 +72,7 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => ref.current?.close()}
             aria-label={p.close}
-            className="grid size-10 shrink-0 place-items-center rounded-full border border-rule transition hover:border-ink"
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
           >
             <CloseIcon className="size-4" />
           </button>
@@ -105,12 +105,12 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
         <div className="mt-5 flex items-center gap-3">
           <button
             onClick={() => ref.current?.close()}
-            className="h-12 flex-1 rounded-full bg-ink text-sm font-semibold text-paper transition active:scale-[0.99]"
+            className="h-12 flex-1 rounded-full bg-accent text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
           >
             {p.done}
           </button>
           {!isEmptyProfile(profile) && (
-            <button onClick={() => saveProfile(EMPTY_PROFILE)} className="eyebrow h-12 rounded-full px-3 text-ink-soft hover:text-ink">
+            <button onClick={() => saveProfile(EMPTY_PROFILE)} className="h-12 rounded-full px-4 text-sm font-medium text-ink-soft hover:bg-mute-soft hover:text-ink">
               {p.clear}
             </button>
           )}
@@ -136,8 +136,8 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition active:scale-[0.97]",
-        on ? "border-accent bg-accent text-on-accent" : "border-rule text-ink hover:border-ink",
+        "inline-flex min-h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition active:scale-[0.97]",
+        on ? "bg-accent-soft text-on-accent-soft ring-1 ring-accent" : "bg-mute-soft text-ink hover:bg-rule",
       )}
     >
       {on && <span aria-hidden>✓</span>}

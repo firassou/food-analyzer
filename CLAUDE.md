@@ -15,5 +15,11 @@ Commands: `pnpm dev`, `pnpm lint`, `pnpm test`, `pnpm build`.
 - `ui-design-system`: when building or changing any UI in `app/`.
 - `verify-app`: after any change, before calling a step done (lint, test, build, browser check).
 - `add-result-feature`: when implementing a Part B feature or any new analysis capability end to end.
+- `add-locale-string`: for any new user-facing text (it must exist in en, fr and ar).
+- `add-fixture`: when a real photo produced a wrong or surprising result.
+- `prompt-eval` (user-only): regression check on `samples/` before and after changing the prompt, models or normalize.
+- `release` (user-only): gates, version bump, changelog and tag.
+
+Project agents (`.claude/agents/`): `label-safety-reviewer` after any change to allergen, gluten, additive, excipient, medicine or interaction rules; `i18n-rtl-reviewer` after UI changes. Hooks (`.claude/settings.json`): edits to `.env*` and generated files are blocked, and a turn that leaves a type error is sent back (`tsc --noEmit`).
 
 Update a skill whenever you learn something it gets wrong.

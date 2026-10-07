@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Figtree, Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
 import { dirOf, isLocale, LOCALE_COOKIE, matchLocale, type Locale } from "./lib/i18n/locales";
@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 // headings and big figures
-const bricolage = Bricolage_Grotesque({
-  variable: "--font-bricolage",
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
 });
 
@@ -49,8 +49,8 @@ export const viewport: Viewport = {
   // the page paints under the notch and the home indicator; the dock pads itself with safe-area insets
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f1e8" },
-    { media: "(prefers-color-scheme: dark)", color: "#12110e" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1015" },
   ],
 };
 
@@ -60,7 +60,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang={locale}
       dir={dirOf(locale)}
-      className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} ${plexArabic.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${figtree.variable} ${plexArabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider initialLocale={locale}>{children}</I18nProvider>

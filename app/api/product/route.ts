@@ -2,7 +2,7 @@ import { barcodeDigits } from "@/app/lib/analysis/knowledge";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale } from "@/app/lib/i18n/locales";
 import { findProduct, fromDatabase, lookupEnabled } from "@/app/lib/server/lookup";
-import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
+import { clientKey, globalLimiter, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 
 // Barcode lookup: GET /api/product?code=<digits>&lang=<en|fr|ar>. No model is involved:
 // the Open Food Facts entry goes through the same deterministic checks as a photo.
@@ -14,7 +14,7 @@ function fail(error: string, code: AnalyzeErrorCode, status: number) {
 }
 
 export async function GET(req: Request) {
-  if (await limiter.hit(clientKey(req))) {
+  if ((await limiter.hit(clientKey(req))) || (await globalLimiter.hit("*"))) {
     return fail("Too many lookups in a short time. Please wait a minute and try again.", "rate_limited", 429);
   }
   const params = new URL(req.url).searchParams;

@@ -4,7 +4,8 @@ import { completeFromDatabase, findProduct, lookupEnabled, needsLookup } from "@
 import { needsExcipients } from "@/app/lib/analysis/medicine";
 import { completeMedicine, findMedicine, wantedMedicine } from "@/app/lib/server/medicines";
 import { getTargets } from "@/app/lib/server/models";
-import { clientKey, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
+import { crossSite } from "@/app/lib/server/guard";
+import { clientKey, globalLimiter, MemoryRateLimiter, type RateLimiter } from "@/app/lib/server/rateLimit";
 import type { AnalyzeErrorCode, AnalyzeResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 
@@ -19,7 +20,8 @@ function fail(error: string, code: AnalyzeErrorCode, status: number, trace?: str
 }
 
 export async function POST(req: Request) {
-  if (await limiter.hit(clientKey(req))) {
+  if (crossSite(req)) return fail("This request did not come from the app.", "bad_request", 403);
+  if ((await limiter.hit(clientKey(req))) || (await globalLimiter.hit("*"))) {
     return fail("Too many analyses in a short time. Please wait a minute and try again.", "rate_limited", 429);
   }
 
@@ -82,9 +84,10 @@ export async function POST(req: Request) {
 /** lightweight health check: is an AI provider configured? (never exposes secrets) */
 export function GET() {
   const targets = getTargets();
+  // which providers and models are configured is for the developer, not for the public
+  const detail = process.env.NODE_ENV !== "production";
   return Response.json({
     ok: targets.length > 0,
-    providers: [...new Set(targets.map((t) => t.provider))],
-    models: targets.map((t) => t.model),
+    ...(detail && { providers: [...new Set(targets.map((t) => t.provider))], models: targets.map((t) => t.model) }),
   });
 }

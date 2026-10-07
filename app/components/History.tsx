@@ -15,9 +15,9 @@ export function useScanName() {
 /** the photo of a saved scan, or a mark standing in for a barcode scan */
 export function ScanThumb({ entry, className }: { entry: HistoryEntry; className?: string }) {
   return entry.thumb ? (
-    <Image src={entry.thumb} alt="" width={96} height={96} unoptimized className={cn("shrink-0 rounded-xl border border-rule object-cover", className)} />
+    <Image src={entry.thumb} alt="" width={96} height={96} unoptimized className={cn("shrink-0 rounded-2xl object-cover ring-1 ring-rule", className)} />
   ) : (
-    <span aria-hidden className={cn("grid shrink-0 place-items-center rounded-xl border border-rule bg-mute-soft text-ink-soft", className)}>
+    <span aria-hidden className={cn("grid shrink-0 place-items-center rounded-2xl bg-mute-soft text-ink-soft", className)}>
       <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <path d="M5 6v12M9 6v12M12.5 6v12M16 6v12M19 6v12" />
       </svg>
@@ -56,21 +56,21 @@ export default function History({
   };
 
   return (
-    <section aria-label={h.title} className="mt-10">
-      <div className="flex items-center gap-2 border-b-[3px] border-ink pb-2">
+    <section aria-label={h.title} className="mt-12">
+      <div className="flex items-center gap-2 pb-1">
         <h2 className="font-display flex-1 text-lg font-semibold">{h.title}</h2>
         {picking ? (
-          <button onClick={stopPicking} className="eyebrow h-9 rounded-full px-3 text-ink-soft hover:text-ink">
+          <button onClick={stopPicking} className="h-11 rounded-full px-4 text-sm font-medium text-ink-soft hover:bg-mute-soft hover:text-ink">
             {t.actions.cancel}
           </button>
         ) : (
           <>
             {entries.length > 1 && (
-              <button onClick={() => setPicking(true)} className="eyebrow h-9 rounded-full border border-rule px-3 text-accent transition hover:border-accent">
+              <button onClick={() => setPicking(true)} className="h-11 rounded-full bg-accent-soft px-4 text-sm font-medium text-on-accent-soft transition hover:brightness-95">
                 {h.compare}
               </button>
             )}
-            <button onClick={clearHistory} className="eyebrow h-9 rounded-full px-3 text-ink-soft hover:text-ink">
+            <button onClick={clearHistory} className="h-11 rounded-full px-4 text-sm font-medium text-ink-soft hover:bg-mute-soft hover:text-ink">
               {h.clear}
             </button>
           </>
@@ -78,23 +78,23 @@ export default function History({
       </div>
       {picking && <p className="pt-3 text-sm text-ink-soft">{h.pick}</p>}
 
-      <ul>
+      <ul className="mt-2 space-y-1">
         {entries.map((entry) => {
           const name = nameOf(entry);
           const on = picked.includes(entry.id);
           return (
-            <li key={entry.id} className="flex items-center gap-1 border-b border-rule">
+            <li key={entry.id} className="flex items-center gap-1 rounded-2xl pe-1 transition hover:bg-mute-soft/70">
               <button
                 onClick={() => (picking ? toggle(entry.id) : onOpen(entry))}
                 aria-label={picking ? undefined : format(h.open, { name })}
                 aria-pressed={picking ? on : undefined}
-                className="flex min-w-0 flex-1 items-center gap-3 py-3 text-start"
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 text-start"
               >
                 {picking && (
                   <span
                     aria-hidden
                     className={cn(
-                      "grid size-6 shrink-0 place-items-center rounded-md border-2 text-xs font-bold transition-colors",
+                      "grid size-6 shrink-0 place-items-center rounded-full border-2 text-xs font-bold transition-colors",
                       on ? "border-accent bg-accent text-on-accent" : "border-rule",
                     )}
                   >
@@ -133,7 +133,7 @@ export default function History({
             onCompare(chosen[0], chosen[1]);
             stopPicking();
           }}
-          className="mt-4 h-12 w-full rounded-full bg-ink text-sm font-semibold text-paper transition active:scale-[0.99] disabled:opacity-35"
+          className="mt-4 h-12 w-full rounded-full bg-accent text-sm font-semibold text-on-accent transition active:scale-[0.99] disabled:opacity-35"
         >
           {h.compareNow}
         </button>

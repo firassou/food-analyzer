@@ -554,6 +554,8 @@ function buildMedicine(raw: unknown, compositionText: string, m: AnalysisMessage
       const doubtful = strokes !== null && strokes >= 1 && total > strokes;
       marks = { morning, midday, evening, anytime, duration, note, confidence: doubtful ? "low" : confidence(pick(marksRaw, "confidence", "certainty")) };
     }
+    // marks the reader typed in stay theirs through every later normalization
+    if (marks && pick(marksRaw, "source") === "you") marks = { ...marks, confidence: "high", source: "you" };
   }
 
   // general information only stands on an identified substance
@@ -1144,7 +1146,7 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
 
   if (medicine) {
     if (quality === "poor") warn(m.warnings.poorQuality);
-    if (medicine.marks) warn(medicine.marks.confidence === "low" ? m.warnings.medicineMarksUnclear : m.warnings.medicineMarks);
+    if (medicine.marks && medicine.marks.source !== "you") warn(medicine.marks.confidence === "low" ? m.warnings.medicineMarksUnclear : m.warnings.medicineMarks);
     if (medicine.active.length === 0) warn(m.warnings.medicineNoActive);
     else if (medicine.uses.length || medicine.typical_dose || medicine.not_for.length || medicine.warnings.length)
       warn(m.warnings.medicineGeneral);

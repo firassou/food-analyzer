@@ -1,5 +1,5 @@
 import "server-only";
-import { askSystemPrompt, cleanAnswer, digestForAsk } from "../analysis/ask";
+import { askSystemPrompt, cleanAnswer, digestForAsk, kindOf } from "../analysis/ask";
 import type { ChatTurn } from "../analysis/types";
 import type { Locale } from "../i18n/locales";
 import { AnalyzeError } from "./analyze";
@@ -11,7 +11,7 @@ const DEADLINE_MS = 50_000;
 const ATTEMPT_MS = 25_000;
 const MIN_ATTEMPT_MS = 8_000;
 const MAX_ATTEMPTS = 3;
-const MAX_TOKENS = 1200;
+const MAX_TOKENS = 1500;
 const INSTANT_FAILURES = new Set<FailureKind | "empty">(["auth", "quota", "rate_limited", "bad_request"]);
 
 /**
@@ -26,7 +26,7 @@ export async function askAboutProduct(
   if (targets.length === 0) {
     throw new AnalyzeError("The server has no AI provider configured.", "not_configured", 503);
   }
-  const system = askSystemPrompt(input.locale, digestForAsk(input.result));
+  const system = askSystemPrompt(input.locale, digestForAsk(input.result), kindOf(input.result));
   const started = Date.now();
   const kinds: (FailureKind | "empty")[] = [];
   const deadProviders = new Set<string>();

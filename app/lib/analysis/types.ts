@@ -124,6 +124,8 @@ export interface DoseMarks {
   note: string | null;
   /** how clearly the marks could be read */
   confidence: Confidence;
+  /** typed in by the reader (a correction, or marks the photo didn't show); absent when read from the photo */
+  source?: "photo" | "you";
 }
 
 export interface Medicine {

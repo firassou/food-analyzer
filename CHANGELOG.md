@@ -4,6 +4,13 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.11.0 — 2026-10-07
+- A new look: a calmer, more modern design (new colours, type, icons, rounded surfaces, tonal tiles, a redesigned home screen) and a new logo, favicon and app icons. The headline's last word now rotates through food, medicine, drinks, dishes and water.
+- Ask AI works for medicines too: ask what it is for, side effects, interactions, food or alcohol, a missed dose. Answers are general information about the substance, always marked, and never tell you to change your dose.
+- Every additive has its own "Ask AI" button that asks about that additive.
+- The pharmacist's pen marks can be corrected or added by you (morning, midday, evening, any time). Your entry replaces the AI's reading and is labelled as yours.
+- Security: cross-site requests to the API are refused, request bodies are capped while they are read, rate limits no longer trust a client-written `X-Forwarded-For` and a shared ceiling holds even then, security headers and a Content-Security-Policy are set, API answers are never cached, the public health check no longer lists models, and `sharp` was updated to a patched version.
+
 ## 0.10.0 — 2026-10-04
 - Ask AI: below a result you can ask follow-up questions about the product or its ingredients. Answers rest on what was read on the label, and anything from general knowledge is stamped as such. The conversation is kept with the scan in your history.
 

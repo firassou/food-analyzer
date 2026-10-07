@@ -23,20 +23,20 @@ export default function Together({ a, b, onBack }: { a: HistoryEntry; b: History
 
   return (
     <div className="animate-fade-up">
-      <button onClick={onBack} className="mb-3 inline-flex h-10 items-center gap-1.5 rounded-full text-sm font-medium text-accent">
+      <button onClick={onBack} className="mb-3 inline-flex h-11 items-center gap-1.5 rounded-full bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule">
         <span aria-hidden className="inline-block rtl:-scale-x-100">
           ←
         </span>
         {t.compare.back}
       </button>
-      <article className="overflow-hidden rounded-[28px] border border-rule bg-sheet">
-        <div className="border-t-[3px] border-ink px-5 pt-5 pb-6 sm:px-7">
+      <article className="overflow-hidden rounded-[28px] bg-sheet ring-1 ring-rule">
+        <div className="px-5 pt-6 pb-6 sm:px-7">
           <h2 className="font-display text-2xl font-bold">{c.title}</h2>
           <p className="mt-1.5 text-sm leading-6 text-ink-soft">{c.lead}</p>
 
-          <ul className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-rule bg-rule">
+          <ul className="mt-5 grid grid-cols-2 gap-2">
             {[a, b].map((e) => (
-              <li key={e.id} className="min-w-0 bg-sheet p-3.5">
+              <li key={e.id} className="min-w-0 rounded-2xl bg-mute-soft/70 p-3.5">
                 <ScanThumb entry={e} className="size-14" />
                 <span dir="auto" className="font-display mt-2 block text-[15px] leading-tight font-semibold wrap-break-word">
                   {nameOf(e)}
@@ -68,7 +68,7 @@ export default function Together({ a, b, onBack }: { a: HistoryEntry; b: History
             )}
           </div>
         </div>
-        <footer className="border-t border-rule px-5 py-5 text-xs leading-5 text-ink-soft sm:px-7">{c.disclaimer}</footer>
+        <footer className="border-t border-rule/70 px-5 py-5 text-xs leading-5 text-ink-soft sm:px-7">{c.disclaimer}</footer>
       </article>
     </div>
   );

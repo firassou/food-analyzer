@@ -29,23 +29,22 @@ export function cn(...classes: (string | false | null | undefined)[]) {
 }
 
 /**
- * One block of the result sheet, set like a printed panel: a heavy rule, a numbered
- * heading, then the content. Sections stack inside a single sheet instead of floating
- * as separate cards.
+ * One block of the result sheet: a surface of its own with an icon, a title and what
+ * belongs to it. Blocks stack with a gap, so the sheet reads as a few clear parts.
  */
 export function Section({
   id,
-  index,
   title,
+  icon,
   aside,
   flash,
   className,
   children,
 }: {
   id?: string;
-  /** position in the sheet, printed before the title ("03") */
-  index?: number;
   title: string;
+  /** a 24px line icon from this file, shown in a tonal bubble before the title */
+  icon?: React.ReactNode;
   aside?: React.ReactNode;
   /** changes on every jump to this section; replays the highlight */
   flash?: number;
@@ -55,41 +54,26 @@ export function Section({
   return (
     <section
       id={id}
-      className={cn(
-        "relative scroll-mt-28 border-t-[3px] border-ink px-5 pt-4 pb-7 sm:px-7",
-        className,
-      )}
+      className={cn("relative scroll-mt-32 overflow-hidden rounded-[28px] bg-sheet px-5 pt-5 pb-6 ring-1 ring-rule sm:px-7", className)}
     >
       {flash ?
-        <span
-          key={flash}
-          aria-hidden
-          className="animate-flash pointer-events-none absolute inset-0"
-        />
+        <span key={flash} aria-hidden className="animate-flash pointer-events-none absolute inset-0" />
       : null}
-      <div className="relative mb-4 flex items-baseline gap-3">
-        {index !== undefined && (
-          <span
-            aria-hidden
-            dir="ltr"
-            className="eyebrow text-accent tabular-nums"
-          >
-            {String(index).padStart(2, "0")}
+      <div className="relative mb-5 flex items-center gap-3">
+        {icon && (
+          <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent-soft text-on-accent-soft [&>svg]:size-5">
+            {icon}
           </span>
         )}
-        <h3 className="font-display text-lg leading-tight font-semibold">
-          {title}
-        </h3>
-        {aside && (
-          <div className="eyebrow ms-auto text-end text-ink-soft">{aside}</div>
-        )}
+        <h3 className="font-display min-w-0 flex-1 text-xl leading-tight font-semibold text-balance">{title}</h3>
+        {aside && <div className="eyebrow shrink-0 text-end text-ink-soft">{aside}</div>}
       </div>
       <div className="relative">{children}</div>
     </section>
   );
 }
 
-/** a small rectangular stamp; `tone` colours it, without one it is an outline */
+/** a small pill; `tone` colours it, without one it is neutral */
 export function Tag({
   tone,
   className,
@@ -104,8 +88,8 @@ export function Tag({
     <span
       {...rest}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm leading-tight font-medium",
-        tone ? toneClasses[tone] : "border border-rule text-ink",
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm leading-tight font-medium",
+        tone ? toneClasses[tone] : "bg-mute-soft text-ink",
         className,
       )}
     >
@@ -127,7 +111,21 @@ export function Dot({ tone, className }: { tone: Tone; className?: string }) {
   );
 }
 
-/** a note set off by a coloured bar on its leading edge */
+function NoticeIcon({ tone }: { tone: Tone }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={cn("mt-0.5 size-5 shrink-0", toneText[tone])} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {tone === "red" ?
+        <path d="M12 8v5m0 3.5h.01M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3.1L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      : tone === "amber" ?
+        <path d="M12 8v5m0 3.5h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
+      : tone === "green" ?
+        <path d="m8 12.5 2.8 2.8L16.5 9.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
+      : <path d="M12 11v5m0-8.5h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />}
+    </svg>
+  );
+}
+
+/** a note: a tinted surface with a small icon for its tone */
 export function Notice({
   tone,
   role = "note",
@@ -143,18 +141,12 @@ export function Notice({
     <div
       role={role}
       className={cn(
-        "flex gap-3 rounded-xl px-4 py-3 text-sm leading-6",
+        "flex gap-3 rounded-2xl px-4 py-3.5 text-sm leading-6",
         toneClasses[tone],
         className,
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          "mt-1 w-0.75 shrink-0 self-stretch rounded-full",
-          dotClasses[tone],
-        )}
-      />
+      <NoticeIcon tone={tone} />
       <div className="min-w-0 flex-1 text-ink">{children}</div>
     </div>
   );
@@ -171,7 +163,7 @@ export function Bar({
   delay?: number;
 }) {
   return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-mute-soft">
+    <div className="h-2 overflow-hidden rounded-full bg-mute-soft">
       <div
         className={cn(
           "animate-grow h-full origin-left rounded-full rtl:origin-right",
@@ -257,3 +249,41 @@ export function BarcodeIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/* ---- icons: 24px, 1.8 stroke, drawn for this app ---- */
+
+const icon = (paths: React.ReactNode) =>
+  function Icon({ className }: { className?: string }) {
+    return (
+      <svg className={className} {...iconProps} strokeWidth={1.8}>
+        {paths}
+      </svg>
+    );
+  };
+
+export const SparkleIcon = icon(<path d="M12 3.5c.6 4.4 2.1 5.9 6.5 6.5-4.4.6-5.9 2.1-6.5 6.5-.6-4.4-2.1-5.9-6.5-6.5 4.4-.6 5.9-2.1 6.5-6.5ZM18.5 15.5c.3 1.9.9 2.5 2.5 2.8-1.6.3-2.2.9-2.5 2.7-.3-1.8-.9-2.4-2.5-2.7 1.6-.3 2.2-.9 2.5-2.8Z" />);
+export const WheatIcon = icon(<path d="M12 21V9m0 0c0-2 1-3.5 2.5-4.5.3 2-.4 3.6-2.5 4.5Zm0 0c0-2-1-3.5-2.5-4.5-.3 2 .4 3.6 2.5 4.5Zm0 5c0-2 1-3.5 2.5-4.5.3 2-.4 3.6-2.5 4.5Zm0 0c0-2-1-3.5-2.5-4.5-.3 2 .4 3.6 2.5 4.5Zm0 4.5c0-2 1-3.5 2.5-4.5.3 2-.4 3.6-2.5 4.5Zm0 0c0-2-1-3.5-2.5-4.5-.3 2 .4 3.6 2.5 4.5Z" />);
+export const SugarIcon = icon(<path d="M4 9.5 11 6l7 3.5v7L11 20l-7-3.5v-7Zm0 0 7 3.5m0 0 7-3.5M11 13v7m3.5-12.5 5-2" />);
+export const AlertIcon = icon(<path d="M12 9v4.5m0 3.5h.01M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3.1L13.7 3.9a2 2 0 0 0-3.4 0Z" />);
+export const FlaskIcon = icon(<path d="M9.5 3.5h5M10.5 3.5v5.2L5.2 17.5A2 2 0 0 0 7 20.5h10a2 2 0 0 0 1.8-3l-5.3-8.8V3.5M8 14.5h8" />);
+export const FlameIcon = icon(<path d="M12 21c3.9 0 6.5-2.6 6.5-6.1 0-2.8-1.6-4.6-3-6.2-.9-1-1.6-2-1.7-3.7-3.2 1.6-4.8 4.5-4.8 6.7-.9-.5-1.4-1.3-1.5-2.3-1.3 1.3-2 3-2 4.9C5.5 18.4 8.1 21 12 21Z" />);
+export const DropIcon = icon(<path d="M12 3.5s6 6.1 6 10.6a6 6 0 1 1-12 0C6 9.600 12 3.500 12 3.500Zm-2.500 10.800a2.700 2.700 0 0 0 2.500 2.400" />);
+export const PillIcon = icon(<path d="m10.2 20 9.8-9.8a4.100 4.100 0 0 0-5.800-5.800L4.400 14.200A4.100 4.100 0 0 0 10.200 20ZM9.300 9.300l5.400 5.400" />);
+export const ListIcon = icon(<path d="M9 6.5h11M9 12h11M9 17.5h11M4.500 6.500h.01M4.500 12h.01M4.500 17.500h.01" />);
+export const InfoIcon = icon(<path d="M12 11v5.500m0-8.500h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />);
+export const ClockIcon = icon(<path d="M12 7.500V12l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />);
+export const ChartIcon = icon(<path d="M5 20V11m5 9V4m5 16v-6m5 6H3" />);
+export const TextIcon = icon(<path d="M5 7V5.500h14V7M12 5.500v13m-2.500 0h5" />);
+export const BottleIcon = icon(<path d="M10 3h4v3l1.500 2.500v10.500a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V8.500L10 6V3ZM8.500 12.500h7" />);
+export const PlateIcon = icon(<path d="M12 5.500a6.500 6.500 0 1 0 0 13 6.500 6.500 0 0 0 0-13Zm0 3.500a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM3 4v6.500M5 4v6.500M4 10.500V20M21 4c-1.500 1-2.500 3-2.500 5.500V13H21V4Zm0 9v7" />);
+export const LabelIcon = icon(<path d="M5 3.500h14v17H5v-17Zm3.500 4.500h7m-7 3.500h7m-7 3.500h4" />);
+export const ChevronIcon = icon(<path d="m9 6 6 6-6 6" />);
+export const CheckIcon = icon(<path d="m5 12.500 4.500 4.500L19 7.500" />);
+export const PlusIcon = icon(<path d="M12 5v14M5 12h14" />);
+export const MinusIcon = icon(<path d="M5 12h14" />);
+export const PencilIcon = icon(<path d="m4 20 1-4.500L16.500 4a2.100 2.100 0 0 1 3 3L8 18.500 4 20Zm9-13.500 3.500 3.500" />);
+export const GlobeIcon = icon(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3c2.500 2.600 3.800 5.600 3.800 9s-1.300 6.400-3.800 9c-2.500-2.600-3.800-5.600-3.800-9S9.500 5.600 12 3Z" />);
+export const UserIcon = icon(<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8.500c.6-3.800 3.400-6 7-6s6.400 2.200 7 6" />);
+export const SendIcon = icon(<path d="M4.500 12 20 4.500 15.500 20l-3.800-6.200L4.500 12Zm7.200 1.800L20 4.500" />);
+export const TrashIcon = icon(<path d="M5 7h14M10 7V4.500h4V7m-7 0 .8 12.500h8.400L17 7M10 11v5m4-5v5" />);
+export const ArrowLeftIcon = icon(<path d="M19 12H5m6-6-6 6 6 6" />);
