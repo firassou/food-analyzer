@@ -519,6 +519,7 @@ export default function Home() {
                   onAddExcipients={excipientPicker.takePhoto}
                   onEditProfile={() => setEditingProfile(true)}
                   onMarksChange={changeMarks}
+                  onOpenBarcode={selectBarcode}
                   otherMedicines={otherMedicines}
                   onCheckWith={shownEntry ? (other) => setComparing([shownEntry, other]) : undefined}
                   adding={adding}
@@ -552,7 +553,9 @@ export default function Home() {
       </main>
 
       {/* Dock: the one primary action, where the thumb is */}
-      <div className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 print:hidden", !open && "sm:hidden")}>
+      <div
+        className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 print:hidden", !open && "sm:hidden")}
+      >
         <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-[28px] bg-sheet/90 p-2 shadow-[0_8px_32px_-8px_rgb(0_0_0/0.35)] ring-1 ring-rule backdrop-blur-md">
           {busy ?
             <>

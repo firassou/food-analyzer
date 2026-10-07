@@ -14,7 +14,7 @@ const API = "https://world.openfoodfacts.org";
 const SOURCE = "Open Food Facts";
 /** the lookup is a bonus: it must not hold up a finished analysis for long */
 const TIMEOUT_MS = 6000;
-const FIELDS =
+export const FIELDS =
   "code,product_name,brands,quantity,lang,ingredients_text,ingredients_text_en,ingredients_text_fr,ingredients_text_ar,allergens_tags,traces_tags,nutriments";
 // Open Food Facts asks every client to identify itself
 const USER_AGENT = "FoodAnalyzer/0.1 (https://github.com/firassou/food-analyzer)";

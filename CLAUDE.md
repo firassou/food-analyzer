@@ -4,7 +4,7 @@
 
 AI food-label analyzer. The spec lives in `PROMPT.md`. The LLM is never trusted blindly: its output is parsed leniently, normalized onto a strict schema and cross-checked by a deterministic knowledge base.
 
-Commands: `pnpm dev`, `pnpm lint`, `pnpm test`, `pnpm build`.
+Commands: `pnpm dev`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:e2e` (browser smoke tests, no AI keys needed), `pnpm eval:samples` and `pnpm eval:marks` (spend provider quota).
 
 ## Project skills (`.claude/skills/`): invoke the matching one before every step it covers
 

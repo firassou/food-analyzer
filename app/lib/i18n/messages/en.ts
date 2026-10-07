@@ -128,6 +128,8 @@ export const en = {
     addPerson: "Add a person",
     name: "Name",
     removePerson: "Remove this person",
+    country: "Country for suggestions",
+    countryAuto: "Detected automatically",
     verdict: {
       eyebrow: "For your profile",
       eyebrowFor: "For {name}",
@@ -276,11 +278,8 @@ export const en = {
   },
   alternatives: {
     title: "Better choices",
-    lead: "Products in the same category with a better Nutri-Score, from Open Food Facts.",
-    button: "Find better choices",
-    looking: "Looking for alternatives…",
-    none: "No better-rated product was found in this category.",
-    failed: "The product database can't be reached right now.",
+    lead: "Same category, better Nutri-Score, sold in {country}.",
+    fitsProfile: "Anything with what you avoid is left out.",
     source: "Source: Open Food Facts",
     sugar: "{sugar} g sugar per 100 g",
     sugarMl: "{sugar} g sugar per 100 ml",

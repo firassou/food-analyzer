@@ -68,3 +68,10 @@ Mobile first, in the manner of the big platforms (Material 3 / Apple Health): a 
 
 ## Ask AI
 - Last section (`ask`), shown whenever `Content` gets an `ask` prop (the page always passes the scan's id). Other parts of the sheet can put a question to it (`askAbout` in `Content.tsx`: the additives' "Ask AI" button): it is sent as if typed. Medicines get their own intro, suggestions and a prompt that answers general questions (always marked `[G]`) without ever advising on a dose. Chat lives in `components/AskAi.tsx`; conversations are stored on the history entry through `saveChat` only. An unanswered question goes back into the input, never into the saved chat.
+
+## Shelf, people, share, dictation, alternatives
+- "My shelf" is a screen of its own (`Shelf.tsx`, opened from the header button, closed by any scan, the logo or Back). It shares `togetherText` with the two-medicine screen: one sentence per finding, never rewritten.
+- Several people: `usePersonName()` is how a profile is called in the interface (typed name, else "Me" / "Person 2"); the header button shows the active person's initial once there are two or more.
+- Anything that appears only where the browser supports it (dictation, notifications, share sheet) is feature-detected through `useSyncExternalStore` or at the click, never in an effect that sets state, and has a fallback or is left out.
+- Anything that calls a free public database on the reader's behalf (better choices) is fetched quietly, cached on the server, and simply absent when it finds nothing or can't be reached: no empty state, no error. Anything suggested to the reader is filtered on the device by their profile and must be available in their country; the profile is never sent.
+- Print: chrome carries `print:hidden`; the sheet prints on white with cards kept whole.

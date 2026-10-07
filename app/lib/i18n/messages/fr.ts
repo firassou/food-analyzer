@@ -123,6 +123,8 @@ export const fr: Messages = {
     addPerson: "Ajouter une personne",
     name: "Prénom",
     removePerson: "Supprimer cette personne",
+    country: "Pays pour les suggestions",
+    countryAuto: "Détecté automatiquement",
     verdict: {
       eyebrow: "Pour votre profil",
       eyebrowFor: "Pour {name}",
@@ -271,11 +273,8 @@ export const fr: Messages = {
   },
   alternatives: {
     title: "De meilleurs choix",
-    lead: "Des produits de la même catégorie avec un meilleur Nutri-Score, d'après Open Food Facts.",
-    button: "Trouver de meilleurs choix",
-    looking: "Recherche d'alternatives…",
-    none: "Aucun produit mieux noté n'a été trouvé dans cette catégorie.",
-    failed: "La base de produits est inaccessible pour le moment.",
+    lead: "Même catégorie, meilleur Nutri-Score, vendus en {country}.",
+    fitsProfile: "Tout ce qui contient ce que vous évitez est écarté.",
     source: "Source : Open Food Facts",
     sugar: "{sugar} g de sucres pour 100 g",
     sugarMl: "{sugar} g de sucres pour 100 ml",

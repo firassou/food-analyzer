@@ -12,6 +12,8 @@ import {
   useProfile,
   useProfileBook,
 } from "../lib/client/profile";
+import { COUNTRIES } from "../lib/analysis/country";
+import { saveCountry, useCountryChoice, useDetectedCountry } from "../lib/client/country";
 import { format, useI18n } from "../lib/i18n/I18nProvider";
 import { CloseIcon, cn, PlusIcon, TrashIcon } from "./ui";
 
@@ -168,6 +170,8 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
           ))}
         </Group>
 
+        <CountryPicker />
+
         <p className="mt-6 text-xs leading-5 text-ink-soft">{p.privacy}</p>
         <div className="mt-5 flex items-center gap-3">
           <button
@@ -210,5 +214,33 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       {on && <span aria-hidden>✓</span>}
       {children}
     </button>
+  );
+}
+
+/** where the reader is, so that suggested products are ones sold there; "automatic" follows the device */
+function CountryPicker() {
+  const { t, locale } = useI18n();
+  const choice = useCountryChoice();
+  const detected = useDetectedCountry();
+  const names = new Intl.DisplayNames(locale, { type: "region" });
+  const nameOf = (code: string) => names.of(code) ?? code;
+  const options = [...COUNTRIES].sort((a, b) => nameOf(a).localeCompare(nameOf(b), locale));
+  return (
+    <fieldset className="mt-6">
+      <legend className="eyebrow text-ink-soft">{t.profile.country}</legend>
+      <select
+        value={choice ?? ""}
+        onChange={(e) => saveCountry(e.target.value || null)}
+        aria-label={t.profile.country}
+        className="mt-2.5 h-12 w-full rounded-full bg-mute-soft px-5 text-base focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        <option value="">{`${t.profile.countryAuto}${detected ? ` (${nameOf(detected)})` : ""}`}</option>
+        {options.map((code) => (
+          <option key={code} value={code}>
+            {nameOf(code)}
+          </option>
+        ))}
+      </select>
+    </fieldset>
   );
 }

@@ -4,6 +4,18 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.12.0 — 2026-10-07
+- My shelf: every date printed on your scans, soonest first, with a badge and an optional reminder when the app opens; every medicine you scanned checked against every other; and a chat about your medicines together.
+- "Why these results?" under the tiles lists what was found on the label behind each verdict.
+- Several people can share one phone, each with their own allergens and diet.
+- Share a result as text, or save it as a PDF.
+- A microphone button dictates your question to Ask AI, where the browser supports it.
+- Better choices: products of the same category with a better Nutri-Score and less sugar, from Open Food Facts, that are sold in your country and leave out anything you avoid (allergies, gluten, lactose, diet). The section only appears when there is something to suggest. Pick your country in your profile if it isn't detected right.
+- The app opens offline and shows your saved scans.
+- A stricter security policy with a nonce for every page, and rate limits that can be shared between servers (Upstash Redis, optional).
+- The "drop a photo or paste" hint is only shown on a desktop with a mouse.
+- Behind the scenes: browser smoke tests, a CI workflow, weekly evaluations of the sample photos and pen marks.
+
 ## 0.11.0 — 2026-10-07
 - A new look: a calmer, more modern design (new colours, type, icons, rounded surfaces, tonal tiles, a redesigned home screen) and a new logo, favicon and app icons. The headline's last word now rotates through food, medicine, drinks, dishes and water.
 - Ask AI works for medicines too: ask what it is for, side effects, interactions, food or alcohol, a missed dose. Answers are general information about the substance, always marked, and never tell you to change your dose.

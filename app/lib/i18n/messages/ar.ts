@@ -123,6 +123,8 @@ export const ar: Messages = {
     addPerson: "إضافة شخص",
     name: "الاسم",
     removePerson: "حذف هذا الشخص",
+    country: "البلد للاقتراحات",
+    countryAuto: "يُكتشف تلقائيًا",
     verdict: {
       eyebrow: "بحسب ملفك",
       eyebrowFor: "لـ {name}",
@@ -271,11 +273,8 @@ export const ar: Messages = {
   },
   alternatives: {
     title: "خيارات أفضل",
-    lead: "منتجات من الفئة نفسها بتصنيف Nutri-Score أفضل، من Open Food Facts.",
-    button: "ابحث عن خيارات أفضل",
-    looking: "جارٍ البحث عن بدائل…",
-    none: "لم يُعثر على منتج بتصنيف أفضل في هذه الفئة.",
-    failed: "تعذّر الوصول إلى قاعدة بيانات المنتجات حاليًا.",
+    lead: "الفئة نفسها، بتصنيف Nutri-Score أفضل، وتُباع في {country}.",
+    fitsProfile: "استُبعد كل ما يحتوي على ما تتجنبه.",
     source: "المصدر: Open Food Facts",
     sugar: "{sugar} غ سكريات لكل 100 غ",
     sugarMl: "{sugar} غ سكريات لكل 100 مل",

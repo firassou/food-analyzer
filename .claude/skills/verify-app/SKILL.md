@@ -31,3 +31,6 @@ description: Use after any change, and before saying a step is done: build, lint
 ## Versioning (Claude's job since 2026-10-04)
 - Every change: bump `version` in `package.json` (0.x: feature → minor, fix → patch), add a `CHANGELOG.md` entry, tag the commit `vX.Y.Z`. The app shows the version at the bottom of the page from `NEXT_PUBLIC_APP_VERSION` (`next.config.ts`).
 - A running `next dev` keeps the old number until it is restarted: the env value is read when the config loads.
+
+## Smoke tests
+- `pnpm test:e2e` builds, starts a production server on port 3101 and runs `e2e/*.spec.ts` in a phone and a desktop viewport. No AI provider is called: the tests seed saved scans from the analysis fixtures (`e2e/seed.ts`) and mock `/api/ask` and `/api/alternatives`. Run it after any UI change; add a test there for each new user-facing feature.

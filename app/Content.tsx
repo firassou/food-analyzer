@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import AskAi from "./components/AskAi";
 import { AdditiveList, additiveId } from "./components/result/Additives";
+import Alternatives from "./components/result/Alternatives";
 import { Chip, GeneralChip, InfoList, Legend, StatusTile, SubLabel } from "./components/result/bits";
 import DrinkPanel from "./components/result/DrinkPanel";
 import { AllergenGroup, EstimatedIngredient, IngredientPill } from "./components/result/Ingredients";
@@ -33,10 +34,12 @@ import {
   SparkleIcon,
   Spinner,
   SugarIcon,
+  SwapIcon,
   toneClasses,
   WheatIcon,
   type Tone,
 } from "./components/ui";
+import { useAlternatives } from "./lib/client/alternatives";
 import { needsExcipients } from "./lib/analysis/medicine";
 import type { HistoryEntry } from "./lib/client/history";
 import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
@@ -64,6 +67,7 @@ type SectionId =
   | "nutrition"
   | "ingredients"
   | "additives"
+  | "alternatives"
   | "details"
   | "raw"
   | "ask";
@@ -92,6 +96,7 @@ const sectionIcons: Record<SectionId, React.ReactNode> = {
   nutrition: <ChartIcon />,
   ingredients: <ListIcon />,
   additives: <FlaskIcon />,
+  alternatives: <SwapIcon />,
   details: <InfoIcon />,
   raw: <InfoIcon />,
   ask: <SparkleIcon />,
@@ -115,6 +120,7 @@ export default function Content({
   onMarksChange,
   otherMedicines,
   onCheckWith,
+  onOpenBarcode,
   adding = null,
   ask,
 }: {
@@ -131,6 +137,8 @@ export default function Content({
   /** other medicines scanned on this device, and the way to check this one with one of them */
   otherMedicines?: HistoryEntry[];
   onCheckWith?: (other: HistoryEntry) => void;
+  /** opens a product by its barcode (the alternatives it lists) */
+  onOpenBarcode?: (code: string) => void;
   /** that photo is being read ("working") or showed no excipient list ("none") */
   adding?: "working" | "none" | null;
   /** the saved scan this result belongs to: enables "Ask AI" about it, with its earlier conversation */
@@ -150,6 +158,7 @@ export default function Content({
       onMarksChange={onMarksChange}
       otherMedicines={otherMedicines}
       onCheckWith={onCheckWith}
+      onOpenBarcode={onOpenBarcode}
       adding={adding}
       ask={ask}
     />
@@ -165,6 +174,7 @@ function Results({
   onMarksChange,
   otherMedicines = [],
   onCheckWith,
+  onOpenBarcode,
   adding,
   ask,
 }: {
@@ -176,6 +186,7 @@ function Results({
   onMarksChange?: React.ComponentProps<typeof Content>["onMarksChange"];
   otherMedicines?: HistoryEntry[];
   onCheckWith?: (other: HistoryEntry) => void;
+  onOpenBarcode?: (code: string) => void;
   adding: "working" | "none" | null;
   ask?: { scanId: string; chat?: ChatTurn[] };
 }) {
@@ -183,6 +194,8 @@ function Results({
   const r = t.results;
   const { kind, product, nutrition, ingredients, allergens, additives, gluten, sugar, water, drink, medicine } = result;
   const med = t.results.medicine;
+  // better choices: fetched quietly for a packaged product with a barcode, and only there when something fit is found
+  const alternatives = useAlternatives(product.barcode, (kind === "label" || kind === "drink") && !!onOpenBarcode);
 
   // ---- derived data ----
   const additiveByCode = new Map(additives.filter((a) => a.code).map((a) => [a.code!, a]));
@@ -243,15 +256,17 @@ function Results({
     nutrition: hasNutrition,
     ingredients: ingredients.length > 0 || (medicine?.excipients.length ?? 0) > 0,
     additives: additives.length > 0,
+    // only when there are suggestions that are sold in the reader's country and fit their profile
+    alternatives: alternatives !== null,
     details: hasDetails,
     raw: !!result.raw_text,
     ask: !!ask,
   };
   const order: Exclude<SectionId, "overview">[] =
     kind === "dish" ? ["ingredients", "allergens", "dietary", "nutrition", "additives", "details", "raw", "ask"]
-    : kind === "drink" ? ["drink", "nutrition", "additives", "ingredients", "allergens", "dietary", "details", "raw", "ask"]
+    : kind === "drink" ? ["drink", "nutrition", "additives", "alternatives", "ingredients", "allergens", "dietary", "details", "raw", "ask"]
     : kind === "medicine" ? ["dose", "medicine", "cautions", "ingredients", "dietary", "nutrition", "additives", "details", "raw", "ask"]
-    : ["water", "allergens", "dietary", "nutrition", "ingredients", "additives", "details", "raw", "ask"];
+    : ["water", "allergens", "dietary", "nutrition", "ingredients", "additives", "alternatives", "details", "raw", "ask"];
   const visible = order.filter((id) => shown[id]);
   const titles: Record<SectionId, string> = {
     overview: r.sections.overview,
@@ -268,6 +283,7 @@ function Results({
       : estimated ? r.dish.ingredients
       : r.sections.ingredients,
     additives: r.sections.additives,
+    alternatives: t.alternatives.title,
     details: r.sections.details,
     raw: r.sections.raw,
     ask: t.ask.title,
@@ -686,6 +702,13 @@ function Results({
         <AdditiveList additives={additives} highlighted={flash?.id} onAsk={ask ? askAboutAdditive : undefined} />
       </Section>
     ),
+
+    alternatives:
+      alternatives && onOpenBarcode ?
+        <Section {...head("alternatives")}>
+          <Alternatives data={alternatives} unit={unit} onOpen={onOpenBarcode} />
+        </Section>
+      : null,
 
     details: (
       <Section {...head("details")}>

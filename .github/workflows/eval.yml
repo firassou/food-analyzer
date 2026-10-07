@@ -1,0 +1,60 @@
+name: Weekly evaluation
+
+# Does the whole pipeline (prompt, models, normalizer) still read the sample photos and the pen
+# marks correctly? Spends provider quota, so it runs weekly and on demand, and only when a key is
+# set as a repository secret (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY or HF_TOKEN).
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HAS_KEY: ${{ secrets.GEMINI_API_KEY != '' || secrets.GROQ_API_KEY != '' || secrets.OPENROUTER_API_KEY != '' || secrets.HF_TOKEN != '' }}
+    steps:
+      - name: No provider key set
+        if: env.HAS_KEY != 'true'
+        run: echo "Add a provider key as a repository secret to run the evaluation."
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+      - uses: pnpm/action-setup@v4
+        if: env.HAS_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: lts/*
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: env.HAS_KEY == 'true'
+      - run: pnpm build
+        if: env.HAS_KEY == 'true'
+      - name: Start the app
+        if: env.HAS_KEY == 'true'
+        run: |
+          pnpm exec next start -p 3000 &
+          for i in $(seq 1 30); do curl -sf localhost:3000/api/analyze && break; sleep 2; done
+      - name: Sample photos
+        if: env.HAS_KEY == 'true'
+        run: pnpm eval:samples
+      - name: Pen marks
+        if: env.HAS_KEY == 'true'
+        # known to miss a stroke at each end of a box: report it, don't fail the week on it
+        continue-on-error: true
+        run: pnpm eval:marks
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true' && always()
+        with:
+          name: evaluation
+          path: |
+            samples/.last-eval.json
+            samples/.last-marks-eval.json

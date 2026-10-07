@@ -42,3 +42,8 @@ yarn-error.log*
 next-env.d.ts
 PROMPT.md
 samples/.last-eval.json
+samples/marks/*
+!samples/marks/README.md
+samples/.last-marks-eval.json
+/test-results/
+/playwright-report/
