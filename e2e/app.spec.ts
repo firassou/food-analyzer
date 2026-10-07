@@ -150,6 +150,29 @@ test("several people can share the device", async ({ page }) => {
   await expect(page.getByRole("button", { name: /My profile: Lina/ })).toBeVisible();
 });
 
+test("a result shows what it means for everyone who shares the device", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "food-analyzer:profile:v2",
+      JSON.stringify({
+        active: "me",
+        profiles: [
+          { id: "me", name: "", allergens: ["milk"], lactose: false, sugar: false, diets: [] },
+          { id: "lina", name: "Lina", allergens: ["fish"], lactose: false, sugar: false, diets: [] },
+        ],
+      }),
+    ),
+  );
+  await withHistory(page, history(fromFixture("n1", "eu-biscuit.txt", { product: { name: "Biscuit" } })));
+  await page.goto("/");
+  await open(page, "Biscuit");
+  const everyone = page.getByRole("button", { name: /^Lina/ });
+  await expect(everyone).toContainText("Nothing found");
+  await expect(page.getByRole("button", { name: /^Me/ })).toContainText("Check");
+  await everyone.click();
+  await expect(page.getByText("For Lina")).toBeVisible();
+});
+
 test("a result can be shared as text without anything personal", async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { __shared: unknown }).__shared = null;

@@ -127,6 +127,8 @@ export const fr: Messages = {
     countryAuto: "Détecté automatiquement",
     verdict: {
       eyebrow: "Pour votre profil",
+      everyone: "Pour tout le monde",
+      everyoneStatus: { avoid: "À éviter", check: "À vérifier", ok: "Rien trouvé", unchecked: "Non vérifié" },
       eyebrowFor: "Pour {name}",
       title: {
         avoid: "Pas pour vous",

@@ -1,7 +1,8 @@
 "use client";
 import { checkProfile, type ProfileFinding } from "../../lib/analysis/profile";
+import { checkEveryone } from "../../lib/analysis/profiles";
 import type { LabelAnalysis } from "../../lib/analysis/types";
-import { useProfile, useProfileBook } from "../../lib/client/profile";
+import { switchProfilePerson, useProfile, useProfileBook } from "../../lib/client/profile";
 import { format, useI18n } from "../../lib/i18n/I18nProvider";
 import { usePersonName } from "../ProfileSheet";
 import { cn, Dot, PencilIcon, toneClasses } from "../ui";
@@ -60,6 +61,38 @@ export default function ProfileVerdict({ result, onEdit }: { result: LabelAnalys
           {t.profile.edit}
         </button>
       )}
+    </div>
+  );
+}
+
+/** one line per person with a profile, once a phone is shared; a tap makes that person the active one */
+export function EveryoneVerdict({ result }: { result: LabelAnalysis }) {
+  const { t } = useI18n();
+  const book = useProfileBook();
+  const nameOf = usePersonName();
+  const people = checkEveryone(result, book);
+  if (book.profiles.length < 2 || people.length < 2) return null;
+  const v = t.profile.verdict;
+  return (
+    <div className="mt-3 rounded-3xl bg-mute-soft/60 px-5 py-4">
+      <p className="eyebrow text-ink-soft">{v.everyone}</p>
+      <ul className="mt-2 divide-y divide-rule">
+        {people.map(({ person, check }) => (
+          <li key={person.id}>
+            <button
+              onClick={() => switchProfilePerson(person.id)}
+              aria-current={person.id === book.active}
+              className="flex min-h-11 w-full items-center gap-3 py-2 text-start"
+            >
+              <Dot tone={verdictTone[check.status]} className="shrink-0" />
+              <span dir="auto" title={nameOf(person)} className={cn("min-w-0 flex-1 truncate text-sm", person.id === book.active ? "font-semibold" : "font-medium")}>
+                {nameOf(person)}
+              </span>
+              <span className="text-sm text-ink-soft">{v.everyoneStatus[check.status]}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

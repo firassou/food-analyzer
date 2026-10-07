@@ -132,6 +132,8 @@ export const en = {
     countryAuto: "Detected automatically",
     verdict: {
       eyebrow: "For your profile",
+      everyone: "Everyone",
+      everyoneStatus: { avoid: "Avoid", check: "Check", ok: "Nothing found", unchecked: "Not checked" },
       eyebrowFor: "For {name}",
       title: {
         avoid: "Not for you",

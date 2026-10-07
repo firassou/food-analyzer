@@ -2,7 +2,8 @@
 // reader switches between them. Pure and client-safe, like profile.ts: this is only the
 // bookkeeping; what a profile means for a result is still `checkProfile`.
 
-import { EMPTY_PROFILE, sanitizeProfile, type Profile } from "./profile";
+import { checkProfile, EMPTY_PROFILE, sanitizeProfile, type Profile, type ProfileCheck } from "./profile";
+import type { LabelAnalysis } from "./types";
 
 export interface NamedProfile extends Profile {
   id: string;
@@ -70,4 +71,21 @@ export const switchPerson = (book: ProfileBook, id: string): ProfileBook => (boo
 export function updateActive(book: ProfileBook, profile: Profile): ProfileBook {
   const clean = sanitizeProfile(profile);
   return { ...book, profiles: book.profiles.map((p) => (p.id === book.active ? { ...p, ...clean } : p)) };
+}
+
+export interface PersonCheck {
+  person: NamedProfile;
+  check: ProfileCheck;
+}
+
+/**
+ * One result against everyone who has said something they avoid, the one with the most to
+ * worry about first. Empty when nobody has: a blank profile has nothing to check.
+ */
+export function checkEveryone(result: LabelAnalysis, book: ProfileBook): PersonCheck[] {
+  const rank = { avoid: 0, check: 1, unchecked: 2, ok: 3 } as const;
+  return book.profiles
+    .map((person) => ({ person, check: checkProfile(result, person) }))
+    .filter((x): x is PersonCheck => x.check !== null)
+    .sort((a, b) => rank[a.check.status] - rank[b.check.status]);
 }

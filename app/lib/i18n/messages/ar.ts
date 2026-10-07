@@ -127,6 +127,8 @@ export const ar: Messages = {
     countryAuto: "يُكتشف تلقائيًا",
     verdict: {
       eyebrow: "بحسب ملفك",
+      everyone: "للجميع",
+      everyoneStatus: { avoid: "يُتجنَّب", check: "تحقّق", ok: "لم نجد شيئًا", unchecked: "لم يُفحص" },
       eyebrowFor: "لـ {name}",
       title: {
         avoid: "لا يناسبك",

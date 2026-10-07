@@ -8,7 +8,7 @@ import DrinkPanel from "./components/result/DrinkPanel";
 import { AllergenGroup, EstimatedIngredient, IngredientPill } from "./components/result/Ingredients";
 import { DoseMarksPanel, GeneralList } from "./components/result/Marks";
 import { GlutenPanel, NutritionPanel } from "./components/result/Nutrition";
-import ProfileVerdict from "./components/result/ProfileVerdict";
+import ProfileVerdict, { EveryoneVerdict } from "./components/result/ProfileVerdict";
 import ShareButtons from "./components/result/ShareButtons";
 import RawText from "./components/result/RawText";
 import { capitalize, highlightMark, highlightTone, levelTone, presenceTone } from "./components/result/tones";
@@ -826,6 +826,7 @@ function Results({
         )}
 
         <ProfileVerdict result={result} onEdit={onEditProfile} />
+        <EveryoneVerdict result={result} />
 
         <div className="mt-5 flex flex-wrap gap-2 print:hidden">
           {ask && (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activeProfile, addPerson, emptyBook, MAX_PROFILES, removePerson, renamePerson, sanitizeBook, switchPerson, updateActive } from "./profiles";
+import { normalize } from "./normalize";
+import { activeProfile, addPerson, checkEveryone, emptyBook, MAX_PROFILES, removePerson, renamePerson, sanitizeBook, switchPerson, updateActive } from "./profiles";
 
 describe("profile book", () => {
   it("starts with one unnamed person", () => {
@@ -52,5 +53,36 @@ describe("profile book", () => {
     let book = addPerson(emptyBook(), "kid", "Lina");
     book = removePerson(book, "kid");
     expect(book.active).toBe("me");
+  });
+});
+
+describe("checkEveryone", () => {
+  const biscuit = normalize({
+    kind: "label",
+    label_detected: true,
+    image_quality: "good",
+    product: { name: "X" },
+    ingredients: ["wheat flour", "sugar", "milk powder"],
+    allergens: { declared: ["gluten", "milk"], may_contain: ["peanuts"] },
+  });
+  const empty = { allergens: [], lactose: false, sugar: false, diets: [] };
+
+  it("checks each person against their own profile, the most worried first", () => {
+    let book = updateActive(emptyBook(), { ...empty, allergens: ["fish"] });
+    book = addPerson(book, "kid", "Lina");
+    book = updateActive(book, { ...empty, allergens: ["peanuts"] });
+    book = addPerson(book, "dad", "Sam");
+    book = updateActive(book, { ...empty, allergens: ["milk"] });
+    expect(checkEveryone(biscuit, book).map((x) => [x.person.id, x.check.status])).toEqual([
+      ["dad", "avoid"],
+      ["kid", "check"],
+      ["me", "ok"],
+    ]);
+  });
+
+  it("leaves out people who avoid nothing, and everyone when nobody does", () => {
+    const book = addPerson(updateActive(emptyBook(), { ...empty, allergens: ["milk"] }), "kid");
+    expect(checkEveryone(biscuit, book).map((x) => x.person.id)).toEqual(["me"]);
+    expect(checkEveryone(biscuit, emptyBook())).toEqual([]);
   });
 });
