@@ -30,6 +30,14 @@ const GROUPS = {
   vka: "warfarin|acenocoumarol|fluindion",
   // raise the effect of vitamin K antagonists
   vka_booster: "miconazol|fluconazol|metronidazol|clarithromycin|erythromycin|ciprofloxacin|levofloxacin|ofloxacin|sulfamethoxazol|amiodaron",
+  quinolone: "ciprofloxacin|levofloxacin|ofloxacin|norfloxacin|moxifloxacin|enoxacin",
+  tetracycline: "tetracyclin|lymecyclin",
+  // caffeine is cleared by CYP1A2, which these block
+  cyp1a2_inhibitor: "ciprofloxacin|enoxacin",
+  // alcohol brings on a violent reaction
+  nitroimidazole: "metronidazol|tinidazol|ornidazol|secnidazol",
+  levothyroxine: "levothyrox|liothyronin",
+  paracetamol: "paracetamol|acetaminophen",
   methotrexate: "methotrexat",
   lithium: "lithium",
   potassium: "spironolacton|eplerenon|amilorid|triamteren|potassium chlorid|chlorure de potassium",
@@ -42,7 +50,7 @@ const GROUPS = {
   // bound in the gut by calcium, iron, magnesium, aluminium and zinc
   bound_by_minerals: "levothyrox|ciprofloxacin|levofloxacin|ofloxacin|norfloxacin|moxifloxacin|doxycyclin|tetracyclin|minocyclin|lymecyclin|alendron|risedron|ibandron",
 } as const;
-type GroupId = keyof typeof GROUPS | "mineral";
+export type GroupId = keyof typeof GROUPS | "mineral";
 
 const stems = (alternatives: string) => new RegExp(`(?<![\\p{L}])(?:${alternatives})`, "u");
 const GROUP_RULES = Object.entries(GROUPS).map(([id, alternatives]) => [id as GroupId, stems(alternatives)] as const);
@@ -57,7 +65,7 @@ const SYNONYMS: [RegExp, string][] = [
 const SALTS =
   /(?<![\p{L}])(hydrochloride|chlorhydrate|dihydrochloride|sodium|sodique|potassium|potassique|calcium|calcique|magnesium|maleate|fumarate|succinate|tartrate|citrate|sulfate|sulphate|phosphate|acetate|mesilate|mesylate|besilate|besylate|bromide|bromure|trihydrate|dihydrate|monohydrate|anhydrous|anhydre|lysine|arginine|de|d')(?![\p{L}])/gu;
 
-interface Substance {
+export interface Substance {
   /** as shown to the reader */
   shown: string;
   /** the same for every spelling and salt of one substance */
@@ -65,7 +73,7 @@ interface Substance {
   groups: Set<GroupId>;
 }
 
-function substanceOf(a: Medicine["active"][number]): Substance {
+export function substanceOf(a: Medicine["active"][number]): Substance {
   const text = fold(a.name);
   const groups = new Set<GroupId>();
   let key: string | null = SYNONYMS.find(([rule]) => rule.test(text))?.[1] ?? null;

@@ -81,9 +81,9 @@ const NOT_ALCOHOL =
 const FAT_ADDITIVES = word("mono-? ?(and|et|-) ?di-?glycerides?( of fatty acids| d'acides gras)?|mono-? ?et diglycerides d'acides gras|stearic acid|acide stearique");
 const FAT_CODES = /^E(47[0-9][a-f]?|570|422)$/i;
 
-type Hit = "pork" | "meat" | "gelatin" | "carmine" | "shellac" | "bee" | "rennet" | "alcohol" | "fat_additive" | "bone";
+export type Hit = "pork" | "meat" | "gelatin" | "carmine" | "shellac" | "bee" | "rennet" | "alcohol" | "fat_additive" | "bone";
 
-function hitsOf(name: string, code: string | null): Hit[] {
+export function hitsOf(name: string, code: string | null): Hit[] {
   const text = fold(name);
   const out: Hit[] = [];
   if (PORK.test(text)) out.push("pork");

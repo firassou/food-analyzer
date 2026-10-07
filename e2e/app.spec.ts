@@ -173,6 +173,27 @@ test("a result shows what it means for everyone who shares the device", async ({
   await expect(page.getByText("For Lina")).toBeVisible();
 });
 
+test.describe("food and the medicines on the shelf", () => {
+  const juice = (name: string) => fromFixture("d1", "drink.txt", { product: { name }, ingredients: [{ name: "Grapefruit juice" }, { name: "Water" }] });
+
+  test("a product that stands out against a scanned medicine says so", async ({ page }) => {
+    await withHistory(page, history(juice("Pink Juice"), medicine("m1", "Zocor", ["simvastatin"])));
+    await page.goto("/");
+    await open(page, "Pink Juice");
+    await expect(page.getByText("With your medicines")).toBeVisible();
+    await expect(page.getByText(/^Zocor/)).toBeVisible();
+    await expect(page.getByText(/Contains grapefruit\. It can raise the level of/)).toBeVisible();
+  });
+
+  test("shows nothing when no medicine is concerned", async ({ page }) => {
+    await withHistory(page, history(juice("Pink Juice"), medicine("m1", "Doliprane", ["paracetamol"])));
+    await page.goto("/");
+    await open(page, "Pink Juice");
+    await expect(page.getByRole("heading", { name: "Ingredients" })).toBeVisible();
+    await expect(page.getByText("With your medicines")).toHaveCount(0);
+  });
+});
+
 test("a result can be shared as text without anything personal", async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { __shared: unknown }).__shared = null;
