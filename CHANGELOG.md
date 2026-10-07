@@ -4,7 +4,7 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
-## Unreleased
+## 0.13.0 — 2026-10-07
 - A printed date such as `25-10-26` is read as 25 October 2026, not 26 October 2025. Models rewrote it year-first and the shelf flagged it as expired; the label's own text now wins, including for scans saved earlier.
 - Ask AI gives practical advice instead of refusing it (for foods, medicines and the shelf), and a switch under the question box can share what you avoid, the medicines you scanned and what the app's rules found for the product, so the answer fits you. Off by default.
 - A card on a food or drink that stands out against a medicine you scanned: caffeine and ciprofloxacin or levothyroxine, calcium or iron and some antibiotics, dairy and tetracycline, grapefruit and some statins, alcohol and metronidazole or sedatives, potassium chloride and blood-pressure medicines. A short list; finding nothing shows nothing.
