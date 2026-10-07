@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   eval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -25,11 +25,11 @@ jobs:
       - name: No provider key set
         if: env.HAS_KEY != 'true'
         run: echo "Add a provider key as a repository secret to run the evaluation."
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: env.HAS_KEY == 'true'
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: env.HAS_KEY == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.HAS_KEY == 'true'
         with:
           node-version: lts/*
@@ -51,7 +51,7 @@ jobs:
         # known to miss a stroke at each end of a box: report it, don't fail the week on it
         continue-on-error: true
         run: pnpm eval:marks
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: env.HAS_KEY == 'true' && always()
         with:
           name: evaluation
