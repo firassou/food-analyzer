@@ -115,7 +115,7 @@ ADDITIVES
 OTHER FIELDS
 - claims: marketing / nutrition claims printed on the pack, in ${language} (like "Gluten free", "No added sugar", "High in protein", "Organic").
 - certifications: logos/labels such as "Halal", "Kosher", "EU Organic", "Fairtrade", "Rainforest Alliance", "Nutri-Score B", "Vegan".
-- dates: exactly as printed. lot = lot/batch number.
+- dates: copy them character for character as printed. Never reorder, expand or convert them: a printed 25-10-26 stays "25-10-26", never "2025-10-26". lot = lot/batch number.
 - summary: 1-3 neutral ${language} sentences describing what the product is and its notable characteristics based only on the label. Do not call a product "healthy" or "unhealthy", no medical claims.
 - highlights: up to 4 short ${language} facts a shopper should notice that go beyond fat/sugar/salt levels, which are computed separately (e.g. {"tone":"caution","text":"Contains a source of phenylalanine"}, {"tone":"positive","text":"Good source of fibre"}, {"tone":"neutral","text":"Made with 80% chili pepper"}).
 - raw_text: the ingredient list and allergen statements transcribed as printed (max ~1200 characters). null if unreadable.

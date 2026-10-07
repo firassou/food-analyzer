@@ -74,10 +74,27 @@ export function parseExpiry(text: string): ParsedDate | null {
   // 11/2027, 11-27
   if ((m = s.match(/\b(\d{1,2})[-/.](\d{4}|\d{2})\b/))) return build(year(m[2]), +m[1], null);
   // 30 nov 2027, nov. 2027, novembre 27
-  if ((m = s.match(/\b(?:(\d{1,2})\s+)?([a-z]{3,9})\.?\s+(\d{4}|\d{2})\b/)) && MONTHS[m[2]] !== undefined) {
+  if ((m = s.match(/\b(?:(\d{1,2})[\s.-]*)?([a-z]{3,9})\.?[\s-]*(\d{4}|\d{2})\b/)) && MONTHS[m[2]] !== undefined) {
     return build(year(m[3]), MONTHS[m[2]], m[1] ? +m[1] : null);
   }
   return null;
+}
+
+/**
+ * Models sometimes rewrite a printed "25-10-26" (day, month, two-digit year) as "2025-10-26",
+ * taking the 25 for the year, and a date that is months away then reads as past. When the label's
+ * own text shows exactly that printed date and it is a valid day-first one, the printed form
+ * replaces the rewritten one. A label really printed year-first is the price: day-first is how
+ * the places this app is used write it, and the printed text is what the reader sees on the pack.
+ */
+export function printedDate(value: string | null, rawText: string | null): string | null {
+  if (!value || !rawText) return value;
+  const iso = value.trim().match(/^20(\d{2})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (!iso) return value;
+  for (const m of normalize(rawText).matchAll(/(?<![\d])(\d{2})([-/.])(\d{1,2})\2(\d{1,2})(?![\d])/g)) {
+    if (m[1] === iso[1] && +m[3] === +iso[2] && +m[4] === +iso[3] && parseExpiry(m[0]) !== null) return m[0];
+  }
+  return value;
 }
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -93,8 +110,10 @@ export function expiryOf(result: LabelAnalysis, now: Date): Expiry | null {
     ["expiration", result.dates?.expiration],
     ["best_before", result.dates?.best_before],
   ] as const;
-  for (const [kind, raw] of candidates) {
-    if (!raw) continue;
+  for (const [kind, stored] of candidates) {
+    if (!stored) continue;
+    // scans saved before the reading was corrected still hold the model's rewritten date
+    const raw = printedDate(stored, result.raw_text) ?? stored;
     const parsed = parseExpiry(raw);
     if (parsed) return { ...parsed, kind, raw, ...expiryStatus(parsed.end, now) };
   }

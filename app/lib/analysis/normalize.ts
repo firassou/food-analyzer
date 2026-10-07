@@ -31,6 +31,7 @@ import {
 } from "./knowledge";
 import type { Locale } from "../i18n/locales";
 import { findExcipients } from "./excipients";
+import { printedDate } from "./expiry";
 import { analysisMessages, localCategory, type AnalysisMessages } from "./messages";
 import {
   ALLERGEN_IDS,
@@ -1221,9 +1222,10 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
     claims,
     certifications,
     dates: {
-      best_before: str(pick(dates, "best_before", "bbe", "best_before_end", "dlc", "dluo") ?? get("best_before"), 60),
-      expiration: str(pick(dates, "expiration", "expiry", "use_by", "expiration_date") ?? get("expiration", "use_by"), 60),
-      production: str(pick(dates, "production", "manufactured", "production_date", "packed_on"), 60),
+      // models rewrite "25-10-26" as "2025-10-26": the printed text is what counts
+      best_before: printedDate(str(pick(dates, "best_before", "bbe", "best_before_end", "dlc", "dluo") ?? get("best_before"), 60), rawText),
+      expiration: printedDate(str(pick(dates, "expiration", "expiry", "use_by", "expiration_date") ?? get("expiration", "use_by"), 60), rawText),
+      production: printedDate(str(pick(dates, "production", "manufactured", "production_date", "packed_on"), 60), rawText),
       lot:
         str(pick(dates, "lot", "batch", "lot_number") ?? get("lot", "batch"), 60)
           ?.replace(/^(lot|batch|lote|n° ?de lot)(?![a-z])\s*(no\.?|n°|number)?\s*[:#.]?\s*/i, "")
