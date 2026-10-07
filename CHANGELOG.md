@@ -4,6 +4,9 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.13.2 — 2026-10-08
+- Next.js is updated to 16.3.8, which fixes six security advisories published against 16.3.6 (one high: server-side request forgery in image optimization; the rest moderate or low). The audit step in CI had started failing because of them.
+
 ## 0.13.1 — 2026-10-08
 - Version bump only: no changes to the app.
 
