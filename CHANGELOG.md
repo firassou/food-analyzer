@@ -4,6 +4,10 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.12.1 — 2026-10-07
+- Better choices cope with Open Food Facts being slow or down: answers are kept an hour and an older one is still used while the service is failing, identical requests are sent once, the service is left alone for 30 seconds after an error, and searches stay under its rate limit.
+- `pnpm audit` is clean again: the dev-only `braces` advisory (no patched release exists) is gone because the Next.js lint plugin's glob library is replaced by `tinyglobby`, which does the one thing it needs.
+
 ## 0.12.0 — 2026-10-07
 - My shelf: every date printed on your scans, soonest first, with a badge and an optional reminder when the app opens; every medicine you scanned checked against every other; and a chat about your medicines together.
 - "Why these results?" under the tiles lists what was found on the label behind each verdict.

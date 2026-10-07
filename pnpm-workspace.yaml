@@ -3,3 +3,6 @@ allowBuilds:
   unrs-resolver: false
 overrides:
   source-map-js: ">=1.2.2"
+  # braces (via fast-glob > micromatch) has an advisory with no patched release;
+  # eslint-plugin-next only calls globSync(..., { onlyDirectories }), which tinyglobby has too
+  fast-glob: "npm:tinyglobby@^0.2.17"
