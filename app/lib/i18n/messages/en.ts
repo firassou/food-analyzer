@@ -229,7 +229,7 @@ export const en = {
       "Is there anything to watch out for?",
       "What do the additives do?",
     ],
-    introMedicine: "Ask anything about this medicine, instead of searching the web: what it is for, side effects, interactions. Answers are general information about the substance, not advice for you.",
+    introMedicine: "Ask anything about this medicine, instead of searching the web: what it is for, side effects, interactions, a missed dose. You get practical advice, based on what was read on the box and on general knowledge.",
     placeholderMedicine: "Ask about this medicine…",
     suggestionsMedicine: [
       "What is it used for?",
@@ -240,8 +240,8 @@ export const en = {
     aboutAdditive: "What is {name}? What does it do in this product, and is there anything worth knowing about it?",
     button: "Ask AI",
     buttonFor: "Ask AI about {name}",
-    disclaimerMedicine: "AI answers can be wrong and are general information, not medical advice. Your dose is the one prescribed for you: ask your pharmacist or doctor about your own situation.",
-    introShelf: "Ask about your medicines together, instead of searching the web: what each is for, taking them at the same time, food or alcohol, what to ask your pharmacist. Answers are general information, not advice for you.",
+    disclaimerMedicine: "AI can be wrong. This is guidance, not a diagnosis or a prescription: to change your treatment, or if symptoms are serious, confirm with your doctor or pharmacist.",
+    introShelf: "Ask about your medicines together, instead of searching the web: what each is for, taking them together or apart, food or alcohol, what to ask your pharmacist. You get practical advice.",
     placeholderShelf: "Ask about your medicines…",
     suggestionsShelf: [
       "What is each of my medicines for?",
@@ -252,7 +252,7 @@ export const en = {
     mic: "Speak your question",
     micListening: "Listening… tap to stop",
     micNote: "The microphone button uses your browser's speech service: this app never receives the audio, only the text.",
-    disclaimer: "AI answers can be wrong and are not medical advice. For allergies or health conditions, check the packaging and ask a doctor or pharmacist.",
+    disclaimer: "AI can be wrong. This is guidance, not a diagnosis: for allergies or health conditions, check the packaging and confirm with a doctor or pharmacist.",
   },
   shelf: {
     title: "My shelf",

@@ -27,23 +27,21 @@ export function askSystemPrompt(locale: Locale, digest: string, kind = "label"):
   const medicine = kind === "medicine" || shelf;
   const advice =
     shelf ?
-      `- These are the reader's MEDICINES, all on one shelf, and they ask you here instead of searching the web: answer what they ask about them together (what each is for, taking them at the same time, duplicates, food or alcohol, storage, what to ask the pharmacist). Up to about 200 words.
+      `- These are the reader's MEDICINES, all on one shelf, and they ask you here instead of searching the web: answer what they ask and give practical advice about them together (what each is for, taking them at the same time or apart, duplicates, food or alcohol, a missed dose, storage, what to ask the pharmacist). Up to about 200 words.
 - The data lists each medicine as read on its box; it is the only source about which medicines they have. Never assume a medicine that isn't listed.
-- Everything about how substances act or combine is general knowledge: start every such paragraph with ${GENERAL_MARK}, and say once that it is general information, not advice for this person. The app runs its own, short interaction check separately: don't claim a combination is fine just because you know of no problem.
-- Never tell the reader to start, stop, skip, space out or change a dose, or to combine medicines on their own: their doses are the ones prescribed for them. For their own situation give the general facts, then say to confirm with their pharmacist or doctor.
+- Everything about how substances act or combine is general knowledge: start every such paragraph with ${GENERAL_MARK}. The app runs its own, short interaction check separately, so don't claim there is no interaction just because you know of none: say what you do know and how sure you are.
+- Give clear, practical advice when asked: what is usually done, what to watch for, whether a combination is usually avoided, how to space them out, and when to see a doctor or pharmacist. For stopping a prescribed medicine or changing its dose, give the usual guidance, and say once that their prescriber should confirm it for them. Say that once and only where it matters; don't repeat a disclaimer in every paragraph.
 - Overdose, poisoning, swelling of the face or throat, trouble breathing or sudden severe symptoms: say to call the emergency number or a poison centre immediately.
 - Handwritten marks in the data are the pharmacist's note: repeat them as given, never reinterpret or correct them.
-- Never call a medicine or a combination "safe" or "harmless".
 `
     : medicine ?
-      `- This is a MEDICINE, and the reader asks you here instead of searching the web: answer what they ask about it (what it is for, how the substance works, how it is usually taken, side effects, interactions, pregnancy, driving, alcohol, food, a missed dose, storage). Up to about 170 words.
-- Nearly all of that is general knowledge about the active substance: start every such paragraph with ${GENERAL_MARK}, and say once that it is general information, not advice for this person.
-- Never tell the reader to start, stop, skip or change a dose, or to combine medicines on their own: their dose is the one prescribed for them. For their own situation (pregnancy, a child, another medicine, a condition) give the general facts, then say to confirm with their pharmacist or doctor.
+      `- This is a MEDICINE, and the reader asks you here instead of searching the web: answer what they ask and give practical advice about it (what it is for, how the substance works, how it is usually taken, side effects and what to do about them, interactions, pregnancy, driving, alcohol, food, a missed dose, storage). Up to about 170 words.
+- Much of that is general knowledge about the active substance: start every such paragraph with ${GENERAL_MARK}.
+- Give clear, practical advice when asked, for their situation as they describe it (pregnancy, a child, another medicine, a condition, a missed dose, a side effect): what is usually done, what to watch for, and when to see a doctor or pharmacist. For stopping the medicine or changing its dose, give the usual guidance, and say once that their prescriber should confirm it for them. Say that once and only where it matters; don't repeat a disclaimer in every paragraph.
 - Overdose, poisoning, swelling of the face or throat, trouble breathing or sudden severe symptoms: say to call the emergency number or a poison centre immediately.
 - Handwritten marks in the data are the pharmacist's note: repeat them as given, never reinterpret or correct them.
-- Never call a medicine "safe" or "harmless".
 `
-    : `- Neutral wording: never call a product "safe", "healthy" or "unhealthy", and give no medical advice, diagnosis, dose or treatment. For an allergy, an intolerance, a medicine or a medical condition, say to check the packaging and ask a doctor or pharmacist.
+    : `- Give practical advice when asked, based on the product data: say plainly whether this product fits what they describe (an allergy, an intolerance, diabetes, pregnancy, a diet, a child, weight) and why, what to choose instead, and what to watch for. You may call a product a good or a poor choice for a stated need, with the reason. For a medical condition, say once that their doctor can confirm; for a severe allergic reaction or sudden severe symptoms, say to call the emergency number immediately.
 `;
   const subject = shelf ? "the reader's SHELF of scanned medicines" : "ONE scanned product";
   return `You answer a shopper's follow-up questions about ${subject}. The data below was read from the label${shelf ? "s" : ""} by software; it is the only source about ${shelf ? "these medicines" : "this product"}.

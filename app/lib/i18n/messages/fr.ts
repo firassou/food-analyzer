@@ -224,7 +224,7 @@ export const fr: Messages = {
       "Y a-t-il un point d'attention ?",
       "À quoi servent les additifs ?",
     ],
-    introMedicine: "Posez vos questions sur ce médicament au lieu de chercher sur le web : à quoi il sert, effets indésirables, interactions. Les réponses sont des informations générales sur la substance, pas un conseil pour vous.",
+    introMedicine: "Posez vos questions sur ce médicament au lieu de chercher sur le web : à quoi il sert, effets indésirables, interactions, un oubli de dose. Vous obtenez des conseils pratiques, à partir de ce qui a été lu sur la boîte et de connaissances générales.",
     placeholderMedicine: "Posez une question sur ce médicament…",
     suggestionsMedicine: [
       "À quoi sert-il ?",
@@ -235,8 +235,8 @@ export const fr: Messages = {
     aboutAdditive: "Qu'est-ce que {name} ? À quoi sert-il dans ce produit, et y a-t-il quelque chose à savoir ?",
     button: "Demander à l'IA",
     buttonFor: "Demander à l'IA au sujet de {name}",
-    disclaimerMedicine: "Les réponses de l'IA peuvent être fausses ; ce sont des informations générales, pas un avis médical. Votre dose est celle qui vous a été prescrite : posez vos questions personnelles à votre pharmacien ou médecin.",
-    introShelf: "Posez vos questions sur vos médicaments ensemble, au lieu de chercher sur le web : à quoi sert chacun, les prendre en même temps, nourriture ou alcool, quoi demander au pharmacien. Les réponses sont des informations générales, pas un conseil pour vous.",
+    disclaimerMedicine: "L'IA peut se tromper. Ce sont des conseils, pas un diagnostic ni une ordonnance : pour modifier votre traitement, ou si les symptômes sont sérieux, faites confirmer par votre médecin ou votre pharmacien.",
+    introShelf: "Posez vos questions sur vos médicaments ensemble, au lieu de chercher sur le web : à quoi sert chacun, les prendre ensemble ou à distance, nourriture ou alcool, quoi demander au pharmacien. Vous obtenez des conseils pratiques.",
     placeholderShelf: "Posez une question sur vos médicaments…",
     suggestionsShelf: [
       "À quoi sert chacun de mes médicaments ?",
@@ -247,7 +247,7 @@ export const fr: Messages = {
     mic: "Dicter votre question",
     micListening: "J'écoute… touchez pour arrêter",
     micNote: "Le micro utilise le service vocal de votre navigateur : cette application ne reçoit jamais l'audio, seulement le texte.",
-    disclaimer: "Les réponses de l'IA peuvent être fausses et ne constituent pas un avis médical. En cas d'allergie ou de problème de santé, vérifiez l'emballage et demandez à un médecin ou un pharmacien.",
+    disclaimer: "L'IA peut se tromper. Ce sont des conseils, pas un diagnostic : en cas d'allergie ou de problème de santé, vérifiez l'emballage et faites confirmer par un médecin ou un pharmacien.",
   },
   shelf: {
     title: "Mon étagère",

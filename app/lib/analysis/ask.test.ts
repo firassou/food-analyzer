@@ -33,11 +33,12 @@ describe("digestForAsk", () => {
 });
 
 describe("askSystemPrompt", () => {
-  it("puts the data in a fenced block, in the reader's language, with the neutral-wording rules", () => {
+  it("puts the data in a fenced block, in the reader's language, with the advice rules", () => {
     const p = askSystemPrompt("fr", "Name: Biscuit");
     expect(p).toContain("French");
     expect(p).toContain("<product_data>\nName: Biscuit\n</product_data>");
-    expect(p).toMatch(/never call a product "safe"/);
+    expect(p).toMatch(/Give practical advice when asked/);
+    expect(p).not.toMatch(/give no medical advice/i);
   });
 });
 
@@ -61,13 +62,16 @@ describe("medicines", () => {
     expect(digest).toContain("Side effects (general information): rare skin reactions");
   });
 
-  it("answers medicine questions instead of refusing, but never advises on a dose", () => {
+  it("answers medicine questions and gives advice, confirming a dose change with the prescriber once", () => {
     const p = askSystemPrompt("en", "Kind: medicine", kindOf(medicine));
     expect(p).toContain("This is a MEDICINE");
-    expect(p).toMatch(/Never tell the reader to start, stop, skip or change a dose/);
+    expect(p).toMatch(/Give clear, practical advice when asked/);
+    expect(p).toMatch(/their prescriber should confirm it for them/);
+    expect(p).not.toMatch(/Never tell the reader/);
+    expect(p).not.toMatch(/Never call a medicine/);
     expect(p).toMatch(/emergency number/);
     expect(p).toContain("[G]");
-    // a food keeps the neutral wording and the shorter answer
+    // a food gets advice too, with the shorter answer
     const food = askSystemPrompt("en", "Kind: label", kindOf(analyzed("eu-biscuit.txt")));
     expect(food).not.toContain("This is a MEDICINE");
     expect(food).toMatch(/About 120 words|at most about 120 words/i);
