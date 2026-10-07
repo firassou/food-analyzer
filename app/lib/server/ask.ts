@@ -1,5 +1,6 @@
 import "server-only";
 import { askSystemPrompt, cleanAnswer, digestForAsk, digestForCabinet, kindOf } from "../analysis/ask";
+import type { AskContext } from "../analysis/askContext";
 import type { ChatTurn } from "../analysis/types";
 import type { Locale } from "../i18n/locales";
 import { AnalyzeError } from "./analyze";
@@ -19,7 +20,7 @@ const INSTANT_FAILURES = new Set<FailureKind | "empty">(["auth", "quota", "rate_
  * the analysis. Text only: the photo isn't sent, the analysis stands in for it.
  */
 export async function askAboutProduct(
-  input: { question: string; history: ChatTurn[]; result: unknown; locale: Locale; cabinet?: unknown[] },
+  input: { question: string; history: ChatTurn[]; result: unknown; locale: Locale; cabinet?: unknown[]; context?: AskContext },
   signal: AbortSignal,
 ): Promise<{ answer: string; model: string; provider: string }> {
   const targets = getTargets();
@@ -28,7 +29,7 @@ export async function askAboutProduct(
   }
   const system = input.cabinet
     ? askSystemPrompt(input.locale, digestForCabinet(input.cabinet), "cabinet")
-    : askSystemPrompt(input.locale, digestForAsk(input.result), kindOf(input.result));
+    : askSystemPrompt(input.locale, digestForAsk(input.result), kindOf(input.result), input.context);
   const started = Date.now();
   const kinds: (FailureKind | "empty")[] = [];
   const deadProviders = new Set<string>();

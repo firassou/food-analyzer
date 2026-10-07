@@ -171,6 +171,54 @@ test("several people can share the device", async ({ page }) => {
   await expect(page.getByRole("button", { name: /My profile: Lina/ })).toBeVisible();
 });
 
+test.describe("Ask AI and what it may know about the reader", () => {
+  const answer = { ok: true, answer: "Fine.", model: "m", provider: "p" };
+  const withProfile = (page: Page) =>
+    page.addInitScript(() =>
+      localStorage.setItem(
+        "food-analyzer:profile:v2",
+        JSON.stringify({ active: "me", profiles: [{ id: "me", name: "", allergens: ["milk"], lactose: false, sugar: false, diets: [] }] }),
+      ),
+    );
+  /** asks a question and waits until the `n`th answer is on the page */
+  const ask = async (page: Page, question: string, n: number) => {
+    await page.getByRole("textbox", { name: "Ask about this product…" }).fill(question);
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText("Fine.")).toHaveCount(n);
+  };
+
+  test("sends nothing about the reader until they turn it on", async ({ page }) => {
+    const bodies: Record<string, unknown>[] = [];
+    await page.route("**/api/ask", async (route) => {
+      bodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: answer });
+    });
+    await withProfile(page);
+    await withHistory(page, history(fromFixture("n1", "eu-biscuit.txt", { product: { name: "Biscuit" } })));
+    await page.goto("/");
+    await open(page, "Biscuit");
+    const switchControl = page.getByRole("switch", { name: "Use my profile and medicines" });
+    await expect(switchControl).toHaveAttribute("aria-checked", "false");
+    await ask(page, "Is this fine for me?", 1);
+    expect(bodies[0].context).toBeUndefined();
+
+    await switchControl.click();
+    await expect(switchControl).toHaveAttribute("aria-checked", "true");
+    await ask(page, "And now?", 2);
+    const context = bodies[1].context as { reader: string[]; checks: string[] };
+    expect(context.reader[0]).toBe("The reader is allergic or intolerant to milk.");
+    expect(context.checks[0]).toMatch(/^Profile check for this product:/);
+  });
+
+  test("is not offered when there is nothing to tell", async ({ page }) => {
+    await withHistory(page, history(fromFixture("n1", "eu-biscuit.txt", { product: { name: "Biscuit" } })));
+    await page.goto("/");
+    await open(page, "Biscuit");
+    await expect(page.getByRole("textbox", { name: "Ask about this product…" })).toBeVisible();
+    await expect(page.getByRole("switch")).toHaveCount(0);
+  });
+});
+
 test("a result shows what it means for everyone who shares the device", async ({ page }) => {
   await page.addInitScript(() =>
     localStorage.setItem(

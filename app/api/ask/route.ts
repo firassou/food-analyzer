@@ -1,4 +1,4 @@
-import { cleanCabinet, cleanQuestion, cleanTurns } from "@/app/lib/analysis/ask";
+import { cleanCabinet, cleanContext, cleanQuestion, cleanTurns } from "@/app/lib/analysis/ask";
 import type { AnalyzeErrorCode, AskResponse } from "@/app/lib/analysis/types";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/app/lib/i18n/locales";
 import { AnalyzeError } from "@/app/lib/server/analyze";
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
   try {
     const { answer, model, provider } = await askAboutProduct(
-      { question, history: cleanTurns(body.history), result: body.result, locale, cabinet },
+      { question, history: cleanTurns(body.history), result: body.result, locale, cabinet, context: cleanContext(body.context) },
       req.signal,
     );
     return Response.json({ ok: true, answer, model, provider } satisfies AskResponse);

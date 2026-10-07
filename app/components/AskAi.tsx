@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cleanTurns, MAX_QUESTION_CHARS, splitAnswer } from "../lib/analysis/ask";
+import { type AskContext, buildAskContext, hasPersonalContext } from "../lib/analysis/askContext";
+import { checkShelf } from "../lib/analysis/cabinet";
 import type { AnalyzeErrorCode, AskResponse, ChatTurn, LabelAnalysis } from "../lib/analysis/types";
-import { saveChat } from "../lib/client/history";
+import { setAskPersonal, useAskPersonal } from "../lib/client/askPersonal";
+import { saveChat, useHistory } from "../lib/client/history";
+import { useProfile } from "../lib/client/profile";
 import { SPEECH_LANG, speechSupported, startSpeech } from "../lib/client/speech";
 import { useI18n } from "../lib/i18n/I18nProvider";
 import type { Messages } from "../lib/i18n/messages";
@@ -21,13 +25,13 @@ class AskFailure extends Error {
 /** what the question is about: one scanned product, or the medicines on the shelf */
 type Subject = { result: LabelAnalysis } | { cabinet: LabelAnalysis[] };
 
-async function ask(question: string, history: ChatTurn[], subject: Subject, lang: string, signal: AbortSignal): Promise<string> {
+async function ask(question: string, history: ChatTurn[], subject: Subject, lang: string, signal: AbortSignal, context?: AskContext): Promise<string> {
   let response: Response;
   try {
     response = await fetch("/api/ask", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ question, history, ...subject, lang }),
+      body: JSON.stringify({ question, history, ...subject, lang, context }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(CLIENT_TIMEOUT_MS)]),
     });
   } catch (e) {
@@ -78,6 +82,12 @@ export default function AskAi({
     shelf ? a.suggestionsShelf
     : medicine ? a.suggestionsMedicine
     : a.suggestions;
+  // what the reader may tell the AI about themselves: only offered for one product, only when there is something to tell
+  const profile = useProfile();
+  const entries = useHistory();
+  const personalOn = useAskPersonal();
+  const shelfMedicines = checkShelf(entries).medicines.map((e) => ({ name: e.result.product.name ?? e.result.product.category ?? "medicine", medicine: e.result.medicine }));
+  const canPersonalise = !!result && !cabinet && hasPersonalContext(profile, shelfMedicines);
   const save = persist ?? ((turns: ChatTurn[]) => saveChat(scanId, turns));
   const subject: Subject | null =
     cabinet ? { cabinet }
@@ -128,7 +138,8 @@ export default function AskAi({
     const asked: ChatTurn[] = [...turns, { role: "user", text: question }];
     setTurns(asked);
     try {
-      const answer = await ask(question, turns, subject, locale, controller.signal);
+      const context = canPersonalise && personalOn && result ? buildAskContext(result, profile, shelfMedicines) : undefined;
+      const answer = await ask(question, turns, subject, locale, controller.signal, context);
       const next: ChatTurn[] = [...asked, { role: "assistant", text: answer }];
       setTurns(next);
       save(next);
@@ -298,6 +309,33 @@ export default function AskAi({
           : <SendIcon className="size-5 rtl:-scale-x-100" />}
         </button>
       </form>
+
+      {canPersonalise && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={personalOn}
+          aria-labelledby="ask-personal-label"
+          aria-describedby="ask-personal-hint"
+          onClick={() => setAskPersonal(!personalOn)}
+          className="mt-3 flex min-h-11 w-full items-start gap-3 rounded-2xl bg-mute-soft/60 p-3.5 text-start transition hover:bg-mute-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <span
+            aria-hidden
+            className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full transition ${personalOn ? "bg-accent" : "bg-sheet ring-2 ring-ink-soft ring-inset"}`}
+          >
+            <span className={`absolute top-1 size-5 rounded-full transition-all ${personalOn ? "start-6 bg-on-accent" : "start-1 bg-ink-soft"}`} />
+          </span>
+          <span className="min-w-0">
+            <span id="ask-personal-label" className="block text-sm font-medium">
+              {a.personal}
+            </span>
+            <span id="ask-personal-hint" className="mt-0.5 block text-xs leading-5 text-ink-soft rtl:leading-6">
+              {a.personalHint}
+            </span>
+          </span>
+        </button>
+      )}
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <p className="min-w-0 flex-1 text-xs leading-5 text-ink-soft">{medicine ? a.disclaimerMedicine : a.disclaimer}{canSpeak && ` ${a.micNote}`}</p>
