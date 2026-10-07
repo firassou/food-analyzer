@@ -1,8 +1,9 @@
 "use client";
 import { checkProfile, type ProfileFinding } from "../../lib/analysis/profile";
 import type { LabelAnalysis } from "../../lib/analysis/types";
-import { useProfile } from "../../lib/client/profile";
+import { useProfile, useProfileBook } from "../../lib/client/profile";
 import { format, useI18n } from "../../lib/i18n/I18nProvider";
+import { usePersonName } from "../ProfileSheet";
 import { cn, Dot, PencilIcon, toneClasses } from "../ui";
 
 const verdictTone = { avoid: "red", check: "amber", ok: "green", unchecked: "zinc" } as const;
@@ -11,6 +12,8 @@ const verdictTone = { avoid: "red", check: "amber", ok: "green", unchecked: "zin
 export default function ProfileVerdict({ result, onEdit }: { result: LabelAnalysis; onEdit?: () => void }) {
   const { t } = useI18n();
   const profile = useProfile();
+  const several = useProfileBook().profiles.length > 1;
+  const nameOf = usePersonName();
   const check = checkProfile(result, profile);
   if (!check) return null;
   const v = t.profile.verdict;
@@ -28,7 +31,7 @@ export default function ProfileVerdict({ result, onEdit }: { result: LabelAnalys
     : null;
   return (
     <div className={cn("mt-5 rounded-3xl px-5 py-4", toneClasses[tone])}>
-      <p className="eyebrow opacity-80">{v.eyebrow}</p>
+      <p className="eyebrow opacity-80">{several ? format(v.eyebrowFor, { name: nameOf(profile) }) : v.eyebrow}</p>
       <p className="font-display mt-1 text-xl leading-tight font-bold">{v.title[check.status]}</p>
       {check.findings.length > 0 && (
         <ul className="mt-3 space-y-2">

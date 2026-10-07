@@ -122,8 +122,15 @@ export const en = {
     clear: "Clear",
     close: "Close",
     edit: "Edit my profile",
+    me: "Me",
+    person: "Person {n}",
+    people: "Who is this for?",
+    addPerson: "Add a person",
+    name: "Name",
+    removePerson: "Remove this person",
     verdict: {
       eyebrow: "For your profile",
+      eyebrowFor: "For {name}",
       title: {
         avoid: "Not for you",
         check: "Check before you have it",

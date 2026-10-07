@@ -2,9 +2,25 @@
 import { useEffect, useRef } from "react";
 import { DIETS, EMPTY_PROFILE, isEmptyProfile, type Profile } from "../lib/analysis/profile";
 import { ALLERGEN_IDS } from "../lib/analysis/types";
-import { saveProfile, useProfile } from "../lib/client/profile";
-import { useI18n } from "../lib/i18n/I18nProvider";
-import { CloseIcon, cn } from "./ui";
+import { MAX_PROFILES, type NamedProfile } from "../lib/analysis/profiles";
+import {
+  addProfilePerson,
+  removeProfilePerson,
+  renameProfilePerson,
+  saveProfile,
+  switchProfilePerson,
+  useProfile,
+  useProfileBook,
+} from "../lib/client/profile";
+import { format, useI18n } from "../lib/i18n/I18nProvider";
+import { CloseIcon, cn, PlusIcon, TrashIcon } from "./ui";
+
+/** what a person is called in the interface: the name typed, else "Me" or "Person 2" */
+export function usePersonName() {
+  const { t } = useI18n();
+  const book = useProfileBook();
+  return (p: NamedProfile) => p.name || (p.id === book.profiles[0].id ? t.profile.me : format(t.profile.person, { n: book.profiles.indexOf(p) + 1 }));
+}
 
 export function ProfileIcon({ className }: { className?: string }) {
   return (
@@ -15,18 +31,22 @@ export function ProfileIcon({ className }: { className?: string }) {
   );
 }
 
-/** the header button: a dot shows that a profile is set */
+/** the header button: a dot shows that a profile is set; with several people it shows who is active */
 export function ProfileButton({ onClick }: { onClick: () => void }) {
   const { t } = useI18n();
-  const active = !isEmptyProfile(useProfile());
+  const book = useProfileBook();
+  const profile = useProfile();
+  const nameOf = usePersonName();
+  const several = book.profiles.length > 1;
+  const active = !isEmptyProfile(profile);
   return (
     <button
       onClick={onClick}
-      aria-label={t.profile.title}
-      title={t.profile.title}
+      aria-label={several ? `${t.profile.title}: ${nameOf(profile)}` : t.profile.title}
+      title={several ? nameOf(profile) : t.profile.title}
       className="relative grid size-11 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
     >
-      <ProfileIcon className="size-5" />
+      {several ? <span className="font-display text-base font-bold text-accent">{[...nameOf(profile)][0]?.toUpperCase()}</span> : <ProfileIcon className="size-5" />}
       {active && <span aria-hidden className="absolute end-0 top-0 size-3 rounded-full border-2 border-paper bg-accent" />}
     </button>
   );
@@ -40,6 +60,8 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const p = t.profile;
   const profile = useProfile();
+  const book = useProfileBook();
+  const nameOf = usePersonName();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -77,6 +99,51 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
             <CloseIcon className="size-4" />
           </button>
         </div>
+
+        <fieldset className="mt-5">
+          <legend className="eyebrow text-ink-soft">{p.people}</legend>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {book.profiles.map((person) => (
+              <Chip key={person.id} on={person.id === book.active} onClick={() => switchProfilePerson(person.id)}>
+                {nameOf(person)}
+              </Chip>
+            ))}
+            {book.profiles.length < MAX_PROFILES && (
+              <button
+                type="button"
+                onClick={addProfilePerson.bind(null, "")}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-accent ring-1 ring-rule transition hover:bg-accent-soft active:scale-[0.97]"
+              >
+                <PlusIcon className="size-4" />
+                {p.addPerson}
+              </button>
+            )}
+          </div>
+          {book.profiles.length > 1 && (
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                key={profile.id}
+                defaultValue={profile.name}
+                onChange={(e) => renameProfilePerson(profile.id, e.target.value)}
+                maxLength={24}
+                dir="auto"
+                autoComplete="off"
+                placeholder={p.name}
+                aria-label={p.name}
+                className="h-11 min-w-0 flex-1 rounded-full bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
+              />
+              <button
+                type="button"
+                onClick={() => removeProfilePerson(profile.id)}
+                aria-label={p.removePerson}
+                title={p.removePerson}
+                className="grid size-11 shrink-0 place-items-center rounded-full text-bad transition hover:bg-bad-soft"
+              >
+                <TrashIcon className="size-5" />
+              </button>
+            </div>
+          )}
+        </fieldset>
 
         <Group title={p.allergens}>
           {ALLERGEN_IDS.map((id) => (

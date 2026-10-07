@@ -117,8 +117,15 @@ export const ar: Messages = {
     clear: "مسح",
     close: "إغلاق",
     edit: "تعديل ملفي",
+    me: "أنا",
+    person: "الشخص {n}",
+    people: "لمن هذا؟",
+    addPerson: "إضافة شخص",
+    name: "الاسم",
+    removePerson: "حذف هذا الشخص",
     verdict: {
       eyebrow: "بحسب ملفك",
+      eyebrowFor: "لـ {name}",
       title: {
         avoid: "لا يناسبك",
         check: "تحقّق قبل تناوله",

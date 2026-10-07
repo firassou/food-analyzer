@@ -117,8 +117,15 @@ export const fr: Messages = {
     clear: "Effacer",
     close: "Fermer",
     edit: "Modifier mon profil",
+    me: "Moi",
+    person: "Personne {n}",
+    people: "Pour qui ?",
+    addPerson: "Ajouter une personne",
+    name: "Prénom",
+    removePerson: "Supprimer cette personne",
     verdict: {
       eyebrow: "Pour votre profil",
+      eyebrowFor: "Pour {name}",
       title: {
         avoid: "Pas pour vous",
         check: "À vérifier avant de consommer",
