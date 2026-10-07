@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "eval:marks": "node scripts/eval-marks.mjs",
     "test:e2e": "pnpm build && playwright test",
-    "eval:samples": "node scripts/eval-samples.mjs"
+    "eval:samples": "node scripts/eval-samples.mjs",
+    "eval:knowledge": "OFF_REPORT=1 vitest run knowledge.off --silent=false",
+    "fetch:corpus": "node scripts/fetch-off-corpus.mjs"
   },
   "dependencies": {
     "next": "16.3.6",

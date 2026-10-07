@@ -98,6 +98,50 @@ describe("allergen rules", () => {
     expect(has("جوز الهند", "tree_nuts")).toBe(false);
   });
 
+  it("covers the Italian, Spanish, French and German forms the Open Food Facts snapshot and the reviewer showed were missing", () => {
+    for (const [text, id] of [
+      ["emulsionanti: lecitine (SOIA)", "soy"],
+      ["lupini", "lupin"],
+      ["Maquereaux, huile végétale, sel", "fish"],
+      ["merluzzo 31%", "fish"],
+      ["trucha", "fish"],
+      ["truite fumée", "fish"],
+      ["Forellenfilet", "fish"],
+      ["Kabeljaufilet", "fish"],
+      ["Lachsfilet", "fish"],
+      ["capesante 21,4%", "molluscs"],
+      ["polpo", "molluscs"],
+      ["almejas", "molluscs"],
+      ["Miesmuscheln", "molluscs"],
+      ["Austern", "molluscs"],
+      ["coquilles Saint Jacques", "molluscs"],
+      ["pétoncles", "molluscs"],
+      ["aragosta", "crustaceans"],
+      ["scampi", "crustaceans"],
+      ["granchio", "crustaceans"],
+      ["Garnelen", "crustaceans"],
+      ["Krabben", "crustaceans"],
+      ["Hummer", "crustaceans"],
+      ["langosta", "crustaceans"],
+    ] as const)
+      expect(has(text, id), `${text} → ${id}`).toBe(true);
+  });
+
+  it("a scallop is a mollusc and not a nut", () => {
+    expect(has("noix de Saint-Jacques", "molluscs")).toBe(true);
+    expect(has("noix de Saint-Jacques", "tree_nuts")).toBe(false);
+    expect(has("noix", "tree_nuts")).toBe(true);
+  });
+
+  it("does not take a neighbouring word for one of them", () => {
+    expect(has("polpa di pomodoro", "molluscs")).toBe(false);
+    expect(has("sole", "fish")).toBe(false);
+    expect(has("marathon", "fish")).toBe(false);
+    expect(has("lupo", "lupin")).toBe(false);
+    // "seppia" is also a colour: flagging it is the safe direction, not a claim that the colour is cuttlefish
+    expect(has("seppia", "molluscs")).toBe(true);
+  });
+
   it("soy, sesame, fish, crustaceans, molluscs", () => {
     expect(has("soy lecithin", "soy")).toBe(true);
     expect(has("soja", "soy")).toBe(true);
