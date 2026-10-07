@@ -138,6 +138,27 @@ test.describe("the shelf", () => {
     await expect(page.getByText("Ask before taking both")).toBeVisible();
     await expect(page.getByText("Brufen + Sintrom")).toBeVisible();
   });
+
+  test("shows how long a treatment still runs, from the duration the pharmacist wrote", async ({ page }) => {
+    const marks = { morning: 1, midday: 0, evening: 1, confidence: "high", duration: "7 jours" };
+    await withHistory(page, history(medicine("a", "Augmentin", ["amoxicillin"], { marks }), medicine("b", "Doliprane", ["paracetamol"])));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My shelf" }).first().click();
+    await expect(page.getByRole("heading", { name: "Treatments" })).toBeVisible();
+    await expect(page.getByText("Augmentin")).toBeVisible();
+    await expect(page.getByText("6 days left")).toBeVisible();
+    await expect(page.getByText("2 a day")).toBeVisible();
+    // a medicine with no duration written on it isn't listed as a treatment
+    await expect(page.getByRole("button", { name: /Doliprane.*days left/ })).toHaveCount(0);
+  });
+
+  test("has no treatments section when no duration was written", async ({ page }) => {
+    await withHistory(page, history(medicine("a", "Doliprane", ["paracetamol"])));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My shelf" }).first().click();
+    await expect(page.getByRole("heading", { name: "Medicines together" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Treatments" })).toHaveCount(0);
+  });
 });
 
 test("several people can share the device", async ({ page }) => {

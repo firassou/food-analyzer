@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { checkShelf, datedEntries } from "../lib/analysis/cabinet";
+import { type Course, coursesOf } from "../lib/analysis/course";
 import type { Expiry } from "../lib/analysis/expiry";
 import { loadShelfChat, saveShelfChat, useHistory, type HistoryEntry } from "../lib/client/history";
 import { disableReminders, enableReminders, useReminderState } from "../lib/client/reminders";
@@ -22,6 +23,7 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
   const [now] = useState(() => new Date());
   const dated = useMemo(() => datedEntries(entries, now), [entries, now]);
   const shelf = useMemo(() => checkShelf(entries), [entries]);
+  const courses = useMemo(() => coursesOf(shelf.medicines, now), [shelf, now]);
   const [initialChat] = useState(loadShelfChat);
 
   const month = useMemo(() => new Intl.DateTimeFormat(dateLocale(locale), { month: "long", year: "numeric" }), [locale]);
@@ -67,6 +69,17 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
             <Reminders />
           </Section>
 
+          {courses.length > 0 && (
+            <Section title={s.courses} icon={<PillIcon />}>
+              <ul className="space-y-1">
+                {courses.map((course) => (
+                  <CourseRow key={course.entry.id} course={course} name={nameOf(course.entry)} onOpen={onOpen} />
+                ))}
+              </ul>
+              <p className="mt-3 text-xs leading-5 text-ink-soft rtl:leading-6">{s.coursesNote}</p>
+            </Section>
+          )}
+
           <Section title={s.medicines} icon={<PillIcon />} aside={shelf.compared > 0 && format(s.compared, { count: shelf.compared })}>
             {shelf.medicines.length < 2 ?
               <p className="text-sm leading-6 text-ink-soft">{s.medicinesNone}</p>
@@ -106,6 +119,40 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
         </>
       )}
     </div>
+  );
+}
+
+/** a medicine whose pharmacist's note gave a duration: how long it still runs, counted from the scan */
+function CourseRow({ course, name, onOpen }: { course: Course<HistoryEntry>; name: string; onOpen: (e: HistoryEntry) => void }) {
+  const { t } = useI18n();
+  const s = t.shelf;
+  const tone = course.status === "finished" ? "zinc" : course.left <= 1 ? "amber" : "green";
+  const when =
+    course.status === "finished" ? s.finished
+    : course.status === "last_day" ? s.lastDay
+    : course.left === 1 ? s.oneDayLeft
+    : course.left === 2 ? s.leftTwo
+    : course.left <= 10 ? format(s.leftFew, { count: course.left })
+    : format(s.leftMany, { count: course.left });
+  return (
+    <li>
+      <button
+        onClick={() => onOpen(course.entry)}
+        className="flex w-full items-center gap-3 rounded-2xl p-2 text-start transition hover:bg-mute-soft/70"
+      >
+        <ScanThumb entry={course.entry} className="size-12" />
+        <span className="min-w-0 flex-1">
+          <span dir="auto" className="block truncate text-[15px] font-medium">
+            {name}
+          </span>
+          <span className="eyebrow mt-0.5 block text-ink-soft rtl:leading-5 rtl:tracking-normal">
+            <span dir="auto">{course.raw}</span>
+            {course.perDay > 0 && <> · {format(s.perDay, { count: course.perDay })}</>}
+          </span>
+        </span>
+        <span className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold", tone === "zinc" ? "bg-mute-soft text-ink-soft" : toneClasses[tone])}>{when}</span>
+      </button>
+    </li>
   );
 }
 
