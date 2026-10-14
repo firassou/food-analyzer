@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import sharp from "sharp";
 import { fromFixture, HISTORY_KEY, history, medicine, monthsFromNow } from "./seed";
 
 /** saved scans in place before the page first loads (a reload keeps what the app saved since) */
@@ -86,6 +87,16 @@ test.describe("a medicine", () => {
     await expect(page.getByText("It relieves pain and fever.")).toBeVisible();
     await expect(page.getByRole("log").getByText("General information")).toBeVisible();
     expect(asked).toBe("What is it used for?");
+  });
+
+  test("a reading of the pen marks the app doubts is never drawn as the dose", async ({ page }) => {
+    const unsure = medicine("m2", "Mycophil", ["terbinafine"], { marks: { morning: 1, midday: 0, evening: 1, confidence: "low" } });
+    await withHistory(page, history(unsure));
+    await page.goto("/");
+    await open(page, "Mycophil");
+    await expect(page.getByText("Uncertain reading").first()).toBeVisible();
+    await expect(page.getByText(/Possible reading, not certain: .?Morning 1 · Evening 1/)).toBeVisible();
+    await expect(page.getByText("a day in total")).toHaveCount(0);
   });
 
   test("its pen marks can be corrected by the reader", async ({ page }) => {
@@ -460,4 +471,69 @@ test("the app opens offline once it has been visited", async ({ page, context })
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Know what's really in your");
+});
+
+test.describe("a saved result follows the interface language", () => {
+  const med = medicine("m1", "Paradol", ["paracetamol"], { marks: { morning: 1, midday: 0, evening: 1, confidence: "high" } });
+
+  test("the app's own sentences switch at once, the AI's text is translated once and kept", async ({ page }) => {
+    const sent: string[][] = [];
+    await page.route("**/api/translate", async (route) => {
+      const { texts } = route.request().postDataJSON() as { texts: string[] };
+      sent.push(texts);
+      await route.fulfill({ json: { ok: true, texts: texts.map((t) => `FR: ${t}`) } });
+    });
+    await withHistory(page, history(med));
+    await page.goto("/");
+    await open(page, "Paradol");
+    await page.getByLabel("Language").selectOption("fr");
+    // a sentence the app wrote itself, rebuilt in French without any model
+    await expect(page.getByText("Les traits au stylo ont été lus par une IA")).toBeVisible();
+    // the model's text, through the translation
+    await expect(page.getByText("FR: pain")).toBeVisible();
+    expect(sent).toHaveLength(1);
+    // back to English: the phrasebook kept with the scan answers, no request
+    await page.getByLabel("Langue").selectOption("en");
+    await expect(page.getByText("The pen marks were read by an AI")).toBeVisible();
+    await expect(page.getByText("pain", { exact: true })).toBeVisible();
+    expect(sent).toHaveLength(1);
+  });
+
+  test("a failed translation leaves the result readable and offers to try again", async ({ page }) => {
+    let calls = 0;
+    await page.route("**/api/translate", (route) => {
+      calls++;
+      return route.fulfill({ status: 503, json: { ok: false, error: "busy", code: "rate_limited" } });
+    });
+    await withHistory(page, history(med));
+    await page.goto("/");
+    await open(page, "Paradol");
+    await page.getByLabel("Language").selectOption("fr");
+    await expect(page.getByText("la traduction n'a pas abouti")).toBeVisible();
+    await page.getByRole("button", { name: "Réessayer" }).click();
+    await expect.poll(() => calls).toBe(2);
+  });
+});
+
+test("the same photo picked again opens its saved result without asking the AI", async ({ page }) => {
+  let analyses = 0;
+  const biscuit = fromFixture("b1", "eu-biscuit.txt");
+  await page.route("**/api/analyze", async (route) => {
+    analyses++;
+    await route.fulfill({ json: { ok: true, result: biscuit.result, meta: { model: "m", provider: "p", attempts: 1, duration_ms: 900, locale: "en" } } });
+  });
+  // a small picture with something on it
+  const png = await sharp({ create: { width: 96, height: 64, channels: 3, background: "#f4f1ea" } })
+    .composite([{ input: { create: { width: 40, height: 30, channels: 3, background: "#27624d" } }, top: 10, left: 20 }])
+    .png()
+    .toBuffer();
+  const pick = () => page.locator('input[type="file"]:not([capture])').first().setInputFiles({ name: "label.png", mimeType: "image/png", buffer: png });
+  await page.goto("/");
+  await pick();
+  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
+  expect(analyses).toBe(1);
+  await page.getByRole("button", { name: "Food Analyzer" }).first().click();
+  await pick();
+  await expect(page.getByText("You analyzed this exact photo before")).toBeVisible();
+  expect(analyses).toBe(1);
 });

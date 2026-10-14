@@ -52,6 +52,8 @@ export interface AnalysisMessages {
     medicineMarksUnclear: string;
   };
   issues: { sugarsOverCarbs: string; saturatesOverFat: string; macrosOver100: string; energyMismatch: string };
+  /** the note on pen marks whose reading contradicts itself: no dose is shown for them */
+  marksConflict: string;
   evidence: {
     ingredient: (name: string) => string;
     glutenDeclared: string;
@@ -204,18 +206,20 @@ const en: AnalysisMessages = {
     estimatedNutrition:
       "The calories and nutrients are a rough estimate for a typical recipe and portion of this dish. The real figures can differ a lot.",
     medicineGeneral:
-      "The uses, usual dose and cautions below are general information about the active substance, written by an AI. They can be wrong and may not apply to you. Your dose is the one your doctor or pharmacist gave you: follow it, and read the leaflet.",
+      "The uses, usual dose and cautions are general information about the active substance, written by an AI: they can be wrong and may not apply to you. The dose prescribed for you comes first; the leaflet in your box has the details.",
     medicineNoActive:
       "The active substance couldn't be read, so no general information is shown. Photograph the side of the box that names the substance and its strength.",
     medicineNoExcipients:
-      "The excipients aren't on this photo and weren't found in the official medicines database, so gluten and other sensitive ingredients couldn't be checked. If that matters to you, add a photo of the composition (on the side of the box or in the leaflet).",
+      "The excipients aren't on this photo or in the official medicines database, so gluten and other sensitive ingredients weren't checked. If that matters to you, add a photo of the composition.",
     medicineDatabase: (product) =>
       `The excipients weren't on the photo. They come from the official French medicines database, entry “${product}”. A box made for another country can differ: the leaflet in your box has the final word.`,
     medicineMarks:
-      "The pen marks on the box were read by an AI. If this reading doesn't match what your doctor or pharmacist told you, follow what they told you and ask them to confirm.",
+      "The pen marks were read by an AI: if they don't match what your doctor or pharmacist told you, follow them and ask them to confirm.",
     medicineMarksUnclear:
       "The pen marks on the box were hard to read: don't rely on this reading, ask your pharmacist.",
   },
+  marksConflict:
+    "Pen marks that can be read two ways (a line across the box, usually once a day, or a dose at set times): ask your pharmacist which it is.",
   issues: {
     sugarsOverCarbs: "sugars exceed carbohydrates",
     saturatesOverFat: "saturates exceed total fat",
@@ -398,18 +402,20 @@ const fr: AnalysisMessages = {
     estimatedNutrition:
       "Les calories et les nutriments sont une estimation approximative pour une recette et une portion typiques de ce plat. Les valeurs réelles peuvent être très différentes.",
     medicineGeneral:
-      "Les indications, la dose habituelle et les précautions ci-dessous sont des informations générales sur la substance active, rédigées par une IA. Elles peuvent être fausses et ne pas s'appliquer à vous. Votre dose est celle que votre médecin ou votre pharmacien vous a donnée : suivez-la, et lisez la notice.",
+      "Les indications, la dose habituelle et les précautions sont des informations générales sur la substance active, rédigées par une IA : elles peuvent être fausses et ne pas s'appliquer à vous. La dose qui vous a été prescrite passe en premier ; la notice de votre boîte donne les détails.",
     medicineNoActive:
       "La substance active n'a pas pu être lue : aucune information générale n'est affichée. Photographiez le côté de la boîte qui indique la substance et son dosage.",
     medicineNoExcipients:
-      "Les excipients ne figurent pas sur cette photo et n'ont pas été trouvés dans la base officielle des médicaments : le gluten et les autres ingrédients sensibles n'ont pas pu être vérifiés. Si c'est important pour vous, ajoutez une photo de la composition (sur le côté de la boîte ou dans la notice).",
+      "Les excipients ne figurent ni sur cette photo ni dans la base officielle des médicaments : le gluten et les autres ingrédients sensibles n'ont pas été vérifiés. Si c'est important pour vous, ajoutez une photo de la composition.",
     medicineDatabase: (product) =>
       `Les excipients ne figuraient pas sur la photo. Ils viennent de la base de données publique des médicaments (France), fiche « ${product} ». Une boîte fabriquée pour un autre pays peut être différente : la notice de votre boîte fait foi.`,
     medicineMarks:
-      "Les traits au stylo sur la boîte ont été lus par une IA. Si cette lecture ne correspond pas à ce que votre médecin ou votre pharmacien vous a dit, suivez ce qu'ils vous ont dit et demandez-leur de confirmer.",
+      "Les traits au stylo ont été lus par une IA : s'ils ne correspondent pas à ce que votre médecin ou votre pharmacien vous a dit, suivez leurs consignes et demandez-leur de confirmer.",
     medicineMarksUnclear:
       "Les traits au stylo sur la boîte étaient difficiles à lire : ne vous fiez pas à cette lecture, demandez à votre pharmacien.",
   },
+  marksConflict:
+    "Des traits au stylo qui se lisent de deux façons (un trait en travers de la boîte, en général une fois par jour, ou une dose à des moments précis) : demandez à votre pharmacien laquelle est la bonne.",
   issues: {
     sugarsOverCarbs: "les sucres dépassent les glucides",
     saturatesOverFat: "les acides gras saturés dépassent les matières grasses totales",
@@ -618,18 +624,20 @@ const ar: AnalysisMessages = {
     estimatedNutrition:
       "السعرات والعناصر الغذائية تقدير تقريبي لوصفة وحصة نموذجيتين من هذا الطبق، وقد تختلف القيم الحقيقية كثيرًا.",
     medicineGeneral:
-      "دواعي الاستعمال والجرعة المعتادة والتحذيرات أدناه معلومات عامة عن المادة الفعّالة كتبها ذكاء اصطناعي. قد تكون خاطئة وقد لا تنطبق عليك. جرعتك هي التي حدّدها لك طبيبك أو الصيدلي: التزم بها واقرأ النشرة.",
+      "دواعي الاستعمال والجرعة المعتادة والتحذيرات معلومات عامة عن المادة الفعّالة كتبها ذكاء اصطناعي: قد تكون خاطئة وقد لا تنطبق عليك. الجرعة الموصوفة لك تأتي أولًا، والنشرة الموجودة في علبتك تذكر التفاصيل.",
     medicineNoActive:
       "تعذّرت قراءة المادة الفعّالة، لذا لا تُعرض أي معلومات عامة. صوّر جانب العلبة الذي يذكر المادة وتركيزها.",
     medicineNoExcipients:
-      "السواغات غير ظاهرة في هذه الصورة ولم نجدها في قاعدة البيانات الرسمية للأدوية، لذا تعذّر التحقق من الغلوتين والمكوّنات الحساسة الأخرى. إن كان ذلك يهمّك فأضف صورة للتركيبة (على جانب العلبة أو في النشرة).",
+      "السواغات غير ظاهرة في هذه الصورة ولا في قاعدة البيانات الرسمية للأدوية، فلم يُتحقَّق من الغلوتين والمكوّنات الحساسة الأخرى. إن كان ذلك يهمّك فأضف صورة للتركيبة.",
     medicineDatabase: (product) =>
       `السواغات لم تكن ظاهرة في الصورة، وقد أُخذت من قاعدة البيانات الرسمية للأدوية في فرنسا، صفحة «${product}». قد تختلف العلبة المصنوعة لبلد آخر: النشرة الموجودة في علبتك هي المرجع.`,
     medicineMarks:
-      "الخطوط المرسومة بالقلم على العلبة قرأها ذكاء اصطناعي. إذا لم تطابق هذه القراءة ما قاله لك طبيبك أو الصيدلي فاتبع ما قالاه واطلب منهما التأكيد.",
+      "الخطوط المرسومة بالقلم قرأها ذكاء اصطناعي: إن لم تطابق ما قاله لك طبيبك أو الصيدلي فاتبع تعليماتهما واطلب منهما التأكيد.",
     medicineMarksUnclear:
       "الخطوط المرسومة بالقلم على العلبة كانت صعبة القراءة: لا تعتمد على هذه القراءة واسأل الصيدلي.",
   },
+  marksConflict:
+    "علامات بالقلم يمكن قراءتها بطريقتين (خط عبر العلبة، وغالبًا ما يعني مرة يوميًا، أو جرعة في أوقات محددة): اسأل الصيدلي أيّهما المقصود.",
   issues: {
     sugarsOverCarbs: "السكريات تتجاوز الكربوهيدرات",
     saturatesOverFat: "الدهون المشبعة تتجاوز إجمالي الدهون",
@@ -803,4 +811,50 @@ export function localCategory(m: AnalysisMessages, category: string | null): str
 /** unknown or missing locales fall back to English */
 export function analysisMessages(locale: unknown): AnalysisMessages {
   return typeof locale === "string" && Object.hasOwn(MESSAGES, locale) ? MESSAGES[locale as Locale] : en;
+}
+
+/**
+ * Earlier wordings of warnings that were rewritten, as scans saved before then still hold
+ * them: matched like the current ones (a typed dose removes the marks warning, a new
+ * language rebuilds them). Add the old sentence here whenever a warning's wording changes.
+ */
+export const PREVIOUS_WARNINGS: Record<Locale, Partial<Record<keyof AnalysisMessages["warnings"], string[]>>> = {
+  en: {
+    medicineGeneral: [
+      "The uses, usual dose and cautions below are general information about the active substance, written by an AI. They can be wrong and may not apply to you. Your dose is the one your doctor or pharmacist gave you: follow it, and read the leaflet.",
+    ],
+    medicineNoExcipients: [
+      "The excipients aren't on this photo and weren't found in the official medicines database, so gluten and other sensitive ingredients couldn't be checked. If that matters to you, add a photo of the composition (on the side of the box or in the leaflet).",
+    ],
+    medicineMarks: [
+      "The pen marks on the box were read by an AI. If this reading doesn't match what your doctor or pharmacist told you, follow what they told you and ask them to confirm.",
+    ],
+  },
+  fr: {
+    medicineGeneral: [
+      "Les indications, la dose habituelle et les précautions ci-dessous sont des informations générales sur la substance active, rédigées par une IA. Elles peuvent être fausses et ne pas s'appliquer à vous. Votre dose est celle que votre médecin ou votre pharmacien vous a donnée : suivez-la, et lisez la notice.",
+    ],
+    medicineNoExcipients: [
+      "Les excipients ne figurent pas sur cette photo et n'ont pas été trouvés dans la base officielle des médicaments : le gluten et les autres ingrédients sensibles n'ont pas pu être vérifiés. Si c'est important pour vous, ajoutez une photo de la composition (sur le côté de la boîte ou dans la notice).",
+    ],
+    medicineMarks: [
+      "Les traits au stylo sur la boîte ont été lus par une IA. Si cette lecture ne correspond pas à ce que votre médecin ou votre pharmacien vous a dit, suivez ce qu'ils vous ont dit et demandez-leur de confirmer.",
+    ],
+  },
+  ar: {
+    medicineGeneral: [
+      "دواعي الاستعمال والجرعة المعتادة والتحذيرات أدناه معلومات عامة عن المادة الفعّالة كتبها ذكاء اصطناعي. قد تكون خاطئة وقد لا تنطبق عليك. جرعتك هي التي حدّدها لك طبيبك أو الصيدلي: التزم بها واقرأ النشرة.",
+    ],
+    medicineNoExcipients: [
+      "السواغات غير ظاهرة في هذه الصورة ولم نجدها في قاعدة البيانات الرسمية للأدوية، لذا تعذّر التحقق من الغلوتين والمكوّنات الحساسة الأخرى. إن كان ذلك يهمّك فأضف صورة للتركيبة (على جانب العلبة أو في النشرة).",
+    ],
+    medicineMarks: [
+      "الخطوط المرسومة بالقلم على العلبة قرأها ذكاء اصطناعي. إذا لم تطابق هذه القراءة ما قاله لك طبيبك أو الصيدلي فاتبع ما قالاه واطلب منهما التأكيد.",
+    ],
+  },
+};
+
+/** whether `text` is warning `key`, in its current wording or an earlier one */
+export function isWarning(text: string, key: keyof AnalysisMessages["warnings"], locale: Locale): boolean {
+  return text === analysisMessages(locale).warnings[key] || !!PREVIOUS_WARNINGS[locale]?.[key]?.includes(text);
 }

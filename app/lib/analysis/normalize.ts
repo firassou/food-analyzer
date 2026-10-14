@@ -545,15 +545,38 @@ function buildMedicine(raw: unknown, compositionText: string, m: AnalysisMessage
     const duration = str(pick(marksRaw, "duration", "days"), 40);
     // nothing readable is "no marks", not "take nothing"
     const strokes = num(pick(marksRaw, "strokes", "stroke_count", "lines"));
-    if (strokes === 1) {
-      // one pen stroke is one unit a day, wherever it is drawn: a line's two ends are
-      // not "morning and evening", whatever the model made of them
-      marks = { morning: 0, midday: 0, evening: 0, anytime: 1, duration, note: null, confidence: confidence(pick(marksRaw, "confidence", "certainty")) };
-    } else if (morning + midday + evening + anytime > 0 || note) {
-      // more units than strokes drawn: the reading doesn't add up
-      const total = morning + midday + evening + anytime;
-      const doubtful = strokes !== null && strokes >= 1 && total > strokes;
-      marks = { morning, midday, evening, anytime, duration, note, confidence: doubtful ? "low" : confidence(pick(marksRaw, "confidence", "certainty")) };
+    const layout = keyOf(str(pick(marksRaw, "layout", "pattern", "drawing")) ?? "");
+    const across = ["across", "diagonal", "single_line", "one_line", "line_across"].includes(layout);
+    const row = ["row", "strokes", "short_strokes"].includes(layout);
+    // a dose written in figures or words is read, never redrawn from strokes
+    const written = ["figures", "figure", "numbers", "words", "text"].includes(layout);
+    // what the model says it saw, piece by piece (see the prompt's "seen")
+    const lengths = arr(pick(marksRaw, "seen", "ink", "handwriting")).map((s) => keyOf(str(isObj(s) ? pick(s, "length", "size") : null) ?? ""));
+    const longLines = lengths.filter((l) => l.startsWith("long")).length;
+    const shortMarks = lengths.filter((l) => l.startsWith("short")).length;
+    const timed = morning + midday + evening;
+    const stated = confidence(pick(marksRaw, "confidence", "certainty"));
+    // A wrong number is worse than none, in either direction (a halved antibiotic, a tripled
+    // antifungal): a reading that contradicts itself shows no dose, only what was seen, doubted.
+    const unclear = (why: string | null) => ({ morning: 0, midday: 0, evening: 0, anytime: 0, duration, note: why ?? m.marksConflict, confidence: "low" as const });
+    if (!written && strokes === 1) {
+      // One pen stroke is one unit a day, wherever it is drawn: a line's two ends are not
+      // "morning and evening" (seen live). Two or more units from one stroke can't be right.
+      marks = { morning: 0, midday: 0, evening: 0, anytime: 1, duration, note, confidence: timed > 1 ? "low" : stated };
+    } else if (!written && timed > 0 && (across || (longLines > 0 && shortMarks < timed))) {
+      // "a line across the box" read as times of day, or more doses than short strokes seen
+      // beside a long line (seen live: one diagonal line with a hooked end read as 1-1-1)
+      marks = unclear(note);
+    } else if (across && timed + anytime === 0) {
+      // a line was seen, but no dose given for it: the usual meaning, doubted
+      marks = { morning: 0, midday: 0, evening: 0, anytime: 1, duration, note, confidence: "low" };
+    } else if (timed + anytime > 0 || note) {
+      // more units than strokes drawn, a row of strokes read as "no set time", or written
+      // figures next to a long line nobody accounted for: the reading doesn't add up
+      const total = timed + anytime;
+      const doubtful =
+        (strokes !== null && strokes >= 1 && total > strokes) || (row && anytime > 0 && timed === 0) || (written && longLines > 0);
+      marks = { morning, midday, evening, anytime, duration, note, confidence: doubtful ? "low" : stated };
     }
     // marks the reader typed in stay theirs through every later normalization
     if (marks && pick(marksRaw, "source") === "you") marks = { ...marks, confidence: "high", source: "you" };
@@ -595,7 +618,7 @@ function subjectKind(v: unknown): SubjectKind | null {
 // ------------------------------------------------------------------ ingredients
 
 /** "chocolate chips (22%) (sugar, cocoa…)" → "chocolate chips" */
-const shortName = (s: string) =>
+export const shortName = (s: string) =>
   s
     .replace(/\s*[([].*$/, "")
     .replace(/\s*\d+(?:[.,]\d+)?\s*%/, "")

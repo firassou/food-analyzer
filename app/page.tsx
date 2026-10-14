@@ -28,17 +28,20 @@ import {
   SparkleIcon,
   Spinner,
 } from "./components/ui";
-import { makeThumb, newScanId, saveScan, useHistory, type HistoryEntry } from "./lib/client/history";
+import { matchPhoto, type PhotoPrint } from "./lib/client/fingerprint";
+import { findScan, makeThumb, newScanId, savedScans, saveScan, updateScan, useHistory, type HistoryEntry, type Phrase } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
+import { translateResult } from "./lib/client/translate";
 import { attentionCount, datedEntries } from "./lib/analysis/cabinet";
 import { addExcipientPhoto, withUserMarks } from "./lib/analysis/medicine";
 import { remindIfDue } from "./lib/client/reminders";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
-import { format, useI18n } from "./lib/i18n/I18nProvider";
-import type { Locale } from "./lib/i18n/locales";
+import { format, rich, useI18n } from "./lib/i18n/I18nProvider";
+import { dateLocale, type Locale } from "./lib/i18n/locales";
 import type { Messages } from "./lib/i18n/messages";
 
-type Status = "preparing" | "analyzing" | "done" | "error";
+/** "similar": the photo looks like a saved scan, and the reader decides whether to analyze it */
+type Status = "preparing" | "similar" | "analyzing" | "done" | "error";
 
 /** an error is kept as a code so it follows the interface language; server text is the English fallback */
 type AppError =
@@ -61,7 +64,7 @@ function errorText(error: AppError, t: Messages, locale: Locale): string {
 }
 
 /** what a result came from, so it can be fetched again (in another language, or after an error) */
-type Source = { type: "photo"; image: Blob } | { type: "barcode"; code: string };
+type Source = { type: "photo"; image: Blob; print?: PhotoPrint } | { type: "barcode"; code: string };
 
 /** the browser gives up a little after the server's own time budget */
 const CLIENT_TIMEOUT_MS = 150_000;
@@ -83,6 +86,14 @@ export default function Home() {
   // an optional second photo (a medicine's composition) being read into the result on screen
   const [adding, setAdding] = useState<"working" | "none" | null>(null);
   const [dragging, setDragging] = useState(false);
+  // the saved scan a new photo looks like (status "similar"), or that an identical photo reopened
+  const [lookalike, setLookalike] = useState<HistoryEntry | null>(null);
+  const [reused, setReused] = useState(false);
+  // the interface language the result on screen failed to be translated into, and a way to try again
+  const [translateFailed, setTranslateFailed] = useState<Locale | null>(null);
+  const [translateTry, setTranslateTry] = useState(0);
+  // translations of a result that isn't saved (a photo of something else) live as long as it is on screen
+  const unsavedPhrases = useRef<Phrase[]>([]);
   // bumps on every new file/reset so stale async work is ignored
   const requestId = useRef(0);
   const scanId = useRef("");
@@ -118,6 +129,9 @@ export default function Home() {
     setFailure(null);
     setResult(null);
     setAdding(null);
+    setReused(false);
+    setTranslateFailed(null);
+    unsavedPhrases.current = [];
     try {
       const r =
         from.type === "photo" ?
@@ -130,7 +144,16 @@ export default function Home() {
       // remember anything that is about a food; a photo of something else isn't worth keeping
       if (r.result.kind !== "other") {
         thumb.current = from.type === "photo" ? await makeThumb(from.image) : null;
-        saveScan({ id: scanId, at: Date.now(), thumb: thumb.current, result: r.result, meta: r.meta });
+        // a new reading replaces the old one's translations, which no longer match its text
+        saveScan({
+          id: scanId,
+          at: Date.now(),
+          thumb: thumb.current,
+          result: r.result,
+          meta: r.meta,
+          phrases: [],
+          ...(from.type === "photo" && from.print && { photo: from.print }),
+        });
       }
     } catch (e) {
       if (id !== requestId.current) return;
@@ -153,6 +176,8 @@ export default function Home() {
       setOpen(true);
       setSource(null);
       setImageSrc(null);
+      setLookalike(null);
+      setReused(false);
       setStatus("preparing");
       window.scrollTo({ top: 0 });
       try {
@@ -161,10 +186,23 @@ export default function Home() {
           URL.revokeObjectURL(prepared.previewUrl);
           return;
         }
-        const from: Source = { type: "photo", image: prepared.blob };
-        startScan(newScanId());
+        const from: Source = { type: "photo", image: prepared.blob, print: prepared.print };
         setSource(from);
         setImageSrc(prepared.previewUrl);
+        // a photo already analyzed isn't sent to the AI again
+        const match = matchPhoto(prepared.print, savedScans());
+        if (match?.kind === "same") {
+          showSaved(match.entry);
+          setReused(true);
+          return;
+        }
+        if (match?.kind === "similar") {
+          // a look-alike may be a new box with another dose in pen: the reader decides
+          setLookalike(match.entry);
+          setStatus("similar");
+          return;
+        }
+        startScan(newScanId());
         void run(from, locale, scanId.current);
       } catch (e) {
         if (id !== requestId.current) return;
@@ -172,6 +210,7 @@ export default function Home() {
         setFailure({ kind: "client", key: e instanceof ImagePrepError ? e.code : "damaged" });
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showSaved only sets state
     [locale, run, startScan],
   );
 
@@ -251,20 +290,37 @@ export default function Home() {
     [selectBarcode],
   );
 
-  const openSaved = (entry: HistoryEntry) => {
-    requestId.current++;
-    cancelInFlight();
+  /** a saved scan on screen; the photo it came from stays the source when it was just picked again */
+  function showSaved(entry: HistoryEntry) {
     startScan(entry.id);
     thumb.current = entry.thumb;
     setAdding(null);
     setFailure(null);
-    setShelfOpen(false);
-    setSource(null);
-    setImageSrc(entry.thumb);
+    setReused(false);
+    setLookalike(null);
+    setTranslateFailed(null);
+    unsavedPhrases.current = [];
     setResult({ result: entry.result, meta: entry.meta });
     setStatus("done");
     setOpen(true);
     window.scrollTo({ top: 0 });
+  }
+
+  const openSaved = (entry: HistoryEntry) => {
+    requestId.current++;
+    cancelInFlight();
+    setShelfOpen(false);
+    setSource(null);
+    setImageSrc(entry.thumb);
+    showSaved(entry);
+  };
+
+  // the photo looked like a saved scan, and the reader wants it analyzed after all
+  const analyzeLookalike = () => {
+    if (source?.type !== "photo") return;
+    setLookalike(null);
+    startScan(newScanId());
+    void run(source, locale, scanId.current);
   };
 
   const reset = () => {
@@ -277,6 +333,8 @@ export default function Home() {
     setImageSrc(null);
     setResult(null);
     setFailure(null);
+    setLookalike(null);
+    setReused(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -315,8 +373,30 @@ export default function Home() {
   const canRedo = !!source;
   const error = failure && errorText(failure, t, locale);
   const hasPhoto = !!imageSrc || source?.type === "photo" || status === "preparing";
-  // the result's text stays in the language it was analyzed in
+  // A result follows the interface language: what the app wrote is rebuilt on the spot, and the
+  // model's own text is translated once (kept with the scan), without reading the photo again.
   const resultLocale = status === "done" && result ? (result.meta.locale ?? "en") : locale;
+  const translating = resultLocale !== locale && translateFailed !== locale;
+  useEffect(() => {
+    if (!translating || !result) return;
+    const controller = new AbortController();
+    const id = requestId.current;
+    const scan = scanId.current;
+    const from = result.meta.locale ?? "en";
+    const saved = findScan(scan);
+    translateResult(result.result, from, locale, saved ? (saved.phrases ?? []) : unsavedPhrases.current, controller.signal)
+      .then(({ result: next, phrases }) => {
+        if (controller.signal.aborted || id !== requestId.current) return;
+        const meta = { ...result.meta, locale };
+        setResult({ result: next, meta });
+        if (saved) updateScan(scan, { result: next, meta, phrases });
+        else unsavedPhrases.current = phrases;
+      })
+      .catch(() => {
+        if (!controller.signal.aborted && id === requestId.current) setTranslateFailed(locale);
+      });
+    return () => controller.abort();
+  }, [translating, result, locale, translateTry]);
 
   return (
     <div
@@ -347,7 +427,8 @@ export default function Home() {
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-6">
           <button onClick={reset} className="-ms-1 flex min-w-0 items-center gap-3 rounded-2xl p-1">
             <Logo />
-            <span dir="ltr" className="font-display hidden truncate text-lg font-bold tracking-tight min-[430px]:inline">
+            {/* hidden from sight on a narrow phone, but still the button's name */}
+            <span dir="ltr" className="font-display sr-only truncate text-lg font-bold tracking-tight min-[430px]:not-sr-only">
               Food Analyzer
             </span>
           </button>
@@ -517,14 +598,34 @@ export default function Home() {
                     </span>
                   </p>
                 : <Analyzing />)}
+              {status === "similar" && lookalike && (
+                <Lookalike entry={lookalike} onOpen={() => showSaved(lookalike)} onAnalyze={analyzeLookalike} />
+              )}
+              {status === "done" && result && reused && (
+                <Notice tone="zinc" className="animate-fade-up mb-3">
+                  {t.duplicate.reused}
+                </Notice>
+              )}
               {status === "done" && result && resultLocale !== locale && (
                 <Notice tone="zinc" className="animate-fade-up mb-3">
-                  {format(t.status.otherLanguage, { language: languageName(resultLocale) })}{" "}
-                  {canRedo && (
-                    <button onClick={analyze} className="font-medium text-accent underline underline-offset-4">
-                      {t.status.translate}
-                    </button>
-                  )}
+                  {translating ?
+                    <span role="status" className="inline-flex items-center gap-2">
+                      <Spinner className="text-accent" />
+                      {t.status.translating}
+                    </span>
+                  : <>
+                      {format(t.status.translateFailed, { language: languageName(resultLocale) })}{" "}
+                      <button
+                        onClick={() => {
+                          setTranslateFailed(null);
+                          setTranslateTry((n) => n + 1);
+                        }}
+                        className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-4"
+                      >
+                        {t.status.retryTranslate}
+                      </button>
+                    </>
+                  }
                 </Notice>
               )}
               {status === "done" && result && (
@@ -624,6 +725,53 @@ export default function Home() {
   );
 }
 
+/** the new photo looks like a scan already saved: open that one, or analyze this one */
+function Lookalike({ entry, onOpen, onAnalyze }: { entry: HistoryEntry; onOpen: () => void; onAnalyze: () => void }) {
+  const { t, locale } = useI18n();
+  const d = t.duplicate;
+  // an older scan says which year, or "14 October" reads as last week
+  const thisYear = new Date(entry.at).getFullYear() === new Date().getFullYear();
+  const date = new Intl.DateTimeFormat(dateLocale(locale), { day: "numeric", month: "long", ...(!thisYear && { year: "numeric" }) }).format(entry.at);
+  const name = entry.result.product.name ?? entry.result.product.category ?? t.kinds[entry.result.kind];
+  return (
+    <section aria-labelledby="lookalike-title" className="animate-fade-up rounded-[28px] bg-sheet px-5 py-6 ring-1 ring-rule sm:px-7">
+      <div aria-live="polite" className="flex items-center gap-4">
+        {entry.thumb && (
+          // eslint-disable-next-line @next/next/no-img-element -- a data URL kept in the browser
+          <img src={entry.thumb} alt="" className="size-16 shrink-0 rounded-2xl object-cover ring-1 ring-rule" />
+        )}
+        <div className="min-w-0">
+          <p id="lookalike-title" className="font-display text-lg font-semibold">
+            {d.title}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-ink-soft">
+            {rich(format(d.text, { name: `<b>${name}</b>`, date }), (text) => (
+              <b dir="auto" className="text-ink">
+                {text}
+              </b>
+            ))}
+          </p>
+        </div>
+      </div>
+      {entry.result.kind === "medicine" && <p className="mt-3 text-sm leading-6 text-ink-soft">{d.medicineHint}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          onClick={onOpen}
+          className="inline-flex h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+        >
+          {d.open}
+        </button>
+        <button
+          onClick={onAnalyze}
+          className="inline-flex h-11 items-center rounded-full bg-mute-soft px-5 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
+        >
+          {d.analyze}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** a leaf inside a scanner's corner marks: the same mark as the app icon */
 function Logo() {
   return (
@@ -641,7 +789,7 @@ function Logo() {
 async function lookupBarcode(code: string, signal: AbortSignal, locale: Locale): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
   let response: Response;
   try {
-    response = await fetch(`/api/product?code=${code}&lang=${locale}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
+    response = await fetch(`/api/product?code=${encodeURIComponent(code)}&lang=${locale}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
   } catch (e) {
     if (e instanceof DOMException && e.name === "TimeoutError") throw new AnalysisFailure({ kind: "client", key: "timeout" });
     if (e instanceof DOMException && e.name === "AbortError") throw e;

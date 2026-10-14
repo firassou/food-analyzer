@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { askSystemPrompt, cleanAnswer, cleanQuestion, cleanTurns, digestForAsk, kindOf, MAX_QUESTION_CHARS, MAX_TURNS, splitAnswer } from "./ask";
+import { askSystemPrompt, cleanAnswer, cleanQuestion, cleanTurns, digestForAsk, digestForCabinet, kindOf, MAX_QUESTION_CHARS, MAX_TURNS, splitAnswer } from "./ask";
 import { normalize } from "./normalize";
 import { parseModelJson } from "./parse";
 
@@ -57,16 +57,25 @@ describe("medicines", () => {
 
   it("puts the pharmacist's marks, the dose and the side effects in what the model sees", () => {
     const digest = digestForAsk(medicine);
-    expect(digest).toMatch(/Handwritten marks on the box \(pharmacist's note\): morning 1, evening 1/);
+    expect(digest).toMatch(/Handwritten marks on the box \(pharmacist's note, read by the app from the photo\): morning 1, evening 1/);
+    // an uncertain reading says so, and the reader's own entry is theirs
+    const unsure = { ...medicine, medicine: { ...medicine.medicine!, marks: { ...medicine.medicine!.marks!, confidence: "low" as const } } };
+    expect(digestForAsk(unsure)).toMatch(/UNCERTAIN: to be confirmed with the pharmacist\): morning 1, evening 1/);
+    const typed = { ...medicine, medicine: { ...medicine.medicine!, marks: { ...medicine.medicine!.marks!, source: "you" as const } } };
+    expect(digestForAsk(typed)).toMatch(/entered by the reader\): morning 1, evening 1/);
+    expect(digestForCabinet([unsure])).toMatch(/UNCERTAIN/);
     expect(digest).toContain("Usual dose (general information): 1 to 2 tablets");
     expect(digest).toContain("Side effects (general information): rare skin reactions");
   });
 
-  it("answers medicine questions and gives advice, confirming a dose change with the prescriber once", () => {
+  it("answers medicine questions like a clinician: practical, asking instead of assuming, the prescriber named once", () => {
     const p = askSystemPrompt("en", "Kind: medicine", kindOf(medicine));
     expect(p).toContain("This is a MEDICINE");
-    expect(p).toMatch(/Give clear, practical advice when asked/);
-    expect(p).toMatch(/their prescriber should confirm it for them/);
+    expect(p).toMatch(/clinical pharmacist/);
+    expect(p).toMatch(/Never assume what you weren't told/);
+    expect(p).toMatch(/ask one or two short, specific questions instead of guessing/);
+    expect(p).toMatch(/Give clear, practical advice/);
+    expect(p).toMatch(/their prescriber confirms it\)\. Never repeat it/);
     expect(p).not.toMatch(/Never tell the reader/);
     expect(p).not.toMatch(/Never call a medicine/);
     expect(p).toMatch(/emergency number/);

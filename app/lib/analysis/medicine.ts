@@ -4,7 +4,7 @@
 // notes and the gluten check are computed the same way as for a single photo.
 
 import type { Locale } from "../i18n/locales";
-import { analysisMessages } from "./messages";
+import { isWarning } from "./messages";
 import { normalize, type NormalizeOptions } from "./normalize";
 import type { DoseMarks, LabelAnalysis } from "./types";
 
@@ -47,10 +47,11 @@ export function withExcipients(
     },
     { locale, database },
   );
-  // the new list answers these; every other warning of the first reading still stands
-  const w = analysisMessages(locale).warnings;
-  const answered = new Set([w.medicineNoExcipients, w.estimatedProduct]);
-  const stale = (warning: string) => answered.has(warning) || (result.database && warning.includes(result.database.product));
+  // the new list answers these (in any wording a saved scan may hold); every other warning of the first reading still stands
+  const stale = (warning: string) =>
+    isWarning(warning, "medicineNoExcipients", locale) ||
+    isWarning(warning, "estimatedProduct", locale) ||
+    (result.database && warning.includes(result.database.product));
   for (const warning of result.warnings)
     if (!stale(warning) && !completed.warnings.includes(warning)) completed.warnings.push(warning);
   return completed;
@@ -92,14 +93,13 @@ export function withUserMarks(
   locale: Locale,
 ): LabelAnalysis {
   if (!result.medicine) return result;
-  const w = analysisMessages(locale).warnings;
-  const total = marks ? marks.morning + marks.midday + marks.evening + marks.anytime : 0;
+  const total = marks ? marks.morning + marks.midday + marks.evening + (marks.anytime ?? 0) : 0;
   return {
     ...result,
     medicine: {
       ...result.medicine,
       marks: marks && (total > 0 || marks.note) ? { ...marks, confidence: "high", source: "you" } : null,
     },
-    warnings: result.warnings.filter((x) => x !== w.medicineMarks && x !== w.medicineMarksUnclear),
+    warnings: result.warnings.filter((x) => !isWarning(x, "medicineMarks", locale) && !isWarning(x, "medicineMarksUnclear", locale)),
   };
 }

@@ -73,7 +73,8 @@ export function courseOf<E extends Scanned>(entry: E, now: Date): Course<E> | nu
     entry,
     raw: marks.duration,
     days,
-    perDay: marks.morning + marks.midday + marks.evening + marks.anytime,
+    // scans saved before "anytime" existed don't have it; a reading the app doubts gives no count
+    perDay: marks.confidence === "low" && marks.source !== "you" ? 0 : marks.morning + marks.midday + marks.evening + (marks.anytime ?? 0),
     last,
     status: left < 0 ? "finished" : left === 0 ? "last_day" : "ongoing",
     left,

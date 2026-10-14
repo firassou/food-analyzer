@@ -500,15 +500,19 @@ function Results({
           [
             {
               title: med.marked,
-              // one line across the box: so many a day, no times to list
-              ...(medicine.marks.anytime ?
+              // one line across the box: so many a day, no times to list; a doubted reading shows no figures
+              ...(medicine.marks.confidence === "low" && medicine.marks.source !== "you" ? { label: med.uncertain }
+              : medicine.marks.anytime ?
                 { label: `${ltr(fmt(medicine.marks.anytime))} ${med.anytime}` }
               : {
                   label: ltr([medicine.marks.morning, medicine.marks.midday, medicine.marks.evening].map(fmt).join(" · ")),
                   hint: `${med.morning} · ${med.midday} · ${med.evening}`,
                 }),
-              empty: !medicine.marks.anytime && medicine.marks.morning + medicine.marks.midday + medicine.marks.evening === 0,
-              tone: "zinc" as const,
+              empty:
+                !(medicine.marks.confidence === "low" && medicine.marks.source !== "you") &&
+                !medicine.marks.anytime &&
+                medicine.marks.morning + medicine.marks.midday + medicine.marks.evening === 0,
+              tone: medicine.marks.confidence === "low" && medicine.marks.source !== "you" ? ("amber" as const) : ("zinc" as const),
               icon: <ClockIcon />,
               target: jump("dose"),
             },
@@ -847,21 +851,29 @@ function Results({
         {/* nothing the analysis is unsure about is hidden */}
         {(result.warnings.length > 0 || needsProductPhoto || canAddExcipients || result.database) && (
           <div className="mt-5 space-y-2">
-            {result.warnings.map((w) => (
-              <Notice key={w} tone="amber">
-                <span dir="auto">{w}</span>
-                {result.database && w.includes(result.database.product) && (
-                  <a
-                    href={result.database.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ms-1 font-medium text-accent underline underline-offset-2"
-                  >
-                    {r.source.viewEntry}
-                  </a>
-                )}
+            {/* one card, not a stack of alarms: every note is still there */}
+            {result.warnings.length > 0 && (
+              <Notice tone="amber">
+                <ul role={result.warnings.length > 1 ? undefined : "none"} className={cn(result.warnings.length > 1 && "list-disc space-y-1.5 ps-4")}>
+                  {result.warnings.map((w) => (
+                    // the bullet follows each note's own language (one can stay untranslated)
+                    <li key={w} dir="auto" role={result.warnings.length > 1 ? undefined : "none"}>
+                      <span>{w}</span>
+                      {result.database && w.includes(result.database.product) && /^https:\/\//.test(result.database.url) && (
+                        <a
+                          href={result.database.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ms-1 font-medium text-accent underline underline-offset-2"
+                        >
+                          {r.source.viewEntry}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </Notice>
-            ))}
+            )}
             {needsProductPhoto && onTakePhoto && (
               // the warning above says why; this is the way out
               <button

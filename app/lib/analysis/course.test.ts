@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { coursesOf, courseOf, MAX_COURSE_DAYS, parseCourseDays } from "./course";
 import { normalize } from "./normalize";
+import type { DoseMarks } from "./types";
 
 describe("parseCourseDays", () => {
   it("reads a count of days, weeks or months in the languages of the boxes", () => {
@@ -40,6 +41,19 @@ describe("courseOf", () => {
     const c = courseOf(scan("7 jours", day(0)), day(0))!;
     expect(c).toMatchObject({ days: 7, perDay: 2, status: "ongoing", left: 6 });
     expect(c.last).toEqual(new Date(2026, 9, 13));
+  });
+
+  it("counts the units of a scan saved before 'anytime' existed", () => {
+    const old = scan("7 jours", day(0));
+    const marks: Record<string, unknown> = { ...old.result.medicine!.marks! };
+    delete marks.anytime;
+    const medicine = { ...old.result.medicine!, marks: marks as unknown as DoseMarks };
+    const c = courseOf({ ...old, result: { ...old.result, medicine } }, day(0));
+    expect(c?.perDay).toBe(2);
+  });
+
+  it("gives no daily count from a reading the app doubts", () => {
+    expect(courseOf(scan("7 jours", day(0), { confidence: "low" }), day(0))?.perDay).toBe(0);
   });
 
   it("is on its last day, then finished", () => {

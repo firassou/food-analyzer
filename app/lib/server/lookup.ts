@@ -108,7 +108,7 @@ export function parseProduct(raw: unknown, locale: Locale): DatabaseProduct | nu
     allergens: tags(p.allergens_tags),
     traces: tags(p.traces_tags),
     nutrients: Object.keys(nutrients).length ? nutrients : null,
-    url: code ? `${API}/product/${code}` : API,
+    url: code ? `${API}/product/${encodeURIComponent(code)}` : API,
   };
 }
 

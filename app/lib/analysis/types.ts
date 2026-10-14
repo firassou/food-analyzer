@@ -358,3 +358,6 @@ export interface ChatTurn {
 export type AskResponse =
   | { ok: true; answer: string; model: string; provider: string }
   | { ok: false; error: string; code: AnalyzeErrorCode };
+
+/** POST /api/translate: the texts in the requested language, in the order they were sent */
+export type TranslateResponse = { ok: true; texts: string[] } | { ok: false; error: string; code: AnalyzeErrorCode };

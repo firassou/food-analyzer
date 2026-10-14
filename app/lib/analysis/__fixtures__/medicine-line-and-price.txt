@@ -1,0 +1,20 @@
+```json
+{"label_detected": true, "kind": "medicine", "image_quality": "good", "language": "fr",
+"product": {"name": "Mycophil", "brand": null, "category": "مضاد للفطريات", "quantity": "20 comprimés sécables", "barcode": null},
+"ingredients": [], "estimated_ingredients": [],
+"allergens": {"declared": [], "may_contain": []},
+"gluten": {"status": "unclear", "confidence": "low", "evidence": []},
+"lactose": {"status": "unclear", "evidence": []},
+"additives": [], "nutrition": null, "estimated_nutrition": null, "water": null,
+"medicine": {"form": "comprimés sécables", "active": [{"name": "terbinafine", "name_local": "تيربينافين", "strength": "250 mg"}],
+ "marks": {"seen": [{"what": "خط مائل طويل", "where": "الوجه الأمامي", "length": "long"}, {"what": "علامات مكتوبة بخط اليد تشبه 1-0-1 أو جرعة", "where": "أعلى وسط الوجه الأمامي", "length": "short"}], "layout": "figures", "strokes": null, "morning": 1, "midday": 0, "evening": 1, "anytime": 0, "duration": null, "note": "1-0-1 أو علامات جرعة", "confidence": "medium"},
+ "uses": ["علاج الالتهابات الفطرية في الأظافر والجلد"],
+ "typical_dose": "الجرعة المعتادة للبالغين هي 250 مجم مرة واحدة يومياً.",
+ "how_to_take": "يُبلع القرص كاملاً أو مقسوماً مع الماء.",
+ "not_for": ["أمراض الكبد"], "warnings": ["الحمل والرضاعة"], "side_effects": ["اضطرابات هضمية"]},
+"claims": [], "certifications": [],
+"dates": {"best_before": null, "expiration": null, "production": null, "lot": null},
+"storage": {"instructions": null, "temperature": null},
+"manufacturer": {"name": null, "address": null, "country": null},
+"origin": null, "summary": "أقراص تيربينافين 250 مجم.", "highlights": [], "raw_text": "Mycophil 250mg Terbinafine 20 Comprimés sécables Voie Orale"}
+```

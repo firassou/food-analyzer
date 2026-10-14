@@ -56,7 +56,7 @@ describe("invariants", () => {
   });
 
   it("returns a complete object for every fixture", () => {
-    for (const f of ["eu-biscuit", "us-per-serving", "fr-peut-contenir", "arabic", "drink", "non-label", "truncated", "python-literals", "fr-yogurt-traces", "water", "dish", "medicine"])
+    for (const f of ["eu-biscuit", "us-per-serving", "fr-peut-contenir", "arabic", "drink", "non-label", "truncated", "python-literals", "fr-yogurt-traces", "water", "dish", "medicine", "medicine-line-and-price"])
       expectComplete(analyze(`${f}.txt`));
   });
 
@@ -681,8 +681,8 @@ describe("fixture: a medicine with pen marks", () => {
 
   it("says what is general information and what is a reading", () => {
     expect(r.warnings).toEqual([
-      "The pen marks on the box were read by an AI. If this reading doesn't match what your doctor or pharmacist told you, follow what they told you and ask them to confirm.",
-      "The uses, usual dose and cautions below are general information about the active substance, written by an AI. They can be wrong and may not apply to you. Your dose is the one your doctor or pharmacist gave you: follow it, and read the leaflet.",
+      "The pen marks were read by an AI: if they don't match what your doctor or pharmacist told you, follow them and ask them to confirm.",
+      "The uses, usual dose and cautions are general information about the active substance, written by an AI: they can be wrong and may not apply to you. The dose prescribed for you comes first; the leaflet in your box has the details.",
     ]);
   });
 
@@ -696,7 +696,7 @@ describe("fixture: a medicine with pen marks", () => {
     expect(blind.warnings).toEqual([
       "The label was hard to read, so some details may be missing or inaccurate. A sharper, closer photo will help.",
       "The active substance couldn't be read, so no general information is shown. Photograph the side of the box that names the substance and its strength.",
-      "The excipients aren't on this photo and weren't found in the official medicines database, so gluten and other sensitive ingredients couldn't be checked. If that matters to you, add a photo of the composition (on the side of the box or in the leaflet).",
+      "The excipients aren't on this photo or in the official medicines database, so gluten and other sensitive ingredients weren't checked. If that matters to you, add a photo of the composition.",
     ]);
     expect(blind.gluten.status).toBe("unclear");
   });
@@ -708,12 +708,62 @@ describe("fixture: a medicine with pen marks", () => {
     expect(marks({ morning: 0, midday: 0, evening: 0 }).medicine?.marks).toBeNull();
     expect(marks({ morning: 0, midday: 0, evening: 0, anytime: 1 }).medicine?.marks).toMatchObject({ morning: 0, anytime: 1, note: null });
     // one line across the box is one a day, never "morning and evening"
-    expect(marks({ strokes: 1, morning: 1, evening: 1, confidence: "medium" }).medicine?.marks).toMatchObject({ morning: 0, evening: 0, anytime: 1, confidence: "medium" });
+    // …and since one stroke can't be two doses, the reading is doubted
+    expect(marks({ strokes: 1, morning: 1, evening: 1, confidence: "medium" }).medicine?.marks).toMatchObject({ morning: 0, evening: 0, anytime: 1, confidence: "low" });
+    expect(marks({ strokes: 1, anytime: 1, confidence: "high" }).medicine?.marks).toMatchObject({ anytime: 1, confidence: "high" });
     expect(marks({ strokes: 2, morning: 1, evening: 1, confidence: "high" }).medicine?.marks).toMatchObject({ morning: 1, evening: 1, anytime: 0, confidence: "high" });
     expect(marks({ strokes: 2, morning: 2, midday: 2, evening: 2, confidence: "high" }).medicine?.marks?.confidence).toBe("low");
     expect(marks({ strokes: null, morning: 1, evening: 1, note: "1-0-1", confidence: "high" }).medicine?.marks).toMatchObject({ morning: 1, evening: 1, confidence: "high" });
     expect(marks({ note: "1-0-1" }).medicine?.marks).toMatchObject({ morning: 0, note: "1-0-1" });
     expect(marks({ morning: 1, confidence: "low" }).warnings[0]).toMatch(/hard to read: don't rely on this reading/);
+  });
+
+  it("shows no dose for a reading that contradicts itself, and never rewrites a written one", () => {
+    const marks = (v: object) =>
+      normalize({ kind: "medicine", image_quality: "good", medicine: { active: ["terbinafine"], marks: v } }).medicine?.marks;
+    const unclear = { morning: 0, midday: 0, evening: 0, anytime: 0, confidence: "low" };
+    // the model's own layout says "a line", its units say "three times a day": no number, the doubt said
+    expect(marks({ layout: "across", strokes: 3, morning: 1, midday: 1, evening: 1, confidence: "high" })).toMatchObject({
+      ...unclear,
+      note: expect.stringMatching(/can be read two ways .* ask your pharmacist/),
+    });
+    // more doses than short strokes beside the long line it saw
+    expect(marks({ seen: [{ what: "long diagonal line", length: "long" }, { length: "short" }], layout: "row", strokes: 3, morning: 1, midday: 1, evening: 1, note: "price?" })).toMatchObject({
+      ...unclear,
+      note: "price?",
+    });
+    // a signature or an underline beside a real row of strokes changes nothing
+    expect(
+      marks({ seen: [{ length: "short" }, { length: "short" }, { what: "signature", length: "long" }], layout: "row", strokes: 2, morning: 1, evening: 1, confidence: "high" }),
+    ).toMatchObject({ morning: 1, evening: 1, anytime: 0, confidence: "high" });
+    // a dose written in figures or words is never redrawn from strokes or lines, only doubted next to an unexplained long line
+    expect(marks({ seen: [{ what: "matin et soir", length: "long" }], layout: "words", morning: 1, evening: 1, note: "matin et soir" })).toMatchObject({
+      morning: 1, evening: 1, anytime: 0, note: "matin et soir", confidence: "low",
+    });
+    // (one stroke for two doses is still a reading that doesn't add up)
+    expect(marks({ layout: "figures", strokes: 1, morning: 1, evening: 1, note: "1-0-1", confidence: "high" })).toMatchObject({
+      morning: 1, evening: 1, anytime: 0, note: "1-0-1", confidence: "low",
+    });
+    expect(marks({ layout: "figures", strokes: null, morning: 1, evening: 1, note: "1-0-1", confidence: "high" })?.confidence).toBe("high");
+    // "line of strokes" is a row, not a line across the box
+    expect(marks({ layout: "line of strokes", strokes: 3, morning: 1, midday: 1, evening: 1, confidence: "high" })).toMatchObject({
+      morning: 1, midday: 1, evening: 1, confidence: "high",
+    });
+    // a line seen with no dose given for it: its usual meaning, doubted
+    expect(marks({ seen: [{ what: "long diagonal line", length: "long" }], layout: "across", anytime: 0 })).toMatchObject({ anytime: 1, confidence: "low" });
+    expect(marks({ seen: [{ length: "long" }, { length: "long" }], layout: "across", strokes: 2, anytime: 2 })).toMatchObject({ anytime: 2, morning: 0 });
+    // a row of strokes read as "no set time" doesn't add up
+    expect(marks({ layout: "row", strokes: 2, anytime: 2, confidence: "high" })?.confidence).toBe("low");
+  });
+});
+
+describe("fixture: one line across a medicine box, and a handwritten price", () => {
+  // seen live (gemini flash-lite, Arabic): the line was read as "1-0-1" or "1-1-1"; the pharmacist meant once a day
+  const r = analyze("medicine-line-and-price.txt");
+
+  it("keeps the dose it read in figures, but doubts it: a long line beside it was never accounted for", () => {
+    expect(r.medicine?.marks).toMatchObject({ morning: 1, midday: 0, evening: 1, anytime: 0, confidence: "low" });
+    expect(r.warnings[0]).toMatch(/hard to read: don't rely on this reading/);
   });
 
   it("never sends a medicine to the food database", () => {

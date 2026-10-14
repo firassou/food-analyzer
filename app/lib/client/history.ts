@@ -4,6 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { AnalyzeMeta, ChatTurn, LabelAnalysis } from "../analysis/types";
+import type { Locale } from "../i18n/locales";
 
 export interface HistoryEntry {
   id: string;
@@ -15,7 +16,14 @@ export interface HistoryEntry {
   meta: AnalyzeMeta;
   /** the "Ask AI" conversation about this scan; absent until a question is asked */
   chat?: ChatTurn[];
+  /** the photo's fingerprints, to recognise it when it is picked again (see prepareImage) */
+  photo?: { sha256: string | null; dhash: string | null };
+  /** the model's free text of this result in each language it was shown in (see translate.ts) */
+  phrases?: Phrase[];
 }
+
+/** one piece of text, in every language it has been translated into */
+export type Phrase = Partial<Record<Locale, string>>;
 
 const MAX_CHAT_TURNS = 40;
 
@@ -92,12 +100,29 @@ export function useHistory(): HistoryEntry[] {
   return useSyncExternalStore(subscribe, snapshot, () => EMPTY);
 }
 
-/** adds a scan, or replaces the one with the same id (the same photo analyzed again, or completed); its chat stays */
+/** adds a scan, or replaces the one with the same id (the same photo analyzed again, or completed); its date, chat, photo and translations stay */
 export function saveScan(entry: HistoryEntry) {
   const previous = snapshot().find((e) => e.id === entry.id);
-  const chat = entry.chat ?? previous?.chat;
-  commit([chat ? { ...entry, chat } : entry, ...snapshot().filter((e) => e.id !== entry.id)].slice(0, MAX_ENTRIES));
+  const kept = { chat: entry.chat ?? previous?.chat, photo: entry.photo ?? previous?.photo, phrases: entry.phrases ?? previous?.phrases };
+  // the day it was scanned stays the day it was scanned: a treatment's course counts from it (course.ts),
+  // and correcting the dose on day 5 mustn't start the course again
+  const next: HistoryEntry = { ...entry, at: previous?.at ?? entry.at };
+  for (const [k, v] of Object.entries(kept)) if (v !== undefined) Object.assign(next, { [k]: v });
+  commit([next, ...snapshot().filter((e) => e.id !== entry.id)].slice(0, MAX_ENTRIES));
 }
+
+/** changes a saved scan where it is in the list (a translation isn't a new scan); does nothing for one that isn't saved */
+export function updateScan(id: string, patch: Partial<Pick<HistoryEntry, "result" | "meta" | "phrases">>) {
+  const entries = snapshot();
+  if (!entries.some((e) => e.id === id)) return;
+  commit(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+}
+
+/** every saved scan, newest first, read outside of rendering */
+export const savedScans = (): HistoryEntry[] => snapshot();
+
+/** a saved scan by id, read outside of rendering */
+export const findScan = (id: string): HistoryEntry | undefined => snapshot().find((e) => e.id === id);
 
 /** keeps the conversation of a saved scan; does nothing for a scan that isn't saved */
 export function saveChat(id: string, chat: ChatTurn[]) {

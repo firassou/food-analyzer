@@ -26,23 +26,31 @@ export function askSystemPrompt(locale: Locale, digest: string, kind = "label", 
   const language = LANGUAGE[locale] ?? LANGUAGE.en;
   const shelf = kind === "cabinet";
   const medicine = kind === "medicine" || shelf;
+  // how a clinician answers: precisely, from what is known, asking instead of assuming
+  const clinician = `- Answer the way an experienced clinical pharmacist does at the counter: precise, direct and concrete, with the reasoning in a few words. No filler and no lecture; when you aren't sure, say so once, plainly.
+- Emergency signs come first: if they describe one, give the emergency instruction before anything else, questions included.
+- Never assume what you weren't told. When the right answer depends on something you don't know (age, or weight for a child; pregnancy or breast-feeding; kidney or liver disease; other medicines; allergies; what the symptoms are and since when), ask one or two short, specific questions instead of guessing. If part of the answer holds for everyone, give that part first, then ask.
+- Don't diagnose and don't present yourself as their doctor. Say what the medicine does, what is usual, what to watch for, and which signs need a doctor today.
+- Safety goes in at most one short sentence, only where it matters (stopping or changing a prescribed treatment: their prescriber confirms it). Never repeat it in every paragraph.
+`;
   const advice =
     shelf ?
       `- These are the reader's MEDICINES, all on one shelf, and they ask you here instead of searching the web: answer what they ask and give practical advice about them together (what each is for, taking them at the same time or apart, duplicates, food or alcohol, a missed dose, storage, what to ask the pharmacist). Up to about 200 words.
 - The data lists each medicine as read on its box; it is the only source about which medicines they have. Never assume a medicine that isn't listed.
 - Everything about how substances act or combine is general knowledge: start every such paragraph with ${GENERAL_MARK}. The app runs its own, short interaction check separately, so don't claim there is no interaction just because you know of none: say what you do know and how sure you are.
-- Give clear, practical advice when asked: what is usually done, what to watch for, whether a combination is usually avoided, how to space them out, and when to see a doctor or pharmacist. For stopping a prescribed medicine or changing its dose, give the usual guidance, and say once that their prescriber should confirm it for them. Say that once and only where it matters; don't repeat a disclaimer in every paragraph.
+${clinician}- Give clear, practical advice when asked: what is usually done, whether a combination is usually avoided, how to space them out.
 - Overdose, poisoning, swelling of the face or throat, trouble breathing or sudden severe symptoms: say to call the emergency number or a poison centre immediately.
-- Handwritten marks in the data are the pharmacist's note: repeat them as given, never reinterpret or correct them.
+- Handwritten marks in the data are the pharmacist's note as the app read it: repeat them as given, never reinterpret or correct them, and when they are marked uncertain say so and send the reader to the pharmacist to confirm.
 `
     : medicine ?
       `- This is a MEDICINE, and the reader asks you here instead of searching the web: answer what they ask and give practical advice about it (what it is for, how the substance works, how it is usually taken, side effects and what to do about them, interactions, pregnancy, driving, alcohol, food, a missed dose, storage). Up to about 170 words.
 - Much of that is general knowledge about the active substance: start every such paragraph with ${GENERAL_MARK}.
-- Give clear, practical advice when asked, for their situation as they describe it (pregnancy, a child, another medicine, a condition, a missed dose, a side effect): what is usually done, what to watch for, and when to see a doctor or pharmacist. For stopping the medicine or changing its dose, give the usual guidance, and say once that their prescriber should confirm it for them. Say that once and only where it matters; don't repeat a disclaimer in every paragraph.
+${clinician}- Give clear, practical advice for their situation as they describe it (pregnancy, a child, another medicine, a condition, a missed dose, a side effect): what is usually done and what to watch for.
 - Overdose, poisoning, swelling of the face or throat, trouble breathing or sudden severe symptoms: say to call the emergency number or a poison centre immediately.
-- Handwritten marks in the data are the pharmacist's note: repeat them as given, never reinterpret or correct them.
+- Handwritten marks in the data are the pharmacist's note as the app read it: repeat them as given, never reinterpret or correct them, and when they are marked uncertain say so and send the reader to the pharmacist to confirm.
 `
     : `- Give practical advice when asked, based on the product data: say plainly whether this product fits what they describe (an allergy, an intolerance, diabetes, pregnancy, a diet, a child, weight) and why, what to choose instead, and what to watch for. You may call a product a good or a poor choice for a stated need, with the reason. For a medical condition, say once that their doctor can confirm; for a severe allergic reaction or sudden severe symptoms, say to call the emergency number immediately.
+- Never assume what you weren't told: when the answer depends on it (which allergy, which kind of diabetes, the child's age), ask one short question, after giving whatever part of the answer holds anyway.
 `;
   const subject = shelf ? "the reader's SHELF of scanned medicines" : "ONE scanned product";
   return `You answer a shopper's follow-up questions about ${subject}. The data below was read from the label${shelf ? "s" : ""} by software; it is the only source about ${shelf ? "these medicines" : "this product"}.
@@ -172,12 +180,7 @@ export function digestForAsk(input: unknown): string {
     );
     add("Form", text(m.form));
     const marks = isObj(m.marks) ? m.marks : null;
-    if (marks) {
-      const times = (["morning", "midday", "evening", "anytime"] as const)
-        .map((k) => (typeof marks[k] === "number" && marks[k] !== 0 ? `${k} ${marks[k]}` : null))
-        .filter(Boolean);
-      add("Handwritten marks on the box (pharmacist's note)", [...times, text(marks.duration), text(marks.note)].filter(Boolean).join(", "));
-    }
+    if (marks) add(`Handwritten marks on the box (pharmacist's note, ${marksOrigin(marks)})`, [marksTimes(marks), text(marks.duration), text(marks.note)].filter(Boolean).join(", "));
     add("Usual dose (general information)", text(m.typical_dose, 300));
     add("How to take it (general information)", text(m.how_to_take, 300));
     add("Side effects (general information)", strings(m.side_effects).join("; "));
@@ -208,6 +211,20 @@ export function digestForAsk(input: unknown): string {
   return lines.join("\n").slice(0, MAX_DIGEST_CHARS);
 }
 
+/** the units of a reading of the pen marks, as "morning 1, evening 1" */
+function marksTimes(marks: Record<string, unknown>): string {
+  return (["morning", "midday", "evening", "anytime"] as const)
+    .map((k) => (typeof marks[k] === "number" && marks[k] !== 0 ? `${k} ${marks[k]}` : null))
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** who the marks come from and how sure the reading is: an uncertain reading is never passed off as the pharmacist's word */
+function marksOrigin(marks: Record<string, unknown>): string {
+  if (marks.source === "you") return "entered by the reader";
+  return marks.confidence === "low" ? "read by the app, UNCERTAIN: to be confirmed with the pharmacist" : "read by the app from the photo";
+}
+
 /* ---------- the shelf ---------- */
 
 const MAX_SHELF = 8;
@@ -225,19 +242,14 @@ export function digestForCabinet(input: unknown): string {
       const m = r.medicine;
       const product = isObj(r.product) ? r.product : {};
       const marks = isObj(m.marks) ? m.marks : null;
-      const times = marks
-        ? (["morning", "midday", "evening", "anytime"] as const)
-            .map((k) => (typeof marks[k] === "number" && marks[k] !== 0 ? `${k} ${marks[k]}` : null))
-            .filter(Boolean)
-            .join(", ")
-        : "";
+      const times = marks ? [marksTimes(marks), text(marks.note)].filter(Boolean).join(", ") : "";
       const dates = isObj(r.dates) ? r.dates : {};
       const lines = [
         `Medicine ${i + 1}: ${text(product.name) ?? "unnamed"}`,
         list(m.active, 10).map((a) => (isObj(a) ? [text(a.name), text(a.strength)].filter(Boolean).join(" ") : null)).filter(Boolean).join("; ") &&
           `  Active substances: ${list(m.active, 10).map((a) => (isObj(a) ? [text(a.name), text(a.strength)].filter(Boolean).join(" ") : null)).filter(Boolean).join("; ")}`,
         text(m.form) && `  Form: ${text(m.form)}`,
-        times && `  Handwritten marks (pharmacist's note): ${times}`,
+        times && marks && `  Handwritten marks (pharmacist's note, ${marksOrigin(marks)}): ${times}`,
         text(m.typical_dose, 160) && `  Usual dose (general information): ${text(m.typical_dose, 160)}`,
         (text(dates.expiration) ?? text(dates.best_before)) && `  Expiry printed: ${text(dates.expiration) ?? text(dates.best_before)}`,
       ];

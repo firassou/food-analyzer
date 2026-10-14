@@ -4,6 +4,16 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.14.0 — 2026-10-14
+- One pen line drawn across a medicine box is read as "1 a day" again. A real box with one diagonal line and a handwritten price was read as morning, midday and evening by Gemini Flash-Lite (the fallback model when Gemini Flash is busy). The model now works through the handwriting step by step (what it saw, its layout, the count) and sets prices and other figures aside. When a reading contradicts itself (a line across the box read as times of day), no dose is shown at all, only a note saying it can be read two ways and to ask the pharmacist: a wrong number is worse than none. A dose written in figures or words is never rewritten. An uncertain reading is labelled as such on screen and in what Ask AI is told.
+- A translated sentence must keep every number of the original (a dose can't change in translation), and translations are never shared between visitors.
+- Switching the language turns the result on screen into that language by itself, without analyzing the photo again: the app's own sentences are rebuilt at once, the AI's text (summary, usual dose, cautions…) is translated once and kept with the scan, so going back costs nothing. Your dose and your conversation stay as they are. Saved scans follow too.
+- The same photo picked again opens its saved result instead of asking the AI again. A photo that only looks like a saved scan asks first: a new box can carry another dose in pen.
+- Fewer, shorter notes on a medicine, shown together in one card; at most 3 cautions, 4 groups who shouldn't take it and 4 common side effects. Ask AI answers medicine questions like a clinical pharmacist: direct, and it asks a short question when the answer depends on something it doesn't know instead of assuming. Its "General information" stamp appears once per answer.
+- The analysis screen no longer talks about food labels only: it reads food, drinks and medicines.
+- Correcting your dose, adding a composition photo or analyzing again no longer restarts a treatment's countdown on the shelf (it counted from the last save instead of the day of the scan), and scans saved before "any time" doses existed no longer show "NaN a day".
+- The home button has a name for screen readers on narrow phones.
+
 ## 0.13.2 — 2026-10-08
 - Next.js is updated to 16.3.8, which fixes six security advisories published against 16.3.6 (one high: server-side request forgery in image optimization; the rest moderate or low). The audit step in CI had started failing because of them.
 

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { DoseMarks } from "../../lib/analysis/types";
 import { format, ltr, useI18n } from "../../lib/i18n/I18nProvider";
-import { cn, MinusIcon, PencilIcon, PlusIcon, toneClasses, type Tone } from "../ui";
+import { cn, MinusIcon, Notice, PencilIcon, PlusIcon, toneClasses, type Tone } from "../ui";
 import { Chip, SubLabel } from "./bits";
 
 type Dose = Pick<DoseMarks, "morning" | "midday" | "evening" | "anytime" | "duration" | "note">;
@@ -75,11 +75,18 @@ export function DoseMarksPanel({
   // results saved before "anytime" existed don't have it
   const anytime = marks.anytime ?? 0;
   const timed = marks.morning + marks.midday + marks.evening;
+  // a reading the app itself doubts is never drawn as the dose: it is said, small, as a possibility
+  const doubted = marks.source !== "you" && marks.confidence === "low";
+  const reading = [
+    ...times.filter(([, n]) => n > 0).map(([label, n]) => `${label} ${fmt(n)}`),
+    ...(anytime > 0 ? [`${fmt(anytime)} ${med.anytime}`] : []),
+  ].join(" · ");
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <p className="font-display min-w-0 flex-1 text-base font-semibold">{med.marksTitle}</p>
         {marks.source === "you" && <Chip icon={<PencilIcon />}>{med.setByYou}</Chip>}
+        {marks.source !== "you" && marks.confidence === "low" && <Chip tone="amber">{med.uncertain}</Chip>}
         {onChange && (
           <button
             onClick={() => setEditing(true)}
@@ -92,7 +99,18 @@ export function DoseMarksPanel({
       </div>
       <p className="mt-1 text-sm leading-6 text-ink-soft">{marks.source === "you" ? med.editorHint : med.marksText}</p>
 
-      {anytime > 0 && (
+      {doubted && (
+        <Notice tone="amber" className="mt-3">
+          {reading && <span className="block font-medium">{format(med.possibleReading, { dose: ltr(reading) })}</span>}
+          {marks.note && (
+            <span dir="auto" className="block">
+              {marks.note}
+            </span>
+          )}
+          <span className="block text-ink-soft">{med.askPharmacist}</span>
+        </Notice>
+      )}
+      {!doubted && anytime > 0 && (
         // one line across the box: so many a day, at no set time
         <div className="mt-3 flex items-center gap-4 rounded-2xl bg-mute-soft/70 px-4 py-4">
           <Strokes count={anytime} slant />
@@ -103,7 +121,13 @@ export function DoseMarksPanel({
           </span>
         </div>
       )}
-      {(timed > 0 || anytime === 0) && (
+      {/* no units means no dose was read, never "take nothing": only the note is shown */}
+      {!doubted && timed + anytime === 0 && marks.note && (
+        <Notice tone="amber" className="mt-3">
+          <span dir="auto">{marks.note}</span>
+        </Notice>
+      )}
+      {!doubted && timed > 0 && (
         <dl className="mt-3 grid grid-cols-3 gap-2">
           {times.map(([label, count]) => (
             <div
@@ -120,13 +144,13 @@ export function DoseMarksPanel({
         </dl>
       )}
       <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {timed > 0 && <span className="font-medium">{format(med.perDay, { count: ltr(fmt(timed + anytime)) })}</span>}
+        {!doubted && timed > 0 && <span className="font-medium">{format(med.perDay, { count: ltr(fmt(timed + anytime)) })}</span>}
         {marks.duration && (
           <span className="text-ink-soft">
             {med.duration} <span dir="auto">{marks.duration}</span>
           </span>
         )}
-        {marks.note && (
+        {!doubted && marks.note && timed + anytime > 0 && (
           <span className="text-ink-soft">
             {med.written}: <span dir="auto">“{marks.note}”</span>
           </span>

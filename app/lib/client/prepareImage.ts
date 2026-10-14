@@ -2,12 +2,16 @@
 // sized, correctly rotated JPEG before upload. Big phone photos (often 5–15 MB)
 // become ~300–800 KB, which makes uploads fast and avoids provider size limits.
 
+import { differenceHash, sha256, type PhotoPrint } from "./fingerprint";
+
 const MAX_INPUT_BYTES = 40 * 1024 * 1024;
 const MAX_SIDE = 2000;
 
 export interface PreparedImage {
   blob: Blob;
   previewUrl: string;
+  /** to recognise the photo if it is picked again */
+  print: PhotoPrint;
 }
 
 export type ImagePrepErrorCode = "notImage" | "inputTooLarge" | "heic" | "damaged";
@@ -46,7 +50,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
     bitmap.close();
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
     if (!blob) throw new Error("encoding failed");
-    return { blob, previewUrl: URL.createObjectURL(blob) };
+    return { blob, previewUrl: URL.createObjectURL(blob), print: { sha256: await sha256(file), dhash: differenceHash(canvas) } };
   } catch {
     // every browser decodes JPEG/PNG/WebP/GIF, so a failure means a damaged file or an unsupported format
     throw new ImagePrepError(/\.(heic|heif)$/i.test(file.name) || /hei[cf]/i.test(file.type) ? "heic" : "damaged");

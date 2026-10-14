@@ -60,14 +60,14 @@ Mobile first, in the manner of the big platforms (Material 3 / Apple Health): a 
 
 ## Nothing found → nothing shown
 - The user asked (2026-10-04) for no "Unknown", "Unclear", "Not printed" or "—" anywhere on the sheet. A tile with nothing to say sets `empty: true` and is filtered out; a section whose content is unknown is left out of `shown`; rows and meters render only the values that exist (flex rows, so any count fills the width).
-- What is missing is explained once, by the warnings in the header, with the way to get it (another photo). Don't add a placeholder for a missing value in a new section.
+- What is missing is explained once, by the warnings in the header (one amber card with a list, not a stack of notices), with the way to get it (another photo). Don't add a placeholder for a missing value in a new section.
 
 ## Profile and medicine check
 - The profile is optional everywhere: no prompt to create one, no feature that requires it. `ProfileVerdict` renders nothing without a profile.
 - A medical or dietary verdict never says "safe": the green state is "nothing you avoid was found", the empty interaction state is "nothing stood out" with the reminder that the list is short.
 
 ## Ask AI
-- Last section (`ask`), shown whenever `Content` gets an `ask` prop (the page always passes the scan's id). Other parts of the sheet can put a question to it (`askAbout` in `Content.tsx`: the additives' "Ask AI" button): it is sent as if typed. Medicines get their own intro, suggestions and a prompt that answers general questions (always marked `[G]`) with practical advice (the prescriber is named once, where a change of treatment is concerned, not after every paragraph). Chat lives in `components/AskAi.tsx`; conversations are stored on the history entry through `saveChat` only. An unanswered question goes back into the input, never into the saved chat.
+- Last section (`ask`), shown whenever `Content` gets an `ask` prop (the page always passes the scan's id). Other parts of the sheet can put a question to it (`askAbout` in `Content.tsx`: the additives' "Ask AI" button): it is sent as if typed. Medicines get their own intro, suggestions and a prompt that answers like a clinical pharmacist: practical advice, a short question instead of an assumption when the answer depends on something unknown, general knowledge always marked `[G]` (the stamp shows once per medicine answer, not on every paragraph), and the prescriber named once, where a change of treatment is concerned. Chat lives in `components/AskAi.tsx`; conversations are stored on the history entry through `saveChat` only. An unanswered question goes back into the input, never into the saved chat.
 
 ## Shelf, people, share, dictation, alternatives
 - "My shelf" is a screen of its own (`Shelf.tsx`, opened from the header button, closed by any scan, the logo or Back). It shares `togetherText` with the two-medicine screen: one sentence per finding, never rewritten.

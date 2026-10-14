@@ -205,9 +205,10 @@ export default function AskAi({
                   {a.answer}
                 </span>
                 <div className="w-full max-w-[94%] space-y-3 rounded-3xl rounded-es-lg bg-mute-soft/70 px-4 py-3.5">
-                  {splitAnswer(turn.text).map((block, j) => (
+                  {splitAnswer(turn.text).map((block, j, blocks) => (
                     <div key={j}>
-                      {block.general && (
+                      {/* a medicine answer is mostly general knowledge: each run of general paragraphs is stamped once */}
+                      {block.general && (!medicine || !blocks[j - 1]?.general) && (
                         <span title={a.generalHint} className="mb-1.5 inline-flex">
                           <GeneralChip>{a.general}</GeneralChip>
                         </span>

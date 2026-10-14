@@ -33,4 +33,5 @@ description: Use after any change, and before saying a step is done: build, lint
 - A running `next dev` keeps the old number until it is restarted: the env value is read when the config loads.
 
 ## Smoke tests
+- When Playwright's own browser isn't downloaded, run the suite on the system Chrome with a scratch config that spreads `playwright.config.ts` and sets `channel: "chrome"` on each project (import it as `raw.default ?? raw`, and give `testDir` and `webServer.cwd` absolute paths).
 - `pnpm test:e2e` builds, starts a production server on port 3101 and runs `e2e/*.spec.ts` in a phone and a desktop viewport. No AI provider is called: the tests seed saved scans from the analysis fixtures (`e2e/seed.ts`) and mock `/api/ask` and `/api/alternatives`. Run it after any UI change; add a test there for each new user-facing feature.
