@@ -49,6 +49,50 @@ const GROUPS = {
   tramadol: "tramadol",
   // bound in the gut by calcium, iron, magnesium, aluminium and zinc
   bound_by_minerals: "levothyrox|ciprofloxacin|levofloxacin|ofloxacin|norfloxacin|moxifloxacin|doxycyclin|tetracyclin|minocyclin|lymecyclin|alendron|risedron|ibandron",
+  // the groups below are only used by the health-condition rules (conditions.ts)
+  antiplatelet: "clopidogrel|prasugrel|ticagrelor|ticlopidin",
+  // taken by mouth or injected; inhaled ones (budesonide, fluticasone, beclometasone) are left out
+  corticosteroid: "prednisolon|prednison|methylprednisolon|dexamet(h)?ason|betamet(h)?ason|hydrocortison|cortison",
+  decongestant: "pseudoephedrin|phenylephrin|ephedrin|oxymetazolin|xylometazolin|naphazolin|tuaminoheptan",
+  beta_blocker_nonselective: "propranolol|sotalol|nadolol|timolol|carvedilol|labetalol|pindolol|carteolol|levobunolol|metipranolol|oxprenolol",
+  // a definite risk of haemolysis in most people with G6PD deficiency (BNF)
+  g6pd_trigger:
+    "primaquin|tafenoquin|dapson|rasburicas|nitrofurantoin|methylthioninium|methylene blue|bleu de methylene|niridazol|ciprofloxacin|levofloxacin|ofloxacin|norfloxacin|moxifloxacin|enoxacin|sulfamethoxazol|cotrimoxazol|co-trimoxazol|sulfadiazin|sulfasalazin|sulfapyridin|sulfafurazol|sulfadoxin",
+  // known to harm the unborn child (ANSM, BNF)
+  teratogen: "isotretinoin|acitretin|alitretinoin|valpro|divalproex|topiramat|mycophenol|misoprostol|thalidomid|lenalidomid|pomalidomid",
+  tetracycline_class: "tetracyclin|doxycyclin|minocyclin|lymecyclin|oxytetracyclin",
+  // the groups below name the classes section 4.5 of an official product information refers to (officialInteractions.ts)
+  oral_anticoagulant: "warfarin|acenocoumarol|fluindion|rivaroxaban|apixaban|dabigatran|edoxaban",
+  doac: "rivaroxaban|apixaban|dabigatran|edoxaban",
+  salicylate: "acetylsalicyl|aspirin",
+  snri: "venlafaxin|desvenlafaxin|duloxetin|milnacipran",
+  serotonergic: "fluoxetin|paroxetin|sertralin|escitalopram|citalopram|fluvoxamin|venlafaxin|desvenlafaxin|duloxetin|milnacipran|tramadol|moclobemid|selegilin|rasagilin|linezolid|sumatriptan|zolmitriptan|naratriptan|rizatriptan|eletriptan|almotriptan|frovatriptan|lithium|fentanyl|methadon|tapentadol|buspiron|trazodon|clomipramin|imipramin|amitriptylin|millepertuis",
+  maoi_b: "selegilin|rasagilin|safinamid",
+  ppi: "omeprazol|esomeprazol|lansoprazol|pantoprazol|rabeprazol",
+  antisecretory: "omeprazol|esomeprazol|lansoprazol|pantoprazol|rabeprazol|famotidin|ranitidin|cimetidin|nizatidin",
+  sedative: "diazepam|lorazepam|alprazolam|bromazepam|clonazepam|prazepam|oxazepam|clobazam|lormetazepam|nitrazepam|tetrazepam|clorazepat|zolpidem|zopiclon|tramadol|codein|dihydrocodein|morphin|oxycodon|fentanyl|buprenorphin|hydromorphon|tapentadol|methadon|pregabalin|gabapentin|hydroxyzin|promethazin|alimemazin|doxylamin|diphenhydramin|dexchlorpheniramin|mirtazapin|mianserin|trazodon|amitriptylin|clomipramin|haloperidol|chlorpromazin|olanzapin|risperidon|quetiapin|clozapin|levomepromazin|cyamemazin|loxapin|phenobarbital|baclofen|thalidomid",
+  calcium_blocker: "amlodipin|nifedipin|felodipin|lercanidipin|nicardipin|isradipin|lacidipin|nitrendipin|verapamil|diltiazem",
+  antihypertensive: "captopril|enalapril|ramipril|perindopril|lisinopril|quinapril|fosinopril|trandolapril|benazepril|zofenopril|cilazapril|imidapril|losartan|valsartan|irbesartan|candesartan|telmisartan|olmesartan|eprosartan|azilsartan|propranolol|atenolol|bisoprolol|metoprolol|nebivolol|acebutolol|celiprolol|betaxolol|carvedilol|labetalol|nadolol|pindolol|furosemid|bumetanid|torasemid|hydrochlorothiazid|chlortalidon|indapamid|spironolacton|eplerenon|amilorid|altizid|amlodipin|nifedipin|felodipin|lercanidipin|nicardipin|isradipin|lacidipin|nitrendipin|verapamil|diltiazem|clonidin|moxonidin|rilmenidin|methyldopa|urapidil|prazosin|doxazosin|aliskiren",
+  hypokalemic: "furosemid|bumetanid|torasemid|hydrochlorothiazid|chlortalidon|indapamid|altizid|amphotericin|bisacodyl|senn|tetracosactid|prednisolon|prednison|methylprednisolon|dexamet(h)?ason|betamet(h)?ason|hydrocortison",
+  potassium_sparing: "spironolacton|eplerenon|amilorid|triamteren",
+  trimethoprim: "trimethoprim|cotrimoxazol|co-trimoxazol",
+  qt_prolonging: "hydroxyzin|escitalopram|citalopram|domperidon|hydroxychloroquin|chloroquin|quinin|azithromycin|clarithromycin|erythromycin|spiramycin|levofloxacin|moxifloxacin|ciprofloxacin|sotalol|amiodaron|disopyramid|hydroquinidin|quinidin|dronedaron|haloperidol|chlorpromazin|levomepromazin|cyamemazin|amisulprid|sulpirid|tiaprid|pimozid|droperidol|methadon|ondansetron|mizolastin|fluconazol|pentamidin|arsenic|vandetanib|citalopram|lithium|anagrelid|mequitazin|prucaloprid|cocain|tamoxifen|donepezil|venlafaxin",
+  heparin: "heparin|enoxaparin|tinzaparin|dalteparin|nadroparin|fondaparinux",
+  acei: "captopril|enalapril|ramipril|perindopril|lisinopril|quinapril|fosinopril|trandolapril|benazepril|zofenopril|cilazapril|imidapril",
+  arb: "losartan|valsartan|irbesartan|candesartan|telmisartan|olmesartan|eprosartan|azilsartan",
+  beta_blocker: "propranolol|sotalol|nadolol|timolol|carvedilol|labetalol|pindolol|carteolol|levobunolol|metipranolol|oxprenolol|atenolol|bisoprolol|metoprolol|nebivolol|acebutolol|celiprolol|betaxolol|esmolol",
+  diuretic: "furosemid|bumetanid|torasemid|hydrochlorothiazid|chlortalidon|indapamid|spironolacton|eplerenon|amilorid|triamteren|altizid|ciclet",
+  macrolide: "clarithromycin|erythromycin|azithromycin|roxithromycin|josamycin|spiramycin|telithromycin",
+  azole: "fluconazol|itraconazol|ketoconazol|posaconazol|voriconazol|miconazol|isavuconazol",
+  sulfonylurea: "gliclazid|glibenclamid|glimepirid|glipizid",
+  insulin: "insulin",
+  hypoglycemic: "gliclazid|glibenclamid|glimepirid|glipizid|repaglinid|insulin",
+  antidiabetic: "metformin|gliclazid|glibenclamid|glimepirid|glipizid|sitagliptin|vildagliptin|saxagliptin|linagliptin|dapagliflozin|empagliflozin|canagliflozin|liraglutid|dulaglutid|semaglutid|insulin|repaglinid|pioglitazon",
+  antiepileptic_inducer: "carbamazepin|phenytoin|fosphenytoin|phenobarbital|primidon|rifampicin|rifabutin|millepertuis",
+  neuroleptic: "haloperidol|chlorpromazin|olanzapin|risperidon|quetiapin|aripiprazol|clozapin|amisulprid|sulpirid|levomepromazin|cyamemazin|loxapin|tiaprid",
+  antihistamine_h1: "cetirizin|levocetirizin|loratadin|desloratadin|fexofenadin|ebastin|mizolastin|bilastin|rupatadin|hydroxyzin|promethazin|dexchlorpheniramin|alimemazin|doxylamin|diphenhydramin",
+  thyroid: "levothyrox|liothyronin",
+  antacid: "hydroxyde d'aluminium|hydroxyde de magnesium|aluminium hydroxid|magnesium hydroxid|carbonate de calcium|calcium carbonat|alginate|sucralfat|diosmectit|smecta",
 } as const;
 export type GroupId = keyof typeof GROUPS | "mineral";
 

@@ -16,6 +16,7 @@ import Shelf from "./components/Shelf";
 import Together from "./components/Together";
 import { BarcodeIcon, CameraIcon, ClockIcon, cn, ImageIcon, Notice, ShelfIcon, Spinner } from "./components/ui";
 import { matchPhoto, type PhotoPrint } from "./lib/client/fingerprint";
+import { backfillOfficial, lacksOfficial } from "./lib/client/official";
 import { findScan, makeThumb, newScanId, savedScans, saveScan, updateScan, useHistory, type HistoryEntry, type Phrase } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
 import { type Mode, useMode } from "./lib/client/mode";
@@ -356,6 +357,16 @@ export default function Home() {
 
   // the other medicines scanned on this device, to check the one on screen with
   const history = useHistory();
+  // medicines saved before their official product information was fetched get it, once, in the background
+  const needsOfficial = history.some((e) => lacksOfficial(e.result));
+  useEffect(() => {
+    if (!needsOfficial) return;
+    const controller = new AbortController();
+    void backfillOfficial(controller.signal, (id, official) => {
+      if (id === scanId.current) setResult((shown) => shown && { ...shown, result: { ...shown.result, official } });
+    });
+    return () => controller.abort();
+  }, [needsOfficial]);
   // what has expired or is about to, across everything saved: the shelf's badge and the reminder
   const [today] = useState(() => new Date());
   const attention = useMemo(() => attentionCount(datedEntries(history, today)), [history, today]);

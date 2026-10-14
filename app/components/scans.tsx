@@ -1,7 +1,8 @@
 "use client";
 // What a saved scan looks like in a list: its name, its picture, and its short status.
 import Image from "next/image";
-import { checkProfile, type Profile } from "../lib/analysis/profile";
+import type { Profile } from "../lib/analysis/profile";
+import { checkPerson } from "../lib/analysis/profiles";
 import type { HistoryEntry } from "../lib/client/history";
 import { useI18n } from "../lib/i18n/I18nProvider";
 import { cn } from "./ui";
@@ -27,9 +28,9 @@ export function ScanThumb({ entry, className }: { entry: HistoryEntry; className
 
 export type ScanStatus = "avoid" | "check" | "ok" | "contains";
 
-/** a scan's short status: the watchlist verdict, else whether it declares allergens */
+/** a scan's short status: the verdict for the watchlist and health conditions, else whether it declares allergens */
 export function scanStatus(entry: HistoryEntry, profile: Profile): ScanStatus | null {
-  const check = checkProfile(entry.result, profile);
+  const check = checkPerson(entry.result, profile);
   if (check && check.status !== "unchecked") return check.status;
   if (!check && entry.result.allergens.some((a) => a.presence === "contains")) return "contains";
   return null;

@@ -1,16 +1,19 @@
 "use client";
 import { useMemo, useState } from "react";
-import { checkShelf, datedEntries } from "../lib/analysis/cabinet";
+import { checkShelf, checkShelfConditions, datedEntries } from "../lib/analysis/cabinet";
 import { type Course, coursesOf } from "../lib/analysis/course";
 import type { Expiry } from "../lib/analysis/expiry";
 import { loadShelfChat, saveShelfChat, useHistory, type HistoryEntry } from "../lib/client/history";
+import { useProfileBook } from "../lib/client/profile";
 import { disableReminders, enableReminders, useReminderState } from "../lib/client/reminders";
-import { format, useI18n } from "../lib/i18n/I18nProvider";
+import { format, isolate, useI18n } from "../lib/i18n/I18nProvider";
 import { dateLocale } from "../lib/i18n/locales";
 import AskAi from "./AskAi";
+import { usePersonName } from "./ProfileSheet";
+import { ConditionLine, OfficialLine, OfficialSourceLink } from "./result/ProfileVerdict";
 import { ScanThumb, useScanName } from "./scans";
-import { togetherText } from "./Together";
-import { ArrowLeftIcon, BellIcon, cn, Notice, PillIcon, Section, ShelfIcon, SparkleIcon, toneClasses, type Tone } from "./ui";
+import { OfficialPairNotice, togetherText } from "./Together";
+import { ArrowLeftIcon, BellIcon, cn, Dot, HeartIcon, Notice, PillIcon, Section, ShelfIcon, SparkleIcon, toneClasses, type Tone } from "./ui";
 
 const statusTone: Record<Expiry["status"], Tone> = { expired: "red", soon: "amber", later: "zinc" };
 
@@ -24,6 +27,8 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
   const dated = useMemo(() => datedEntries(entries, now), [entries, now]);
   const shelf = useMemo(() => checkShelf(entries), [entries]);
   const courses = useMemo(() => coursesOf(shelf.medicines, now), [shelf, now]);
+  const book = useProfileBook();
+  const health = useMemo(() => checkShelfConditions(shelf.medicines, book.profiles), [shelf, book]);
   const [initialChat] = useState(loadShelfChat);
 
   const month = useMemo(() => new Intl.DateTimeFormat(dateLocale(locale), { month: "long", year: "numeric" }), [locale]);
@@ -102,6 +107,9 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
                           <span dir="auto">{togetherText(f, t.together)}</span>
                         </Notice>
                       ))}
+                      {pair.official.map((f, i) => (
+                        <OfficialPairNotice key={`official-${i}`} finding={f} />
+                      ))}
                     </div>
                   </li>
                 ))}
@@ -111,6 +119,8 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
             {shelf.medicines.length >= 2 && <p className="mt-3 text-xs leading-5 text-ink-soft">{t.together.disclaimer}</p>}
           </Section>
 
+          {shelf.medicines.length > 0 && health.length > 0 && <HealthSection health={health} several={book.profiles.length > 1} onOpen={onOpen} />}
+
           {shelf.medicines.length > 0 && (
             <Section title={s.ask} icon={<SparkleIcon />}>
               <AskAi scanId="shelf" cabinet={shelf.medicines.map((m) => m.result)} initialChat={initialChat} persist={saveShelfChat} />
@@ -119,6 +129,68 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
         </>
       )}
     </div>
+  );
+}
+
+/** the shelf's medicines against each person's health conditions, with the same lines as a result's verdict */
+function HealthSection({
+  health,
+  several,
+  onOpen,
+}: {
+  health: ReturnType<typeof checkShelfConditions<HistoryEntry>>;
+  several: boolean;
+  onOpen: (e: HistoryEntry) => void;
+}) {
+  const { t, locale } = useI18n();
+  const nameOf = useScanName();
+  const personName = usePersonName();
+  return (
+    <Section title={t.shelf.health} icon={<HeartIcon />}>
+      <div className="space-y-4">
+        {health.map(({ person, items, unchecked }) => (
+          <div key={person.id}>
+            {several && <p className="eyebrow mb-2 text-ink-soft">{format(t.profile.verdict.eyebrowFor, { name: isolate(personName(person)) })}</p>}
+            {items.length === 0 && unchecked.length === 0 ?
+              <Notice tone="zinc">{t.shelf.healthNone}</Notice>
+            : <ul className="space-y-3">
+                {items.map(({ entry, findings, official, officialSource }) => (
+                  <li key={entry.id} className="rounded-2xl bg-mute-soft/60 p-4">
+                    <button onClick={() => onOpen(entry)} className="-m-2 flex min-h-11 w-[calc(100%+1rem)] items-center gap-3 rounded-2xl p-2 text-start transition hover:bg-mute-soft/70">
+                      <ScanThumb entry={entry} className="size-12" />
+                      <span dir="auto" className="font-display min-w-0 flex-1 truncate text-base font-semibold">
+                        {nameOf(entry)}
+                      </span>
+                    </button>
+                    <ul className="mt-2.5 space-y-2">
+                      {findings.map((f) => (
+                        <li key={f.ruleId} className="flex gap-2.5 text-sm leading-6">
+                          <Dot tone={f.level === "avoid" ? "red" : "amber"} className="mt-2 shrink-0" />
+                          <ConditionLine finding={f} conditions={person.conditions} />
+                        </li>
+                      ))}
+                      {official.map((f, i) => (
+                        <li key={`official-${i}`} className="flex gap-2.5 text-sm leading-6">
+                          <Dot tone={f.level === "avoid" ? "red" : "amber"} className="mt-2 shrink-0" />
+                          <OfficialLine finding={f} />
+                        </li>
+                      ))}
+                    </ul>
+                    <OfficialSourceLink check={{ official, officialSource, status: "check" }} />
+                  </li>
+                ))}
+              </ul>
+            }
+            {unchecked.length > 0 && (
+              <Notice tone="zinc" className="mt-3">
+                {format(t.shelf.healthUnchecked, { names: new Intl.ListFormat(locale, { type: "unit" }).format(unchecked.map((e) => isolate(nameOf(e)))) })}
+              </Notice>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-ink-soft">{t.profile.verdict.health.note}</p>
+    </Section>
   );
 }
 

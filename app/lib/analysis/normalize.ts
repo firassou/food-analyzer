@@ -1229,6 +1229,8 @@ function normalizeUnsafe(input: unknown, opts: NormalizeOptions): LabelAnalysis 
       opts.database && ingredientSource === "database"
         ? { name: opts.database.name, product: opts.database.product, url: opts.database.url }
         : null,
+    // only the server sets it, after the analysis: a model can't claim official text
+    official: null,
     allergens: [...allergenMap.values()].sort(
       (a, b) =>
         (a.presence === b.presence ? 0 : a.presence === "contains" ? -1 : 1) ||

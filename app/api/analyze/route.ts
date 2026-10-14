@@ -1,7 +1,6 @@
 import { AnalyzeError, analyzeLabel } from "@/app/lib/server/analyze";
 import { ImageError, MAX_UPLOAD_BYTES, prepareImage, TOO_LARGE_MESSAGE } from "@/app/lib/server/image";
 import { completeFromDatabase, findProduct, lookupEnabled, needsLookup } from "@/app/lib/server/lookup";
-import { needsExcipients } from "@/app/lib/analysis/medicine";
 import { completeMedicine, findMedicine, wantedMedicine } from "@/app/lib/server/medicines";
 import { getTargets } from "@/app/lib/server/models";
 import { crossSite } from "@/app/lib/server/guard";
@@ -62,13 +61,16 @@ export async function POST(req: Request) {
         console.warn("[analyze] product lookup failed:", error instanceof Error ? error.message : error);
       }
     }
-    // a medicine whose composition isn't in view (it rarely is on the front of the box):
-    // look its excipients up in the official database. Optional: the reading stands without it.
-    if (lookupEnabled() && needsExcipients(result) && result.product.name) {
+    // every medicine: its official contraindications, warnings and pregnancy section, and its
+    // excipients when they aren't in view (they rarely are on the front of the box), from the
+    // official database. Optional: the reading stands without it, and the checks say "not checked".
+    if (lookupEnabled() && result.kind === "medicine" && (result.product.name || result.medicine?.active.length)) {
       try {
         const found = await findMedicine(wantedMedicine(result), req.signal);
         if (found) result = completeMedicine(result, found, locale);
-        console.log(`[analyze] medicine lookup: ${found ? `matched ${found.url}` : "no match"}`);
+        console.log(
+          `[analyze] medicine lookup: ${found ? `matched ${found.brand?.url ?? "no brand entry"}, official ${found.official ? `${found.official.match} ${found.official.url}` : "none"}` : "no match"}`,
+        );
       } catch (error) {
         console.warn("[analyze] medicine lookup failed:", error instanceof Error ? error.message : error);
       }

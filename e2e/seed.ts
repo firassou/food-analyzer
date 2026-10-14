@@ -2,9 +2,10 @@
 // so a test opens a real-shaped result without calling any AI provider.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { OFFICIAL } from "../app/lib/analysis/__fixtures__/official";
 import { normalize } from "../app/lib/analysis/normalize";
 import { parseModelJson } from "../app/lib/analysis/parse";
-import type { LabelAnalysis } from "../app/lib/analysis/types";
+import type { LabelAnalysis, OfficialInfo } from "../app/lib/analysis/types";
 
 export const HISTORY_KEY = "food-analyzer:history:v2";
 
@@ -22,10 +23,13 @@ export function fromFixture(id: string, fixture: string, patch: Record<string, u
 }
 
 /** a medicine made up here: a name, substances and (optionally) pen marks and a printed expiry */
-export function medicine(id: string, name: string, active: string[], extra: { marks?: Record<string, unknown>; expiration?: string } = {}): Seed {
-  return {
-    id,
-    result: normalize({
+export function medicine(
+  id: string,
+  name: string,
+  active: string[],
+  extra: { marks?: Record<string, unknown>; expiration?: string; official?: Partial<OfficialInfo> } = {},
+): Seed {
+  const result = normalize({
       kind: "medicine",
       label_detected: true,
       image_quality: "good",
@@ -33,8 +37,10 @@ export function medicine(id: string, name: string, active: string[], extra: { ma
       product: { name },
       medicine: { active: active.map((a) => ({ name: a })), marks: extra.marks ?? null, uses: ["pain"] },
       dates: { expiration: extra.expiration ?? null },
-    }),
-  };
+    });
+  // its official product information, as the analysis would have fetched it
+  if (extra.official) result.official = { ...OFFICIAL, product: name.toUpperCase(), ...extra.official };
+  return { id, result };
 }
 
 export const entry = (seed: Seed, minutesAgo = 0) => ({

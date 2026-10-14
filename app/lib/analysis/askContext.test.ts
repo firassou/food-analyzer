@@ -1,3 +1,4 @@
+import { OFFICIAL } from "./__fixtures__/official";
 import { describe, expect, it } from "vitest";
 import { askSystemPrompt, cleanContext, contextBlock } from "./ask";
 import { buildAskContext, hasPersonalContext, MAX_CONTEXT_LINE_CHARS, MAX_CONTEXT_LINES } from "./askContext";
@@ -73,5 +74,37 @@ describe("the prompt with a context", () => {
   it("formats the block", () => {
     expect(contextBlock({ reader: ["a"], checks: [] })).toBe("a");
     expect(contextBlock({ reader: ["a"], checks: ["b"] })).toBe("a\nApp checks:\nb");
+  });
+});
+
+describe("buildAskContext: health conditions", () => {
+  const advil = normalize({ kind: "medicine", label_detected: true, image_quality: "good", product: { name: "Advil" }, medicine: { active: [{ name: "Ibuprofen" }] } });
+
+  it("tells the conditions and what the rules found, as facts", () => {
+    const c = buildAskContext(advil, profile({ conditions: ["hemophilia", "asthma"] }), []);
+    expect(c.reader).toEqual(["The reader's health conditions: hemophilia or another bleeding disorder; asthma."]);
+    expect(c.checks[0]).toBe("Health condition check for this product: AVOID.");
+    expect(c.checks[1]).toBe("- Avoid, ask a doctor or pharmacist: hemophilia or another bleeding disorder — an NSAID or aspirin, which adds bleeding risk — Ibuprofen");
+    expect(c.checks[2]).toMatch(/^- Check with a doctor or pharmacist: asthma — /);
+  });
+
+  it("passes on conditions the rules don't know, marked as such", () => {
+    const c = buildAskContext(advil, profile({ otherConditions: ["Crohn's disease"] }), []);
+    expect(c.reader).toEqual(["Other health conditions of the reader (only checked against a medicine's official product information): Crohn's disease."]);
+    // a medicine without its official product information: nothing can be said about it
+    expect(c.checks).toEqual(["Health condition check for this product: not checked (its official product information was not found)."]);
+    expect(hasPersonalContext(profile({ otherConditions: ["Crohn's disease"] }), [])).toBe(true);
+  });
+
+  it("says when nothing was found, never that it is safe", () => {
+    const doliprane = normalize({ kind: "medicine", label_detected: true, product: { name: "Doliprane" }, medicine: { active: [{ name: "Paracetamol" }] } });
+    expect(buildAskContext(doliprane, profile({ conditions: ["hemophilia"] }), []).checks).toEqual([
+      "Health condition check for this product: not checked (its official product information was not found).",
+    ]);
+    const official = { ...doliprane, official: { ...OFFICIAL, product: "DOLIPRANE 500 mg, comprimé", contraindications: ["Insuffisance hépatique sévère."] } };
+    expect(buildAskContext(official, profile({ conditions: ["hemophilia"] }), []).checks).toEqual([
+      "Health condition check for this product: its official product information names none of the reader's conditions.",
+      "Official product information used: DOLIPRANE 500 mg, comprimé.",
+    ]);
   });
 });

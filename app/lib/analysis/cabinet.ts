@@ -2,9 +2,13 @@
 // other, and every printed date sorted by how soon it runs out. Pure and client-safe; the
 // medicine rules are the same ones the two-medicine check uses.
 
+import { checkConditions, type ConditionCheck, type ConditionFinding } from "./conditions";
+import type { OfficialFinding } from "./official";
 import { type Expiry, expiryOf } from "./expiry";
-import { checkTogether, type TogetherFinding } from "./interactions";
+import type { TogetherFinding } from "./interactions";
+import { checkPair, type OfficialPairFinding } from "./officialInteractions";
 import { fold } from "./knowledge";
+import type { NamedProfile } from "./profiles";
 import type { LabelAnalysis } from "./types";
 
 /** the part of a saved scan the shelf needs */
@@ -26,6 +30,8 @@ export interface PairFinding<E extends ShelfEntry> {
   a: E;
   b: E;
   findings: TogetherFinding[];
+  /** what their official product information says about taking them together */
+  official: OfficialPairFinding[];
 }
 
 export interface ShelfCheck<E extends ShelfEntry> {
@@ -62,14 +68,38 @@ export function checkShelf<E extends ShelfEntry>(entries: E[]): ShelfCheck<E> {
   let compared = 0;
   for (let i = 0; i < medicines.length; i++)
     for (let j = i + 1; j < medicines.length; j++) {
-      const check = checkTogether(medicines[i].result.medicine, medicines[j].result.medicine);
+      const check = checkPair(medicines[i].result, medicines[j].result);
       if (!check.checked) continue;
       compared++;
-      if (check.findings.length > 0) pairs.push({ a: medicines[i], b: medicines[j], findings: check.findings });
+      if (check.findings.length + check.official.length > 0) pairs.push({ a: medicines[i], b: medicines[j], findings: check.findings, official: check.official });
     }
-  const worst = (p: PairFinding<E>) => Number(p.findings.some((f) => f.severity === "avoid"));
+  const worst = (p: PairFinding<E>) => Number(p.findings.some((f) => f.severity === "avoid") || p.official.some((f) => f.severity === "avoid" && !f.byDose));
   pairs.sort((p, q) => worst(q) - worst(p));
   return { medicines, unread: all.length - read.length, pairs, compared };
+}
+
+export interface PersonShelfCheck<E extends ShelfEntry> {
+  person: NamedProfile;
+  /** only the medicines where something stood out for this person's conditions, serious ones first */
+  items: { entry: E; findings: ConditionFinding[]; official: OfficialFinding[]; officialSource: ConditionCheck["officialSource"] }[];
+  /** medicines that couldn't be checked: their substance or their official product information is missing */
+  unchecked: E[];
+}
+
+/** the shelf's medicines against each person's health conditions; only people who have some */
+export function checkShelfConditions<E extends ShelfEntry>(medicines: E[], people: NamedProfile[]): PersonShelfCheck<E>[] {
+  const out: PersonShelfCheck<E>[] = [];
+  for (const person of people) {
+    const checks = medicines.map((entry) => ({ entry, check: checkConditions(entry.result, person) }));
+    if (!checks.some((c) => c.check !== null)) continue;
+    const items = checks
+      .filter((c) => (c.check?.findings.length ?? 0) + (c.check?.official.length ?? 0) > 0)
+      .map((c) => ({ entry: c.entry, findings: c.check!.findings, official: c.check!.official, officialSource: c.check!.officialSource }));
+    const worst = (i: (typeof items)[number]) => Number([...i.findings, ...i.official].some((f) => f.level === "avoid"));
+    items.sort((p, q) => worst(q) - worst(p));
+    out.push({ person, items, unchecked: checks.filter((c) => c.check?.status === "unchecked").map((c) => c.entry) });
+  }
+  return out;
 }
 
 /** every saved scan with a readable date, the soonest first (already expired ones lead) */

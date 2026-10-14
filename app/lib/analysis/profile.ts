@@ -9,6 +9,25 @@ import { ALLERGEN_IDS, type AllergenId, type LabelAnalysis } from "./types";
 export const DIETS = ["vegetarian", "vegan", "halal"] as const;
 export type Diet = (typeof DIETS)[number];
 
+/** health conditions (and pregnancy) the rules in conditions.ts know about */
+export const CONDITION_IDS = [
+  "hemophilia",
+  "diabetes",
+  "hypertension",
+  "coeliac",
+  "kidney_disease",
+  "stomach_ulcer",
+  "asthma",
+  "g6pd_deficiency",
+  "pregnancy",
+  "liver_disease",
+] as const;
+export type ConditionId = (typeof CONDITION_IDS)[number];
+
+/** other health conditions the AI named: checked against a medicine's official text only, by their French term */
+export const MAX_OTHER_CONDITIONS = 3;
+export const MAX_CONDITION_TEXT = 60;
+
 export interface Profile {
   allergens: AllergenId[];
   /** lactose intolerance (not the same as a milk allergy) */
@@ -16,22 +35,49 @@ export interface Profile {
   /** watches sugar: products high in sugars are pointed out */
   sugar: boolean;
   diets: Diet[];
+  /** health conditions; absent when there are none, so profiles stored before them read the same */
+  conditions?: ConditionId[];
+  /** other health conditions, by the name the reader saw ("Bipolar disorder"); passed to Ask AI only when allowed */
+  otherConditions?: string[];
+  /** each other condition's French medical term ("trouble bipolaire"), to find it in a medicine's official (French) text */
+  otherTerms?: Record<string, string>;
 }
 
 export const EMPTY_PROFILE: Profile = { allergens: [], lactose: false, sugar: false, diets: [] };
 
-export const isEmptyProfile = (p: Profile) => p.allergens.length === 0 && !p.lactose && !p.sugar && p.diets.length === 0;
+/** coeliac disease is checked as the gluten allergen: one source of truth for gluten */
+export const allergensOf = (p: Profile): AllergenId[] =>
+  p.conditions?.includes("coeliac") && !p.allergens.includes("gluten") ? [...p.allergens, "gluten"] : p.allergens;
+
+/** nothing for `checkProfile` to look for (health conditions other than coeliac disease are `checkConditions`') */
+export const isEmptyWatchlist = (p: Profile) => allergensOf(p).length === 0 && !p.lactose && !p.sugar && p.diets.length === 0;
+
+export const isEmptyProfile = (p: Profile) => isEmptyWatchlist(p) && !p.conditions?.length && !p.otherConditions?.length;
+
+export const cleanConditionText = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, MAX_CONDITION_TEXT) : "");
 
 /** a stored profile, whatever shape it comes back in */
 export function sanitizeProfile(raw: unknown): Profile {
   const x = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
   const list = (v: unknown) => (Array.isArray(v) ? v : []);
-  return {
+  const profile: Profile = {
     allergens: ALLERGEN_IDS.filter((id) => list(x.allergens).includes(id)),
     lactose: x.lactose === true,
     sugar: x.sugar === true,
     diets: DIETS.filter((d) => list(x.diets).includes(d)),
   };
+  const conditions = CONDITION_IDS.filter((id) => list(x.conditions).includes(id));
+  const others: string[] = [];
+  for (const v of list(x.otherConditions)) {
+    const text = cleanConditionText(v);
+    if (text && others.length < MAX_OTHER_CONDITIONS && !others.some((o) => fold(o) === fold(text))) others.push(text);
+  }
+  if (conditions.length) profile.conditions = conditions;
+  if (others.length) profile.otherConditions = others;
+  const terms = typeof x.otherTerms === "object" && x.otherTerms !== null ? (x.otherTerms as Record<string, unknown>) : {};
+  const kept = Object.fromEntries(others.map((o) => [o, cleanConditionText(terms[o])]).filter(([, term]) => term));
+  if (Object.keys(kept).length) profile.otherTerms = kept;
+  return profile;
 }
 
 export type ProfileTopic =
@@ -120,13 +166,13 @@ const MAX_BECAUSE = 4;
  * profile, plain water, or a photo of something else.
  */
 export function checkProfile(result: LabelAnalysis, profile: Profile): ProfileCheck | null {
-  if (isEmptyProfile(profile) || result.kind === "water" || result.kind === "other") return null;
+  if (isEmptyWatchlist(profile) || result.kind === "water" || result.kind === "other") return null;
   // an estimate (a dish, a recalled recipe) can make something likely, never certain
   const estimated = result.ingredient_source === "estimated";
   const cap = (level: "avoid" | "check") => (estimated ? "check" : level);
   const findings: ProfileFinding[] = [];
 
-  for (const id of profile.allergens) {
+  for (const id of allergensOf(profile)) {
     const entry = result.allergens.find((a) => a.id === id);
     let level: "avoid" | "check" | null = entry ? (entry.presence === "contains" ? "avoid" : "check") : null;
     if (id === "gluten") {
@@ -183,4 +229,4 @@ export function checkProfile(result: LabelAnalysis, profile: Profile): ProfileCh
   return { status, findings };
 }
 
-const onlySugar = (p: Profile) => p.sugar && p.allergens.length === 0 && !p.lactose && p.diets.length === 0;
+const onlySugar = (p: Profile) => p.sugar && allergensOf(p).length === 0 && !p.lactose && p.diets.length === 0;

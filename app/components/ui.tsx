@@ -293,3 +293,4 @@ export const ShareIcon = icon(<path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v5.500A1.500
 export const MicIcon = icon(<path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm-6-3a6 6 0 0 0 12 0m-6 6v3" />);
 export const PrinterIcon = icon(<path d="M7 9V4h10v5M7 17H5.500A1.500 1.500 0 0 1 4 15.500v-5A1.500 1.500 0 0 1 5.500 9h13a1.500 1.500 0 0 1 1.500 1.500v5a1.500 1.500 0 0 1-1.500 1.500H17M7 14h10v6H7v-6Z" />);
 export const SwapIcon = icon(<path d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3-3m-3 3 3 3" />);
+export const HeartIcon = icon(<path d="M12 20s-7.500-4.400-7.500-10A4.200 4.200 0 0 1 12 7.400 4.200 4.200 0 0 1 19.500 10c0 5.600-7.500 10-7.500 10ZM8 12h2l1.200-2 1.600 4 1.200-2h2" />);

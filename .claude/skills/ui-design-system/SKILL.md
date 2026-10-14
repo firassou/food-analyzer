@@ -31,7 +31,7 @@ No indigo/purple gradients, glass, blobs, emoji icons, dense dashboards or fake 
 - The home screen is a two-column hero from `lg` (headline, calls to action and the rotating word on the left, a bento of what it reads on the right) and one column below.
 - The dock (fixed, bottom, thumb reach) carries the one primary action on a phone and whenever a scan is open; on the desktop home the same actions sit under the headline. Leave room for it with `pb-dock`. Touch targets are at least 44 px (`h-11`).
 - From `lg`, the photo sits in a sticky left column.
-- The headline's last word rotates (`RotatingWord`): it is paused for reduced motion and for a hidden tab, and screen readers get the list once.
+- The home lead's object rotates ("Photograph a **label** / **drink** / **dish**", `RotatingSentence` in `components/RotatingWord.tsx`, strings `home.leadRotating` + `home.leadThings` with the accent word in `<b>`): the shown option sets the width (no gap before the full stop), it pauses on a hidden tab, and under reduced motion and for screen readers the plain `home.lead` is shown once.
 
 ## Storage and overlays
 - Saved scans go through `app/lib/client/history.ts` only (guarded `localStorage`, read with `useSyncExternalStore`). Bump the key's version when `LabelAnalysis` changes in a way old entries can't satisfy.

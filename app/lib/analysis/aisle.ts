@@ -3,7 +3,8 @@
 // database, the answer through the same checks as everything else. Pure and client-safe; the
 // camera, the network and the screen are in the component.
 
-import { checkProfile, isEmptyProfile, type Profile } from "./profile";
+import { isEmptyProfile, type Profile } from "./profile";
+import { checkPerson } from "./profiles";
 import type { LabelAnalysis } from "./types";
 
 /** what a badge says: the profile's verdict, or only the product when there is no profile to check */
@@ -12,7 +13,7 @@ export type AisleVerdict = "avoid" | "check" | "ok" | "unchecked" | "plain";
 export function aisleVerdict(result: LabelAnalysis, profile: Profile): AisleVerdict {
   if (isEmptyProfile(profile)) return "plain";
   // a plain water or a photo of something else has nothing to check
-  return checkProfile(result, profile)?.status ?? "plain";
+  return checkPerson(result, profile)?.status ?? "plain";
 }
 
 export interface Box {

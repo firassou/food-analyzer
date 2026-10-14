@@ -1,7 +1,8 @@
 "use client";
-import { checkTogether, type TogetherFinding } from "../lib/analysis/interactions";
+import type { TogetherFinding } from "../lib/analysis/interactions";
+import { checkPair, type OfficialPairFinding } from "../lib/analysis/officialInteractions";
 import type { HistoryEntry } from "../lib/client/history";
-import { format, useI18n } from "../lib/i18n/I18nProvider";
+import { format, isolate, ltr, useI18n } from "../lib/i18n/I18nProvider";
 import type { Messages } from "../lib/i18n/messages";
 import { ScanThumb, useScanName } from "./scans";
 import { Notice } from "./ui";
@@ -10,18 +11,46 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** the sentence for one finding of the two-medicine check, in the interface language */
 export function togetherText(f: TogetherFinding, c: Messages["together"]): string {
-  const [x, y] = f.substances.map(capitalize);
+  // names in Latin script inside an Arabic sentence: isolated so they keep their place
+  const [x, y] = f.substances.map((s) => isolate(capitalize(s)));
   if (f.type === "duplicate") return f.paracetamol ? c.duplicateParacetamol : format(c.duplicate, { a: x });
   if (f.type === "same_family") return format(c.sameFamily, { a: x, b: y, family: c.families[f.family] });
   return format(c.interactions[f.id], { a: x, b: y });
 }
 
-/** two saved medicines checked against each other: same substance, same family, known interactions */
+/** what one medicine's official product information says about taking it with the other, quoted as published */
+export function OfficialPairNotice({ finding: f }: { finding: OfficialPairFinding }) {
+  const { t } = useI18n();
+  const c = t.together;
+  // levels set by dose: which one applies isn't known here, so it is asked about rather than called
+  const tone = f.byDose ? "amber" : f.severity === "avoid" ? "red" : "amber";
+  return (
+    <Notice tone={tone}>
+      <span className="block font-semibold">{f.byDose ? c.byDose : f.severity === "avoid" ? c.avoid : c.caution}</span>
+      <span className="mt-1 block space-y-1.5">
+        {f.parts.map((p, i) => (
+          <span key={i} className="block">
+            <span className="font-medium">{c.levels[p.level ?? "none"]}</span>
+            {/* the regulator's words, in French, as published: never translated or reworded */}
+            <span lang="fr" dir="ltr" className="mt-0.5 block text-start italic wrap-break-word">
+              «&nbsp;{p.quote}&nbsp;»
+            </span>
+          </span>
+        ))}
+      </span>
+      <a href={f.source.url} target="_blank" rel="noreferrer" className="mt-1.5 block text-xs leading-5 underline underline-offset-2">
+        {format(f.source.match === "substance" ? c.officialGeneric : c.officialFrom, { product: ltr(f.source.product) })}
+      </a>
+    </Notice>
+  );
+}
+
+/** two saved medicines checked against each other: same substance, same family, and their official interactions */
 export default function Together({ a, b, onBack }: { a: HistoryEntry; b: HistoryEntry; onBack: () => void }) {
   const { t } = useI18n();
   const c = t.together;
   const nameOf = useScanName();
-  const check = checkTogether(a.result.medicine, b.result.medicine);
+  const check = checkPair(a.result, b.result);
 
   const textOf = (f: TogetherFinding) => togetherText(f, c);
 
@@ -57,18 +86,23 @@ export default function Together({ a, b, onBack }: { a: HistoryEntry; b: History
           <div className="mt-5 space-y-2">
             {!check.checked ? (
               <Notice tone="zinc">{c.unchecked}</Notice>
-            ) : check.findings.length === 0 ? (
+            ) : check.findings.length + check.official.length === 0 ? (
               <Notice tone="zinc">
                 <span className="block font-semibold">{c.none}</span>
-                {c.noneText}
+                {check.officialBoth ? c.noneOfficial : c.noneText}
               </Notice>
             ) : (
-              check.findings.map((f, i) => (
-                <Notice key={i} tone={f.severity === "avoid" ? "red" : "amber"}>
-                  <span className="block font-semibold">{f.severity === "avoid" ? c.avoid : c.caution}</span>
-                  <span dir="auto">{textOf(f)}</span>
-                </Notice>
-              ))
+              <>
+                {check.findings.map((f, i) => (
+                  <Notice key={i} tone={f.severity === "avoid" ? "red" : "amber"}>
+                    <span className="block font-semibold">{f.severity === "avoid" ? c.avoid : c.caution}</span>
+                    <span dir="auto">{textOf(f)}</span>
+                  </Notice>
+                ))}
+                {check.official.map((f, i) => (
+                  <OfficialPairNotice key={`official-${i}`} finding={f} />
+                ))}
+              </>
             )}
           </div>
         </div>

@@ -1,5 +1,8 @@
+import { OFFICIAL } from "./__fixtures__/official";
 import { describe, expect, it } from "vitest";
-import { attentionCount, checkShelf, datedEntries, MAX_SHELF_MEDICINES, type ShelfEntry } from "./cabinet";
+import { attentionCount, checkShelf, checkShelfConditions, datedEntries, MAX_SHELF_MEDICINES, type ShelfEntry } from "./cabinet";
+import { EMPTY_PROFILE, type ConditionId } from "./profile";
+import type { NamedProfile } from "./profiles";
 import { normalize } from "./normalize";
 
 let n = 0;
@@ -55,5 +58,40 @@ describe("datedEntries", () => {
     expect(dated.map((d) => d.entry.result.product.name)).toEqual(["Gone", "Soon", "Later"]);
     expect(dated.map((d) => d.expiry.status)).toEqual(["expired", "soon", "later"]);
     expect(attentionCount(dated)).toBe(2);
+  });
+});
+
+describe("checkShelfConditions", () => {
+  const person = (id: string, conditions: ConditionId[]): NamedProfile => ({ ...EMPTY_PROFILE, id, name: id, conditions });
+
+  it("lists, for each person with conditions, the medicines with a finding", () => {
+    const advil = med("Advil", ["Ibuprofen"]);
+    const doliprane = med("Doliprane", ["Paracetamol"]);
+    const out = checkShelfConditions([advil, doliprane], [person("me", ["hemophilia"]), person("kid", []), person("dad", ["liver_disease"])]);
+    expect(out.map((p) => [p.person.id, p.items.map((i) => [i.entry.result.product.name, i.findings.map((f) => f.ruleId)])])).toEqual([
+      ["me", [["Advil", ["bleeding_nsaid"]]]],
+      ["dad", [["Doliprane", ["liver_paracetamol"]]]],
+    ]);
+  });
+
+  it("is empty when nobody has a condition", () => {
+    expect(checkShelfConditions([med("Advil", ["Ibuprofen"])], [person("me", [])])).toEqual([]);
+  });
+
+  it("keeps a person whose medicines raised nothing, so the shelf can say so", () => {
+    const doliprane = { ...med("Doliprane", ["Paracetamol"]), result: { ...med("Doliprane", ["Paracetamol"]).result, official: OFFICIAL } };
+    expect(checkShelfConditions([doliprane], [person("me", ["asthma"])])).toEqual([{ person: person("me", ["asthma"]), items: [], unchecked: [] }]);
+  });
+
+  it("names the medicines whose official product information is missing: they weren't checked", () => {
+    const doliprane = med("Doliprane", ["Paracetamol"]);
+    expect(checkShelfConditions([doliprane], [person("me", ["asthma"])])[0].unchecked).toEqual([doliprane]);
+  });
+
+  it("quotes what the official product information says", () => {
+    const advil = med("Advil", ["Ibuprofen"]);
+    const official = { ...advil, result: { ...advil.result, official: { ...OFFICIAL, contraindications: ["antécédents d'asthme déclenchés par la prise d'ibuprofène,"] } } };
+    const [me] = checkShelfConditions([official], [person("me", ["asthma"])]);
+    expect(me.items[0].official.map((f) => [f.level, f.section])).toEqual([["avoid", "contraindications"]]);
   });
 });

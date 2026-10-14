@@ -17,7 +17,7 @@ const EXPECTED_KEYS = [
   "label_detected", "image_quality", "language", "product", "summary", "highlights", "ingredients",
   "allergens", "gluten", "lactose", "additives", "nutrition", "sugar", "claims", "certifications",
   "dates", "storage", "manufacturer", "origin", "raw_text", "warnings",
-  "kind", "ingredient_source", "database", "water", "drink", "medicine",
+  "kind", "ingredient_source", "database", "water", "drink", "medicine", "official",
 ].sort();
 
 /** invariant 2: every field present, nothing undefined anywhere */
@@ -66,7 +66,7 @@ describe("invariants", () => {
     expect(r.product).toEqual({ name: null, brand: null, category: null, quantity: null, barcode: null });
     expect(r.kind).toBe("other");
     expect(r.ingredient_source).toBe("label");
-    expect([r.water, r.drink, r.database, r.medicine]).toEqual([null, null, null, null]);
+    expect([r.water, r.drink, r.database, r.medicine, r.official]).toEqual([null, null, null, null, null]);
     expect(r.ingredients).toEqual([]);
     expect(r.gluten).toEqual({ status: "unclear", confidence: "medium", evidence: [] });
     expect(r.lactose).toEqual({ status: "unclear", evidence: [] });

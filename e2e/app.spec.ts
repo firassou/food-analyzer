@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import sharp from "sharp";
+import type { OfficialInteraction } from "../app/lib/analysis/types";
 import { fromFixture, HISTORY_KEY, history, medicine, monthsFromNow } from "./seed";
 
 /** saved scans in place before the page first loads (a reload keeps what the app saved since) */
@@ -12,6 +13,11 @@ const withHistory = (page: Page, json: string) =>
   );
 
 const open = (page: Page, name: string) => page.getByRole("button", { name: `Open ${name}` }).click();
+
+// saved medicines without their official product information ask for it in the background: never the real database here
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/official", (route) => route.fulfill({ json: { ok: true, official: null } }));
+});
 
 test.describe("home", () => {
   test("leads with one scan action, the watchlist and the way into Medicine Mode", async ({ page }) => {
@@ -173,6 +179,19 @@ test.describe("the shelf", () => {
     await expect(page.getByText("Brufen + Sintrom")).toBeVisible();
   });
 
+  test("quotes what the official product information says about taking two medicines together", async ({ page }) => {
+    const interactions: OfficialInteraction[] = [{ level: "not_recommended", with: "Anticoagulants oraux", text: "Augmentation du risque hémorragique de l'anticoagulant oral." }];
+    await withHistory(page, history(medicine("a", "Advil", ["ibuprofen"], { official: { interactions } }), medicine("b", "Sintrom", ["acenocoumarol"], { official: { interactions: [] } })));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My shelf" }).first().click();
+    await expect(page.getByText("Ask before taking both")).toBeVisible();
+    await expect(page.getByText("Not recommended", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Anticoagulants oraux : Augmentation du risque hémorragique/)).toBeVisible();
+    await expect(page.getByRole("link", { name: /From the official product information of .ADVIL/ })).toBeVisible();
+    // the app's own sentence for this pair gives way to the official one
+    await expect(page.getByText(/an anti-inflammatory raises the risk of bleeding/)).toHaveCount(0);
+  });
+
   test("shows how long a treatment still runs, from the duration the pharmacist wrote", async ({ page }) => {
     const marks = { morning: 1, midday: 0, evening: 1, confidence: "high", duration: "7 jours" };
     await withHistory(page, history(medicine("a", "Augmentin", ["amoxicillin"], { marks }), medicine("b", "Doliprane", ["paracetamol"])));
@@ -273,7 +292,8 @@ test("a result shows what it means for everyone who shares the device", async ({
   await expect(everyone).toContainText("Nothing found");
   await expect(page.getByRole("button", { name: /^Me/ })).toContainText("Check");
   await everyone.click();
-  await expect(page.getByText("For Lina")).toBeVisible();
+  // the name is isolated (U+2068…U+2069) so it can't reorder a right-to-left sentence
+  await expect(page.getByText("For \u2068Lina\u2069")).toBeVisible();
 });
 
 test.describe("food and the medicines on the shelf", () => {
@@ -559,4 +579,103 @@ test("the same photo picked again opens its saved result without asking the AI",
   await pick();
   await expect(page.getByText("You analyzed this exact photo before")).toBeVisible();
   expect(analyses).toBe(1);
+});
+
+test.describe("health conditions", () => {
+  const withConditions = (page: Page, conditions: string[]) =>
+    page.addInitScript(
+      (list) =>
+        localStorage.setItem(
+          "food-analyzer:profile:v2",
+          JSON.stringify({ active: "me", profiles: [{ id: "me", name: "", allergens: [], lactose: false, sugar: false, diets: [], conditions: list }] }),
+        ),
+      conditions,
+    );
+
+  test("are found by any of their names, and a medicine is checked against them", async ({ page }) => {
+    await withHistory(page, history(medicine("a", "Brufen", ["ibuprofen"])));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My watchlist", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Search a health condition" }).fill("hémophilie");
+    await page.getByRole("button", { name: "Haemophilia or a bleeding disorder" }).click();
+    await expect(page.getByRole("button", { name: "Remove Haemophilia or a bleeding disorder" })).toBeVisible();
+    await page.getByRole("button", { name: "Done" }).click();
+    await open(page, "Brufen");
+    await expect(page.getByText("Avoid: ask your doctor or pharmacist", { exact: true })).toBeVisible();
+    await expect(page.getByText("An anti-inflammatory (NSAID) or aspirin: it adds to the bleeding risk")).toBeVisible();
+    await expect(page.getByText(/^Paracetamol is usually the pain reliever/)).toBeVisible();
+  });
+
+  test("send nothing to the AI until asked, then only the typed text, and wait for the reader's yes", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await page.route("**/api/conditions", async (route) => {
+      bodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, ids: ["hemophilia"], others: [] } });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "My watchlist", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Search a health condition" }).fill("factor VIII deficiency");
+    await expect(page.getByText("No condition in the list matches.")).toBeVisible();
+    expect(bodies).toHaveLength(0);
+    await page.getByRole("button", { name: "Understand with AI" }).click();
+    await expect(page.getByText("The AI read this as:")).toBeVisible();
+    expect(bodies).toEqual([{ text: "factor VIII deficiency", lang: "en" }]);
+    // nothing is saved before the reader confirms
+    await expect(page.getByRole("button", { name: "Remove Haemophilia or a bleeding disorder" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Remove Haemophilia or a bleeding disorder" })).toBeVisible();
+  });
+
+  test("the AI names a condition outside the list, which the reader adds as not checked", async ({ page }) => {
+    await page.route("**/api/conditions", (route) => route.fulfill({ json: { ok: true, ids: [], others: [{ name: "Bipolar disorder", fr: "trouble bipolaire" }] } }));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My watchlist", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Search a health condition" }).fill("bipolar");
+    await expect(page.getByRole("button", { name: "Keep as typed" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Understand with AI" }).click();
+    await expect(page.getByText("The app has no rules for")).toBeVisible();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Remove Bipolar disorder" })).toBeVisible();
+  });
+
+  test("what the AI finds no health condition in is not saved", async ({ page }) => {
+    await page.route("**/api/conditions", (route) => route.fulfill({ json: { ok: true, ids: [], others: [] } }));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My watchlist", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Search a health condition" }).fill("banana");
+    await page.getByRole("button", { name: "Understand with AI" }).click();
+    await expect(page.getByText("The AI found no health condition in this. Nothing was added.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+  });
+
+  test("the shelf checks its medicines against them", async ({ page }) => {
+    await withConditions(page, ["hemophilia"]);
+    await withHistory(page, history(medicine("a", "Brufen", ["ibuprofen"]), medicine("b", "Doliprane", ["paracetamol"], { official: {} })));
+    await page.goto("/");
+    await page.getByRole("button", { name: "My shelf" }).first().click();
+    const section = page.locator("section", { has: page.getByRole("heading", { name: "With your health conditions" }) });
+    await expect(section).toBeVisible();
+    await expect(section.getByText("Brufen")).toBeVisible();
+    await expect(section.getByText("Doliprane")).toHaveCount(0);
+  });
+
+  test("a medicine is checked against its official product information, quoted with its source", async ({ page }) => {
+    await withConditions(page, ["asthma"]);
+    const contraindications = ["antécédents d'asthme déclenchés par la prise d'ibuprofène ou de substances d'activité proche,"];
+    await withHistory(page, history(medicine("a", "Brufen", ["ibuprofen"], { official: { contraindications } }), medicine("b", "Panadol", ["paracetamol"])));
+    await page.goto("/");
+    await open(page, "Brufen");
+    await expect(page.getByText("Contraindicated in its official product information")).toBeVisible();
+    await expect(page.getByText(contraindications[0])).toBeVisible();
+    await expect(page.getByRole("link", { name: /From the official product information of .BRUFEN/ })).toHaveAttribute("href", /base-donnees-publique\.medicaments\.gouv\.fr/);
+  });
+
+  test("a medicine whose official product information wasn't found is never 'nothing found'", async ({ page }) => {
+    await withConditions(page, ["asthma"]);
+    await withHistory(page, history(medicine("b", "Panadol", ["paracetamol"])));
+    await page.goto("/");
+    await open(page, "Panadol");
+    await expect(page.getByText(/official product information wasn't found/)).toBeVisible();
+    await expect(page.getByText("Nothing found for your health conditions")).toHaveCount(0);
+  });
 });

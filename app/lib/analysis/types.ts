@@ -147,6 +147,43 @@ export interface Medicine {
   excipients: ExcipientNote[];
 }
 
+/**
+ * Sections of a medicine's official summary of product characteristics (SmPC, "RCP"), as the
+ * regulator published them: the French public medicines database (ANSM / HAS). Set by the
+ * server after the analysis, never by the model; quoted, never translated or reworded.
+ */
+export interface OfficialInfo {
+  /** "Base de données publique des médicaments" */
+  source: string;
+  /** the entry: "ADVIL 400 mg, comprimé enrobé" */
+  product: string;
+  url: string;
+  /** "brand": this very medicine; "substance": a French medicine with the same active substances and strength */
+  match: "brand" | "substance";
+  /** 4.1 Indications thérapeutiques: what it treats (a condition it treats isn't warned about by its own warnings) */
+  indications: string[];
+  /** 4.3 Contre-indications, one item per paragraph */
+  contraindications: string[];
+  /** 4.4 Mises en garde spéciales et précautions d'emploi */
+  warnings: string[];
+  /** 4.6 Fertilité, grossesse et allaitement */
+  pregnancy: string[];
+  /** 4.5 Interactions, one entry per medicine or class it names; absent on scans saved before it was read */
+  interactions?: OfficialInteraction[];
+  /** false when a section was too long and had to be cut: what wasn't kept can't be called "nothing found" */
+  complete: boolean;
+}
+
+/** one entry of section 4.5, as the ANSM interaction thesaurus lays it out */
+export interface OfficialInteraction {
+  /** its heading: "Associations contre-indiquées", "déconseillées", "faisant l'objet de précautions d'emploi", "à prendre en compte"; null when the text gives none */
+  level: "contraindicated" | "not_recommended" | "precaution" | "consider" | null;
+  /** what it is taken with, as published ("Anticoagulants oraux", "Lithium"); "" for a paragraph of prose */
+  with: string;
+  /** what the text says about it */
+  text: string;
+}
+
 export interface Drink {
   /** container volume parsed from the net quantity */
   volume_ml: number | null;
@@ -284,6 +321,8 @@ export interface LabelAnalysis {
   ingredient_source: IngredientSource;
   /** the product database entry the result was completed from */
   database: { name: string; product: string; url: string } | null;
+  /** a medicine's official product information (never from the model); null when none was found */
+  official: OfficialInfo | null;
   allergens: Allergen[];
   gluten: { status: Presence; confidence: Confidence; evidence: string[] };
   lactose: { status: Presence; evidence: string[] };

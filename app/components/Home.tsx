@@ -1,4 +1,5 @@
 "use client";
+import { RotatingSentence } from "./RotatingWord";
 import { useMemo, useSyncExternalStore } from "react";
 import { isEmptyProfile } from "../lib/analysis/profile";
 import type { HistoryEntry } from "../lib/client/history";
@@ -63,7 +64,7 @@ function FoodHome({ attention, error, onCamera, onUpload, onBarcode, onOpen, onH
       <div className="stagger">
         <p className="text-sm font-medium text-ink-soft">{h.greeting[greeting]}</p>
         <h1 className="font-editorial mt-2 text-[2.55rem] leading-[1.04] font-medium tracking-tight text-balance sm:text-6xl">{h.title}</h1>
-        <p className="mt-4 max-w-md text-base leading-7 text-ink-soft">{h.lead}</p>
+        <RotatingSentence text={h.lead} template={h.leadRotating} things={h.leadThings} className="mt-4 max-w-md text-base leading-7 text-ink-soft" />
 
         <div className="mt-8">
           <button

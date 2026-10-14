@@ -2,6 +2,7 @@
 // reader switches between them. Pure and client-safe, like profile.ts: this is only the
 // bookkeeping; what a profile means for a result is still `checkProfile`.
 
+import { checkConditions, type ConditionCheck, type ConditionFinding } from "./conditions";
 import { checkProfile, EMPTY_PROFILE, sanitizeProfile, type Profile, type ProfileCheck } from "./profile";
 import type { LabelAnalysis } from "./types";
 
@@ -60,7 +61,7 @@ export function renamePerson(book: ProfileBook, id: string, name: string): Profi
 
 /** removes a person; the last one can't be removed (it is cleared instead) */
 export function removePerson(book: ProfileBook, id: string): ProfileBook {
-  if (book.profiles.length <= 1) return { ...book, profiles: book.profiles.map((p) => ({ ...p, ...EMPTY_PROFILE, name: "" })) };
+  if (book.profiles.length <= 1) return { ...book, profiles: book.profiles.map((p) => ({ id: p.id, name: "", ...EMPTY_PROFILE })) };
   const profiles = book.profiles.filter((p) => p.id !== id);
   return { active: book.active === id ? profiles[0].id : book.active, profiles };
 }
@@ -70,12 +71,43 @@ export const switchPerson = (book: ProfileBook, id: string): ProfileBook => (boo
 /** replaces what the active person avoids */
 export function updateActive(book: ProfileBook, profile: Profile): ProfileBook {
   const clean = sanitizeProfile(profile);
-  return { ...book, profiles: book.profiles.map((p) => (p.id === book.active ? { ...p, ...clean } : p)) };
+  // rebuilt rather than merged: a field the new profile leaves out (no conditions) must go
+  return { ...book, profiles: book.profiles.map((p) => (p.id === book.active ? { id: p.id, name: p.name, ...clean } : p)) };
+}
+
+/** the watchlist check with the health-condition findings folded in */
+export interface PersonVerdict extends ProfileCheck {
+  /** present only when the person has health conditions the rules know */
+  conditions?: ConditionFinding[];
+  /** what a medicine's official product information says about them (present with `conditions`) */
+  official?: ConditionCheck["official"];
+  officialSource?: ConditionCheck["officialSource"];
+}
+
+const RANK = { avoid: 0, check: 1, unchecked: 2, ok: 3 } as const;
+
+/**
+ * What a result means for one person: what they avoid and their health conditions, as one
+ * verdict. Null when neither has anything to say (no profile, or a water for a watchlist).
+ */
+export function checkPerson(result: LabelAnalysis, profile: Profile): PersonVerdict | null {
+  const watch = checkProfile(result, profile);
+  const health = checkConditions(result, profile);
+  if (!health) return watch;
+  const fromHealth = { conditions: health.findings, official: health.official, officialSource: health.officialSource };
+  if (!watch) return { status: health.status, findings: [], ...fromHealth };
+  // diabetes already says "high in sugars": the watchlist's sugar line would repeat it
+  const sugarSaid = health.findings.some((f) => f.ruleId === "diabetes_sugar_food" || f.ruleId === "diabetes_sugar_drink");
+  const findings = sugarSaid ? watch.findings.filter((f) => f.topic.type !== "sugar") : watch.findings;
+  const watchStatus = findings.some((f) => f.level === "avoid") ? "avoid" : findings.length ? "check" : watch.status === "unchecked" ? "unchecked" : "ok";
+  // the more worrying of the two; one part unchecked can't be called "nothing found"
+  const status = RANK[watchStatus] < RANK[health.status] ? watchStatus : health.status;
+  return { status, findings, ...fromHealth };
 }
 
 export interface PersonCheck {
   person: NamedProfile;
-  check: ProfileCheck;
+  check: PersonVerdict;
 }
 
 /**
@@ -83,9 +115,8 @@ export interface PersonCheck {
  * worry about first. Empty when nobody has: a blank profile has nothing to check.
  */
 export function checkEveryone(result: LabelAnalysis, book: ProfileBook): PersonCheck[] {
-  const rank = { avoid: 0, check: 1, unchecked: 2, ok: 3 } as const;
   return book.profiles
-    .map((person) => ({ person, check: checkProfile(result, person) }))
+    .map((person) => ({ person, check: checkPerson(result, person) }))
     .filter((x): x is PersonCheck => x.check !== null)
-    .sort((a, b) => rank[a.check.status] - rank[b.check.status]);
+    .sort((a, b) => RANK[a.check.status] - RANK[b.check.status]);
 }

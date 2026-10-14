@@ -1,6 +1,18 @@
 "use client";
-import { useEffect, useRef } from "react";
-import { DIETS, EMPTY_PROFILE, isEmptyProfile, type Profile } from "../lib/analysis/profile";
+import { useEffect, useRef, useState } from "react";
+import type { OtherCondition } from "../lib/analysis/conditionsAi";
+import { searchConditions } from "../lib/analysis/conditionSearch";
+import {
+  CONDITION_IDS,
+  cleanConditionText,
+  type ConditionId,
+  DIETS,
+  EMPTY_PROFILE,
+  isEmptyProfile,
+  MAX_CONDITION_TEXT,
+  MAX_OTHER_CONDITIONS,
+  type Profile,
+} from "../lib/analysis/profile";
 import { ALLERGEN_IDS } from "../lib/analysis/types";
 import { MAX_PROFILES, type NamedProfile } from "../lib/analysis/profiles";
 import {
@@ -13,9 +25,10 @@ import {
   useProfileBook,
 } from "../lib/client/profile";
 import { COUNTRIES } from "../lib/analysis/country";
+import { understandConditions } from "../lib/client/conditions";
 import { saveCountry, useCountryChoice, useDetectedCountry } from "../lib/client/country";
-import { format, useI18n } from "../lib/i18n/I18nProvider";
-import { CloseIcon, cn, PlusIcon, TrashIcon } from "./ui";
+import { format, isolate, useI18n } from "../lib/i18n/I18nProvider";
+import { CloseIcon, cn, Notice, PlusIcon, SparkleIcon, Spinner, TrashIcon } from "./ui";
 
 /** what a person is called in the interface: the name typed, else "Me" or "Person 2" */
 export function usePersonName() {
@@ -72,6 +85,7 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
   }, []);
 
   const set = (patch: Partial<Profile>) => saveProfile({ ...profile, ...patch });
+  const coeliacGluten = !!profile.conditions?.includes("coeliac") && !profile.allergens.includes("gluten");
   const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
 
   return (
@@ -148,13 +162,25 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
           )}
         </fieldset>
 
+        <HealthConditions key={profile.id} profile={profile} onChange={set} />
+
         <Group title={p.allergens}>
-          {ALLERGEN_IDS.map((id) => (
-            <Chip key={id} on={profile.allergens.includes(id)} onClick={() => set({ allergens: toggle(profile.allergens, id) })}>
-              {t.results.allergenNames[id]}
-            </Chip>
-          ))}
+          {ALLERGEN_IDS.map((id) =>
+            // coeliac disease is checked as gluten: the chip shows it, and only the condition can lift it
+            id === "gluten" && coeliacGluten ?
+              <Chip key={id} on locked describedBy="coeliac-gluten" onClick={() => {}}>
+                {t.results.allergenNames[id]}
+              </Chip>
+            : <Chip key={id} on={profile.allergens.includes(id)} onClick={() => set({ allergens: toggle(profile.allergens, id) })}>
+                {t.results.allergenNames[id]}
+              </Chip>,
+          )}
         </Group>
+        {coeliacGluten && (
+          <p id="coeliac-gluten" className="mt-2 text-xs leading-5 text-ink-soft">
+            {p.conditions.coeliacGluten}
+          </p>
+        )}
         <Group title={p.watch}>
           <Chip on={profile.lactose} onClick={() => set({ lactose: !profile.lactose })}>
             {p.lactose}
@@ -201,14 +227,29 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({
+  on,
+  onClick,
+  locked,
+  describedBy,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  /** shown on but not changeable here; stays focusable so its explanation is announced */
+  locked?: boolean;
+  describedBy?: string;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       aria-pressed={on}
       onClick={onClick}
+      aria-disabled={locked || undefined}
+      aria-describedby={describedBy}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1.5 rounded-control px-4 text-sm font-medium transition active:scale-[0.97]",
+        "inline-flex min-h-11 items-center gap-1.5 rounded-control px-4 text-sm font-medium transition active:scale-[0.97] aria-disabled:opacity-70 aria-disabled:active:scale-100",
         on ? "bg-accent-soft text-on-accent-soft ring-1 ring-accent" : "bg-mute-soft text-ink hover:bg-rule",
       )}
     >
@@ -243,5 +284,206 @@ function CountryPicker() {
         ))}
       </select>
     </fieldset>
+  );
+}
+
+type AiState = { state: "idle" } | { state: "working" } | { state: "done"; ids: ConditionId[]; others: OtherCondition[] } | { state: "error" };
+
+/**
+ * Health conditions: the known ones as chips, filtered by a search box that matches names in
+ * every language (no model). What matches nothing is, only when the reader taps for it, sent
+ * alone to the AI, which maps it onto the known list or names another real condition (checked by
+ * no rule); the reader confirms its answer before anything is saved. No health condition found:
+ * nothing is saved, so a typo never becomes a condition.
+ */
+function HealthConditions({ profile, onChange }: { profile: Profile; onChange: (patch: Partial<Profile>) => void }) {
+  const { t, locale } = useI18n();
+  const c = t.profile.conditions;
+  const [query, setQuery] = useState("");
+  const [ai, setAi] = useState<AiState>({ state: "idle" });
+  const pending = useRef<AbortController | null>(null);
+  const chosen = profile.conditions ?? [];
+  const others = profile.otherConditions ?? [];
+  const typed = cleanConditionText(query);
+  const searching = [...typed].length >= 2;
+  const matches = searching ? searchConditions(typed) : [...CONDITION_IDS];
+  const offered = matches.filter((id) => !chosen.includes(id));
+  const unknown = searching && matches.length === 0;
+
+  const reset = (text = "") => {
+    pending.current?.abort();
+    pending.current = null;
+    setQuery(text);
+    setAi({ state: "idle" });
+  };
+  const add = (ids: ConditionId[], named: OtherCondition[] = []) => {
+    const fresh = named.filter((n) => !others.some((o) => o.toLowerCase() === n.name.toLowerCase()));
+    const terms = Object.fromEntries(fresh.flatMap((n) => (n.fr ? [[n.name, n.fr]] : [])));
+    onChange({
+      conditions: [...chosen, ...ids.filter((id) => !chosen.includes(id))],
+      ...(fresh.length > 0 && {
+        otherConditions: [...others, ...fresh.map((n) => n.name)].slice(0, MAX_OTHER_CONDITIONS),
+        otherTerms: { ...profile.otherTerms, ...terms },
+      }),
+    });
+    reset();
+  };
+  const askAi = async () => {
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
+    setAi({ state: "working" });
+    try {
+      const { ids, others: named } = await understandConditions(typed, locale, controller.signal);
+      if (!controller.signal.aborted)
+        setAi({ state: "done", ids: ids.filter((id) => !chosen.includes(id)), others: named.filter((n) => !others.some((o) => o.toLowerCase() === n.name.toLowerCase())) });
+    } catch {
+      if (!controller.signal.aborted) setAi({ state: "error" });
+    }
+  };
+
+  return (
+    <fieldset className="mt-6">
+      <legend className="eyebrow text-ink-soft">{c.title}</legend>
+      <p className="mt-1.5 text-sm leading-6 text-ink-soft">{c.lead}</p>
+
+      {chosen.length + others.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {chosen.map((id) => (
+            <li key={id}>
+              <Removable label={format(c.remove, { name: c.names[id] })} onRemove={() => onChange({ conditions: chosen.filter((x) => x !== id) })} on>
+                {c.names[id]}
+              </Removable>
+            </li>
+          ))}
+          {others.map((text) => (
+            <li key={text}>
+              <Removable label={format(c.remove, { name: text })} onRemove={() => onChange({ otherConditions: others.filter((x) => x !== text) })}>
+                <span className="min-w-0 wrap-break-word">
+                  <bdi>{text}</bdi> · {c.notChecked}
+                </span>
+              </Removable>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="mt-3"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (searching && offered.length > 0) add([offered[0]]);
+        }}
+      >
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => reset(e.target.value)}
+          maxLength={MAX_CONDITION_TEXT}
+          dir="auto"
+          autoComplete="off"
+          enterKeyHint="done"
+          placeholder={c.search}
+          aria-label={c.searchLabel}
+          className="h-11 w-full rounded-control bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
+        />
+      </form>
+
+      {offered.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          {offered.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => add([id])}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-control bg-mute-soft px-4 text-sm font-medium text-ink transition hover:bg-rule active:scale-[0.97]"
+            >
+              <PlusIcon className="size-4 shrink-0" />
+              {c.names[id]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {unknown && (
+        <div className="mt-3 rounded-2xl bg-mute-soft/60 p-4" aria-live="polite">
+          {ai.state === "done" && ai.ids.length + ai.others.length > 0 ?
+            <>
+              <p className="text-sm font-medium">{c.aiFound}</p>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {ai.ids.map((id) => (
+                  <li key={id} className="inline-flex min-h-9 items-center rounded-md bg-accent-soft px-3 text-sm font-medium text-on-accent-soft">
+                    {c.names[id]}
+                  </li>
+                ))}
+                {ai.others.map(({ name }) => (
+                  <li key={name} className="inline-flex min-h-9 items-center rounded-md bg-mute-soft px-3 text-sm font-medium text-ink">
+                    <bdi>{name}</bdi>&nbsp;· {c.notChecked}
+                  </li>
+                ))}
+              </ul>
+              {ai.others.length > 0 && (
+                <p className="mt-2 text-xs leading-6 text-ink-soft">{format(c.otherNote, { names: new Intl.ListFormat(locale, { type: "unit" }).format(ai.others.map((o) => isolate(o.name))) })}</p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => add(ai.ids, ai.others)}
+                  className="inline-flex min-h-11 items-center rounded-control bg-accent px-5 text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                >
+                  {c.aiConfirm}
+                </button>
+                <button type="button" onClick={() => reset(query)} className="inline-flex min-h-11 items-center rounded-control px-4 text-sm font-medium text-ink-soft hover:bg-mute-soft hover:text-ink">
+                  {c.cancel}
+                </button>
+              </div>
+            </>
+          : <>
+              <p className="text-sm">{c.noMatch}</p>
+              {ai.state === "done" && <p className="mt-2 text-sm leading-6 text-ink-soft">{c.aiNone}</p>}
+              {ai.state === "error" && (
+                <Notice tone="amber" className="mt-2">
+                  {c.aiError}
+                </Notice>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ai.state !== "done" && (
+                  <button
+                    type="button"
+                    onClick={() => void askAi()}
+                    disabled={ai.state === "working"}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-control bg-accent-soft px-4 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.98] disabled:opacity-70"
+                  >
+                    {ai.state === "working" ? <Spinner className="size-4" /> : <SparkleIcon className="size-4" />}
+                    {ai.state === "working" ? c.aiWorking : c.ai}
+                  </button>
+                )}
+              </div>
+              {ai.state !== "done" && <p className="mt-2 text-xs leading-6 text-ink-soft">{c.aiNote}</p>}
+            </>
+          }
+        </div>
+      )}
+
+      <p className="mt-3 text-xs leading-5 text-ink-soft">{c.note}</p>
+    </fieldset>
+  );
+}
+
+/** a chosen condition, with its own remove button */
+function Removable({ on, label, onRemove, children }: { on?: boolean; label: string; onRemove: () => void; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex min-h-11 items-center gap-1 rounded-control ps-4 text-sm font-medium",
+        on ? "bg-accent-soft text-on-accent-soft ring-1 ring-accent" : "bg-mute-soft text-ink",
+      )}
+    >
+      {children}
+      <button type="button" onClick={onRemove} aria-label={label} title={label} className="grid size-11 shrink-0 place-items-center rounded-control transition hover:bg-rule/60">
+        <CloseIcon className="size-3.5" />
+      </button>
+    </span>
   );
 }

@@ -106,7 +106,7 @@ export function foodSignals(result: LabelAnalysis): Set<Signal> {
 }
 
 /** a cream, gel or eye drop is not what a warning about drinking or swallowing is about */
-const TOPICAL = /(?<![\p{L}])(gel|cream|creme|ointment|pommade|lotion|collyre|eye drops?|ophthalmi\w*|nasal|spray|shampoo|patch|emplatre|ovules?|pessar\w*|topical|cutane\w*)(?![\p{L}])/u;
+export const TOPICAL = /(?<![\p{L}])(gel|cream|creme|ointment|pommade|lotion|collyre|eye drops?|ophthalmi\w*|nasal|spray|shampoo|patch|emplatre|ovules?|pessar\w*|topical|cutane\w*)(?![\p{L}])/u;
 
 export interface ShelfMedicine {
   /** how the reader sees it: the product's name */

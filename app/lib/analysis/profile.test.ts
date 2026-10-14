@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalize } from "./normalize";
-import { checkProfile, EMPTY_PROFILE, isEmptyProfile, sanitizeProfile, type Profile } from "./profile";
+import { checkProfile, EMPTY_PROFILE, isEmptyProfile, MAX_CONDITION_TEXT, sanitizeProfile, type Profile } from "./profile";
 
 const profile = (p: Partial<Profile>): Profile => ({ ...EMPTY_PROFILE, ...p });
 const label = (ingredients: unknown[], extra: object = {}) =>
@@ -86,5 +86,41 @@ describe("checkProfile", () => {
   it("works on a medicine's excipients", () => {
     const caps = normalize({ kind: "medicine", ingredients: ["lactose monohydraté", "gélatine", "stéarate de magnésium"], medicine: { active: ["omeprazole"] } });
     expect(summary(checkProfile(caps, profile({ lactose: true, diets: ["vegetarian"] })))).toEqual(["avoid", "avoid:lactose", "avoid:vegetarian"]);
+  });
+});
+
+describe("health conditions in the profile", () => {
+  it("loads an old stored profile with no conditions, unchanged", () => {
+    const old = { allergens: ["milk"], lactose: false, sugar: true, diets: [] };
+    expect(sanitizeProfile(old)).toEqual(old);
+    expect("conditions" in sanitizeProfile(old)).toBe(false);
+  });
+
+  it("keeps only known condition ids and short free text", () => {
+    const p = sanitizeProfile({
+      conditions: ["hemophilia", "nonsense", 7, "diabetes", "hemophilia"],
+      otherConditions: ["  Crohn's   disease ", "", 3, "x".repeat(200), "a", "b", "c"],
+    });
+    expect(p.conditions).toEqual(["hemophilia", "diabetes"]);
+    expect(p.otherConditions).toEqual(["Crohn's disease", "x".repeat(MAX_CONDITION_TEXT), "a"]);
+    expect(sanitizeProfile({ conditions: "hemophilia", otherConditions: { a: 1 } })).toEqual(EMPTY_PROFILE);
+  });
+
+  it("is not empty with only a condition or only a typed one", () => {
+    expect(isEmptyProfile(profile({ conditions: ["asthma"] }))).toBe(false);
+    expect(isEmptyProfile(profile({ otherConditions: ["Crohn's disease"] }))).toBe(false);
+    expect(isEmptyProfile(profile({ conditions: [], otherConditions: [] }))).toBe(true);
+  });
+
+  it("checks gluten for coeliac disease, exactly as the gluten allergen", () => {
+    const bread = label(["wheat flour", "water", "salt"], { allergens: { declared: ["gluten"] } });
+    expect(summary(checkProfile(bread, profile({ conditions: ["coeliac"] })))).toEqual(summary(checkProfile(bread, profile({ allergens: ["gluten"] }))));
+    expect(summary(checkProfile(bread, profile({ conditions: ["coeliac"], allergens: ["gluten"] })))).toEqual(["avoid", "avoid:gluten"]);
+  });
+
+  it("leaves conditions with no watchlist meaning to checkConditions", () => {
+    const bread = label(["wheat flour", "water", "salt"], { allergens: { declared: ["gluten"] } });
+    expect(checkProfile(bread, profile({ conditions: ["hemophilia"] }))).toBeNull();
+    expect(checkProfile(bread, profile({ otherConditions: ["Crohn's disease"] }))).toBeNull();
   });
 });

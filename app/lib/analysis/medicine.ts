@@ -54,6 +54,8 @@ export function withExcipients(
     (result.database && warning.includes(result.database.product));
   for (const warning of result.warnings)
     if (!stale(warning) && !completed.warnings.includes(warning)) completed.warnings.push(warning);
+  // the official product information is the medicine's, whatever its excipient list
+  completed.official = result.official ?? null;
   return completed;
 }
 

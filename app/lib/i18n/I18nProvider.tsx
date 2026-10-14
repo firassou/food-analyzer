@@ -76,3 +76,6 @@ export function rich(template: string, emphasis: (text: string) => React.ReactNo
 
 /** keeps "12 g / 100 ml" in reading order inside right-to-left text */
 export const ltr = (text: string) => `⁦${text}⁩`;
+
+/** keeps a name the reader typed (in any script) from reordering the sentence around it */
+export const isolate = (text: string) => `⁨${text}⁩`;

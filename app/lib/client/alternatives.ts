@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { type AlternativesResponse, MAX_ALTERNATIVES } from "../analysis/alternatives";
-import { checkProfile } from "../analysis/profile";
+import { checkPerson } from "../analysis/profiles";
 import { useI18n } from "../i18n/I18nProvider";
 import { useCountry } from "./country";
 import { useProfile } from "./profile";
@@ -38,9 +38,9 @@ export function useAlternatives(barcode: string | null, enabled: boolean): Found
 
   return useMemo(() => {
     if (!key || loaded?.key !== key) return null;
-    // "ok" means nothing the reader avoids was found; with no profile everything is fit
+    // "ok" means nothing the reader avoids, and nothing for their health conditions, was found; with no profile everything is fit
     const fit = loaded.data.items.filter((item) => {
-      const check = checkProfile(item.result, profile);
+      const check = checkPerson(item.result, profile);
       return !check || check.status === "ok";
     });
     return fit.length > 0 ? { ...loaded.data, items: fit.slice(0, MAX_ALTERNATIVES) } : null;
