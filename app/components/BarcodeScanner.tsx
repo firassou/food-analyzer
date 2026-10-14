@@ -134,7 +134,7 @@ export default function BarcodeScanner({ onCode, onClose, onAisle }: { onCode: (
               <button
                 type="button"
                 onClick={onAisle}
-                className="absolute inset-x-6 bottom-16 mx-auto min-h-11 w-fit max-w-full rounded-full bg-black/60 px-5 text-sm font-semibold backdrop-blur transition hover:bg-black/75 active:scale-[0.98]"
+                className="absolute inset-x-6 bottom-16 mx-auto min-h-11 w-fit max-w-full rounded-control bg-black/60 px-5 text-sm font-semibold backdrop-blur transition hover:bg-black/75 active:scale-[0.98]"
               >
                 {t.aisle.open}
               </button>
@@ -168,12 +168,12 @@ export default function BarcodeScanner({ onCode, onClose, onAisle }: { onCode: (
             }}
             aria-invalid={invalid}
             aria-describedby={invalid ? "barcode-error" : undefined}
-            className="h-12 min-w-0 flex-1 rounded-full border border-white/25 bg-white/10 px-5 font-mono text-base tracking-wider text-white placeholder:text-white/30 focus-visible:outline-white"
+            className="h-12 min-w-0 flex-1 rounded-control border border-white/25 bg-white/10 px-5 font-mono text-base tracking-wider text-white placeholder:text-white/30 focus-visible:outline-white"
           />
           <button
             type="submit"
             disabled={!typed.trim()}
-            className="h-12 shrink-0 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/85 active:scale-[0.98] disabled:opacity-40"
+            className="h-12 shrink-0 rounded-control bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/85 active:scale-[0.98] disabled:opacity-40"
           >
             {t.barcode.submit}
           </button>

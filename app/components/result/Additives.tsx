@@ -64,7 +64,7 @@ export function AdditiveList({
               <button
                 onClick={() => onAsk(a)}
                 aria-label={format(t.ask.buttonFor, { name })}
-                className="mt-3 inline-flex min-h-10 items-center gap-2 self-start rounded-full bg-accent-soft px-4 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.97]"
+                className="mt-3 inline-flex min-h-11 items-center gap-2 self-start rounded-control bg-accent-soft px-4 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.97]"
               >
                 <SparkleIcon className="size-4" />
                 {t.ask.button}

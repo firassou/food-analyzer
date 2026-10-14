@@ -40,7 +40,9 @@ import {
   WheatIcon,
   type Tone,
 } from "./components/ui";
+import { checkProfile } from "./lib/analysis/profile";
 import { useAlternatives } from "./lib/client/alternatives";
+import { useProfile } from "./lib/client/profile";
 import { needsExcipients } from "./lib/analysis/medicine";
 import type { HistoryEntry } from "./lib/client/history";
 import { format, ltr, rich, useI18n } from "./lib/i18n/I18nProvider";
@@ -202,6 +204,10 @@ function Results({
   const additiveByCode = new Map(additives.filter((a) => a.code).map((a) => [a.code!, a]));
   const contains = allergens.filter((a) => a.presence === "contains");
   const mayContain = allergens.filter((a) => a.presence === "may_contain");
+  // with a watchlist the verdict says it all; without one, the declared allergens lead
+  const hasVerdict = checkProfile(result, useProfile()) !== null;
+  // allergen names in the interface language (the result's own names are in the language it was analyzed in)
+  const allergenList = (list: typeof allergens) => list.map((a) => r.allergenNames[a.id] ?? a.name).join(r.listSeparator);
   const tags = [product.category, product.quantity].filter((x): x is string => !!x);
   const isWater = kind === "water";
   const estimated = result.ingredient_source === "estimated";
@@ -483,19 +489,6 @@ function Results({
     : kind === "dish" ? [allergenTile, glutenTile, caloriesTile]
     : medicine ?
       [
-        {
-          title: med.active,
-          label: medicine.active.length ? medicine.active.map((a) => capitalize(a.name_local ?? a.name)).join(" + ") : med.notRead,
-          empty: medicine.active.length === 0,
-          tone: "zinc",
-          icon: <PillIcon />,
-          hint:
-            medicine.active
-              .map((a) => a.strength)
-              .filter(Boolean)
-              .join(" + ") || undefined,
-          target: jump("medicine"),
-        },
         ...(medicine.marks ?
           [
             {
@@ -765,7 +758,7 @@ function Results({
             onClick={() => goTo(sid(id))}
             aria-current={active === id ? "true" : undefined}
             className={cn(
-              "inline-flex h-11 shrink-0 items-center rounded-full px-4 text-sm font-medium whitespace-nowrap transition-colors duration-200",
+              "inline-flex h-11 shrink-0 items-center rounded-control px-4 text-sm font-medium whitespace-nowrap transition-colors duration-200",
               active === id ? "bg-accent-soft text-on-accent-soft" : "text-ink-soft ring-1 ring-rule hover:bg-mute-soft hover:text-ink",
             )}
           >
@@ -777,7 +770,7 @@ function Results({
       {/* Overview */}
       <header
         id={sid("overview")}
-        className="animate-fade-up scroll-mt-32 rounded-[28px] bg-sheet px-5 pt-6 pb-6 ring-1 ring-rule sm:px-7 sm:pt-7"
+        className="animate-fade-up scroll-mt-32 rounded-card bg-sheet px-5 pt-6 pb-6 ring-1 ring-rule sm:px-7 sm:pt-7"
       >
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip icon={kindIcons[kind]}>{t.kinds[kind]}</Chip>
@@ -792,9 +785,13 @@ function Results({
         )}
         <h2
           dir="auto"
-          className={cn("font-display text-[1.9rem] leading-[1.1] font-bold text-balance sm:text-4xl", product.brand ? "mt-1" : "mt-5")}
+          className={cn(
+            "text-[1.9rem] leading-[1.1] text-balance sm:text-4xl",
+            medicine ? "font-display font-semibold" : "font-editorial font-medium",
+            product.brand ? "mt-1" : "mt-5",
+          )}
         >
-          {product.name ?? product.category ?? r.fallbackName}
+          {product.name ?? product.category ?? (medicine ? t.kinds.medicine : r.fallbackName)}
         </h2>
         {tags.length > 0 && (
           <p className="mt-2 flex flex-wrap gap-x-2 text-sm text-ink-soft">
@@ -806,13 +803,65 @@ function Results({
             ))}
           </p>
         )}
+        {medicine && medicine.active.length === 0 && (
+          <div className="mt-4 rounded-xl bg-mute-soft px-4 py-3">
+            <p className="eyebrow text-ink-soft">{med.active}</p>
+            <p className="font-display mt-1 text-lg leading-tight font-semibold text-ink-soft">{med.notRead}</p>
+          </div>
+        )}
+        {medicine && medicine.active.length > 0 && (
+          // what a medicine is, before anything else: its active substance and strength
+          <div className="mt-4 rounded-xl bg-accent-soft/70 px-4 py-3">
+            <p className="eyebrow text-on-accent-soft">{med.active}</p>
+            <p dir="auto" className="font-display mt-1 text-xl leading-tight font-semibold text-ink">
+              {medicine.active.map((a) => capitalize(a.name_local ?? a.name)).join(" + ")}
+              {medicine.active.some((a) => a.strength) && (
+                <span className="ms-2 text-base font-medium text-ink-soft tabular-nums">
+                  {ltr(medicine.active.map((a) => a.strength).filter(Boolean).join(" + "))}
+                </span>
+              )}
+            </p>
+            {medicine.form && (
+              <p dir="auto" className="mt-0.5 text-sm text-ink-soft">
+                {medicine.form}
+              </p>
+            )}
+          </div>
+        )}
+        {medicine && (
+          <p className="mt-3 flex gap-2 text-sm leading-6 text-ink-soft">
+            <InfoIcon className="mt-0.5 size-4.5 shrink-0 text-accent" />
+            {t.medicineHome.disclaimer}
+          </p>
+        )}
+
+        {/* the verdict for the reader comes first; without a watchlist, the allergens declared */}
+        <ProfileVerdict result={result} onEdit={onEditProfile} />
+        <EveryoneVerdict result={result} />
+        {!medicine && !hasVerdict && contains.length + mayContain.length > 0 && (
+          <div className="mt-5 rounded-xl bg-bad-soft px-4 py-3.5">
+            <p className="eyebrow text-bad">{r.allergenAlert}</p>
+            {contains.length > 0 && (
+              <p className="mt-1 text-[15px] leading-6 font-semibold text-ink">
+                {format(r.allergenAlertContains, { names: allergenList(contains) })}
+              </p>
+            )}
+            {mayContain.length > 0 && (
+              <p className="mt-1 text-sm leading-6 text-ink">
+                {format(estimated ? r.allergenAlertLikely : r.allergenAlertMay, { names: allergenList(mayContain) })}
+              </p>
+            )}
+          </div>
+        )}
+
+        {(result.summary || result.highlights.length > 0) && <p className="eyebrow mt-6 text-ink-soft">{r.whyMatters}</p>}
         {result.summary && (
-          <p dir="auto" className="mt-4 text-[15px] leading-7 text-ink-soft">
+          <p dir="auto" className="mt-1.5 text-[15px] leading-7 text-ink">
             {result.summary}
           </p>
         )}
         {result.highlights.length > 0 && (
-          <ul className="mt-4 space-y-2">
+          <ul className="mt-3 space-y-2">
             {result.highlights.map((h) => (
               <li key={h.text} className="flex items-start gap-3 text-sm leading-6">
                 <span
@@ -830,8 +879,6 @@ function Results({
           </ul>
         )}
 
-        <ProfileVerdict result={result} onEdit={onEditProfile} />
-        <EveryoneVerdict result={result} />
         <MedicineFoodCheck result={result} />
 
         <div className="mt-5 flex flex-wrap gap-2 print:hidden">
@@ -839,13 +886,13 @@ function Results({
             // the way to put a question about this product, from the top of the sheet
             <button
               onClick={() => goTo(sid("ask"))}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-accent-soft px-5 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.98]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-accent-soft px-5 text-sm font-semibold text-on-accent-soft transition hover:brightness-95 active:scale-[0.98]"
             >
               <SparkleIcon className="size-4.5" />
               {medicine ? t.ask.placeholderMedicine : t.ask.placeholder}
             </button>
           )}
-          <ShareButtons result={result} name={product.name ?? product.category ?? r.fallbackName} />
+          <ShareButtons result={result} name={product.name ?? product.category ?? (medicine ? t.kinds.medicine : r.fallbackName)} />
         </div>
 
         {/* nothing the analysis is unsure about is hidden */}
@@ -854,6 +901,7 @@ function Results({
             {/* one card, not a stack of alarms: every note is still there */}
             {result.warnings.length > 0 && (
               <Notice tone="amber">
+                <p className="eyebrow mb-1 text-warn">{r.aboutReading}</p>
                 <ul role={result.warnings.length > 1 ? undefined : "none"} className={cn(result.warnings.length > 1 && "list-disc space-y-1.5 ps-4")}>
                   {result.warnings.map((w) => (
                     // the bullet follows each note's own language (one can stay untranslated)
@@ -878,7 +926,7 @@ function Results({
               // the warning above says why; this is the way out
               <button
                 onClick={onTakePhoto}
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+                className="inline-flex h-11 items-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
               >
                 <CameraIcon className="size-5" />
                 {r.retake.button}
@@ -895,7 +943,7 @@ function Results({
                 <button
                   onClick={onAddExcipients}
                   disabled={adding === "working"}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-full px-5 py-2 text-start text-sm font-semibold text-ink ring-1 ring-rule transition hover:bg-mute-soft active:scale-[0.98] disabled:opacity-70"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-control px-5 py-2 text-start text-sm font-semibold text-ink ring-1 ring-rule transition hover:bg-mute-soft active:scale-[0.98] disabled:opacity-70"
                 >
                   {adding === "working" ?
                     <Spinner className="text-accent" />
@@ -913,23 +961,26 @@ function Results({
 
       {medicine && medicine.active.length > 0 && onCheckWith && (
         // two medicines at once: the same substance twice, or a known interaction
-        <div className="rounded-3xl bg-sheet px-5 py-4 ring-1 ring-rule sm:px-7">
-          <p className="font-medium">{t.together.checkWith}</p>
+        <div className="card px-5 py-4 sm:px-7">
+          <p className="font-display text-lg font-semibold">{t.together.combineTitle}</p>
           {otherMedicines.length === 0 ?
             <p className="mt-1 text-sm leading-6 text-ink-soft">{t.together.checkWithHint}</p>
-          : <div className="mt-2.5 flex flex-wrap gap-2">
+          : <>
+              <p className="mt-1 text-sm leading-6 text-ink-soft">{t.together.combineText}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
               {otherMedicines.map((other) => (
                 <button
                   key={other.id}
                   onClick={() => onCheckWith(other)}
-                  className="inline-flex min-h-10 max-w-full items-center rounded-full bg-accent-soft px-4 py-1.5 text-start text-sm font-medium text-on-accent-soft transition hover:brightness-95 active:scale-[0.98]"
+                  className="inline-flex min-h-11 max-w-full items-center rounded-control bg-accent-soft px-4 py-1.5 text-start text-sm font-medium text-on-accent-soft transition hover:brightness-95 active:scale-[0.98]"
                 >
                   <span dir="auto" className="truncate">
-                    {format(t.together.checkButton, { name: other.result.product.name ?? t.results.fallbackName })}
+                    {format(t.together.checkButton, { name: other.result.product.name ?? t.kinds.medicine })}
                   </span>
                 </button>
               ))}
             </div>
+            </>
           }
         </div>
       )}
@@ -977,7 +1028,7 @@ function NotALabel({ result }: { result: LabelAnalysis }) {
   const { t } = useI18n();
   const n = t.results.notALabel;
   return (
-    <article className="animate-fade-up overflow-hidden rounded-[28px] bg-sheet px-5 pt-6 pb-7 ring-1 ring-rule sm:px-7">
+    <article className="animate-fade-up overflow-hidden rounded-card bg-sheet px-5 pt-6 pb-7 ring-1 ring-rule sm:px-7">
       <span aria-hidden className="grid size-12 place-items-center rounded-2xl bg-warn-soft text-warn">
         <CameraIcon className="size-6" />
       </span>

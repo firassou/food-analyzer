@@ -32,11 +32,14 @@ export async function POST(req: Request) {
   let file: FormDataEntryValue | null;
   // language of the analysis text; anything unsupported falls back to English
   let locale: Locale = DEFAULT_LOCALE;
+  // taken in Medicine Mode: a hint for the model, never a verdict (it still says what the photo shows)
+  let hint: "medicine" | null = null;
   try {
     const form = await req.formData();
     file = form.get("image") ?? form.get("file");
     const lang = form.get("lang");
     if (isLocale(lang)) locale = lang;
+    if (form.get("mode") === "medicine") hint = "medicine";
   } catch {
     return fail('Send the photo as multipart/form-data in an "image" field.', "bad_request", 400);
   }
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
 
   try {
     const image = await prepareImage(new Uint8Array(await file.arrayBuffer()));
-    const analysis = await analyzeLabel(image.dataUrl, req.signal, locale);
+    const analysis = await analyzeLabel(image.dataUrl, req.signal, locale, hint);
     const { meta } = analysis;
     let { result } = analysis;
     // a recognised product with no readable ingredient list: complete it from the product database

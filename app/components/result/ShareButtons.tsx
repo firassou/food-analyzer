@@ -41,7 +41,7 @@ export default function ShareButtons({ result, name }: { result: LabelAnalysis; 
     }
   };
   const button =
-    "inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold ring-1 ring-rule transition hover:bg-mute-soft active:scale-[0.98]";
+    "inline-flex min-h-11 items-center gap-2 rounded-control px-5 text-sm font-semibold ring-1 ring-rule transition hover:bg-mute-soft active:scale-[0.98]";
   return (
     <>
       <button onClick={share} className={button}>

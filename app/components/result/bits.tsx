@@ -6,7 +6,7 @@ export function Chip({ tone, icon, children }: { tone?: Tone; icon?: React.React
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs leading-4 font-medium [&>svg]:size-3.5",
+        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs leading-4 font-medium [&>svg]:size-3.5",
         tone ? toneClasses[tone] : "bg-accent-soft text-on-accent-soft",
       )}
     >
@@ -40,7 +40,7 @@ export function InfoList({ title, rows }: { title: string; rows: [string, string
   return (
     <div>
       <SubLabel>{title}</SubLabel>
-      <dl className="overflow-hidden rounded-2xl bg-mute-soft/60 text-sm">
+      <dl className="overflow-hidden rounded-xl bg-mute-soft/60 text-sm">
         {filled.map(([label, value]) => (
           <div key={label} className="flex gap-3 border-t border-rule/70 px-4 py-2.5 first:border-t-0">
             <dt className="w-28 shrink-0 text-ink-soft">{label}</dt>
@@ -71,8 +71,8 @@ export function StatusTile({ title, label, tone, icon, hint, onClick, className 
     <Root
       onClick={onClick}
       className={cn(
-        "group flex min-h-28 flex-col items-start gap-3 rounded-3xl p-4 text-start transition active:scale-[0.985]",
-        tone === "zinc" ? "bg-sheet ring-1 ring-rule" : toneClasses[tone],
+        "group flex min-h-28 flex-col items-start gap-3 rounded-card p-4 text-start transition active:scale-[0.985]",
+        tone === "zinc" ? "card" : toneClasses[tone],
         onClick && "cursor-pointer hover:brightness-[0.97] dark:hover:brightness-110",
         className,
       )}

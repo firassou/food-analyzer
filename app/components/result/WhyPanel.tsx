@@ -39,7 +39,7 @@ export default function WhyPanel({ result }: { result: LabelAnalysis }) {
   if (groups.length === 0) return null;
 
   return (
-    <details className="group rounded-3xl bg-sheet ring-1 ring-rule">
+    <details className="group card">
       <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 select-none sm:px-7 [&::-webkit-details-marker]:hidden">
         <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent-soft text-on-accent-soft">
           <InfoIcon className="size-5" />

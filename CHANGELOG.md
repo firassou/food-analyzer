@@ -4,6 +4,15 @@ The version in `package.json` is the one shown at the bottom of the app. Version
 [semantic versioning](https://semver.org): while the app is in `0.x`, a new feature raises the
 middle number and a fix raises the last one. Each release is a git tag (`v0.8.1`).
 
+## 0.15.0 — 2026-10-14
+- The app is now **LabelSight**, with a new design: a warm oat page, botanical charcoal, forest green with lime and peach accents, an editorial serif for food headlines, tighter shapes, soft shadows and a quiet, coherent motion system (all of it off with reduced motion). Dark mode is re-tinted to match. Saved scans and settings carry over.
+- **Medicine Mode**: a place of its own, in deep teal on restrained white, with no playful motion and its disclaimer always in view. Choosing it tells the AI the photo is probably a medicine (it still says when it isn't). A medicine result always opens in Medicine Mode, led by its active ingredient, then how it is taken, the cautions and "Ask a pharmacist before combining".
+- A new home: a greeting, "Know what works for your body.", one obvious scan button (with upload and barcode beside it), your watchlist, your recent scans with their status, and the way into Medicine Mode.
+- Food results open with a verdict for your watchlist: "A good fit", "Worth a closer look" or "Not a match for your watchlist". Without a watchlist, the allergens on the label come first. Then why it matters, the details, and the notes on the reading.
+- History is a screen of its own: search, filters (food, medicines, allergy alerts), dates and a status for every scan.
+- "My profile" is now "My watchlist", edited in a bottom sheet that says how it shapes every result.
+- The analyzing card reveals its steps one by one.
+
 ## 0.14.0 — 2026-10-14
 - One pen line drawn across a medicine box is read as "1 a day" again. A real box with one diagonal line and a handwritten price was read as morning, midday and evening by Gemini Flash-Lite (the fallback model when Gemini Flash is busy). The model now works through the handwriting step by step (what it saw, its layout, the count) and sets prices and other figures aside. When a reading contradicts itself (a line across the box read as times of day), no dose is shown at all, only a note saying it can be read two ways and to ask the pharmacist: a wrong number is worse than none. A dose written in figures or words is never rewritten. An uncertain reading is labelled as such on screen and in what Ask AI is told.
 - A translated sentence must keep every number of the original (a dose can't change in translation), and translations are never shared between visitors.

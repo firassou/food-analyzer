@@ -83,20 +83,21 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
         if (e.target === ref.current) ref.current?.close();
       }}
       aria-labelledby="profile-title"
-      className="animate-fade-up m-auto max-h-[92dvh] w-[min(34rem,calc(100vw-1.5rem))] overflow-y-auto rounded-[28px] bg-sheet p-0 text-ink ring-1 ring-rule backdrop:bg-ink/50"
+      className="animate-sheet-up mx-auto mt-auto mb-0 max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-card bg-sheet p-0 text-ink shadow-raised ring-1 ring-rule backdrop:bg-ink/45 sm:m-auto sm:w-[min(34rem,calc(100vw-1.5rem))] sm:rounded-card"
     >
-      <div className="px-5 pt-5 pb-6 sm:px-7">
+      <div className="px-5 pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-7 sm:pb-6">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 id="profile-title" className="font-display text-2xl font-bold">
+            <h2 id="profile-title" className="font-display text-2xl font-semibold">
               {p.title}
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-ink-soft">{p.lead}</p>
+            <p className="mt-2 rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-sm leading-6 text-ink">{p.effect}</p>
           </div>
           <button
             onClick={() => ref.current?.close()}
             aria-label={p.close}
-            className="grid size-10 shrink-0 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
           >
             <CloseIcon className="size-4" />
           </button>
@@ -114,7 +115,7 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onClick={addProfilePerson.bind(null, "")}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-accent ring-1 ring-rule transition hover:bg-accent-soft active:scale-[0.97]"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-control px-4 text-sm font-medium text-accent ring-1 ring-rule transition hover:bg-accent-soft active:scale-[0.97]"
               >
                 <PlusIcon className="size-4" />
                 {p.addPerson}
@@ -132,7 +133,7 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
                 autoComplete="off"
                 placeholder={p.name}
                 aria-label={p.name}
-                className="h-11 min-w-0 flex-1 rounded-full bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
+                className="h-11 min-w-0 flex-1 rounded-control bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
               />
               <button
                 type="button"
@@ -176,12 +177,12 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
         <div className="mt-5 flex items-center gap-3">
           <button
             onClick={() => ref.current?.close()}
-            className="h-12 flex-1 rounded-full bg-accent text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
+            className="h-12 flex-1 rounded-control bg-accent text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
           >
             {p.done}
           </button>
           {!isEmptyProfile(profile) && (
-            <button onClick={() => saveProfile(EMPTY_PROFILE)} className="h-12 rounded-full px-4 text-sm font-medium text-ink-soft hover:bg-mute-soft hover:text-ink">
+            <button onClick={() => saveProfile(EMPTY_PROFILE)} className="h-12 rounded-control px-4 text-sm font-medium text-ink-soft hover:bg-mute-soft hover:text-ink">
               {p.clear}
             </button>
           )}
@@ -207,7 +208,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition active:scale-[0.97]",
+        "inline-flex min-h-11 items-center gap-1.5 rounded-control px-4 text-sm font-medium transition active:scale-[0.97]",
         on ? "bg-accent-soft text-on-accent-soft ring-1 ring-accent" : "bg-mute-soft text-ink hover:bg-rule",
       )}
     >
@@ -232,7 +233,7 @@ function CountryPicker() {
         value={choice ?? ""}
         onChange={(e) => saveCountry(e.target.value || null)}
         aria-label={t.profile.country}
-        className="mt-2.5 h-12 w-full rounded-full bg-mute-soft px-5 text-base focus-visible:outline-2 focus-visible:outline-accent"
+        className="mt-2.5 h-12 w-full rounded-control bg-mute-soft px-5 text-base focus-visible:outline-2 focus-visible:outline-accent"
       >
         <option value="">{`${t.profile.countryAuto}${detected ? ` (${nameOf(detected)})` : ""}`}</option>
         {options.map((code) => (

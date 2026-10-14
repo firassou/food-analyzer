@@ -4,14 +4,14 @@ import type { MetadataRoute } from "next";
 // it opens like an app, but analyzing a photo still needs a connection.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Food Analyzer",
-    short_name: "Food Analyzer",
-    description: "Decode food labels: allergens, additives and nutrition at a glance.",
+    name: "LabelSight",
+    short_name: "LabelSight",
+    description: "Understand food labels and medicine boxes: what fits your body, what to watch for.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f5f7fa",
-    theme_color: "#f5f7fa",
+    background_color: "#f7f4ee",
+    theme_color: "#f7f4ee",
     categories: ["food", "health"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

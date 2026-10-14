@@ -4,7 +4,7 @@ import { checkFoodWithMedicines } from "../../lib/analysis/foodMedicine";
 import type { LabelAnalysis } from "../../lib/analysis/types";
 import { useHistory } from "../../lib/client/history";
 import { format, ltr, useI18n } from "../../lib/i18n/I18nProvider";
-import { useScanName } from "../History";
+import { useScanName } from "../scans";
 import { cn, Dot, PillIcon, toneClasses } from "../ui";
 
 /**
@@ -21,7 +21,7 @@ export default function MedicineFoodCheck({ result }: { result: LabelAnalysis })
   const c = t.foodMedicine;
   const worst = findings.some((f) => f.severity === "avoid");
   return (
-    <div className={cn("mt-3 rounded-3xl px-5 py-4", toneClasses[worst ? "red" : "amber"])}>
+    <div className={cn("mt-3 rounded-card px-5 py-4", toneClasses[worst ? "red" : "amber"])}>
       <p className="eyebrow flex items-center gap-1.5 rtl:tracking-normal">
         <PillIcon className="size-4" />
         {c.title}

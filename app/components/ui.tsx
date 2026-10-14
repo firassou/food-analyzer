@@ -54,18 +54,18 @@ export function Section({
   return (
     <section
       id={id}
-      className={cn("relative scroll-mt-32 overflow-hidden rounded-[28px] bg-sheet px-5 pt-5 pb-6 ring-1 ring-rule sm:px-7", className)}
+      className={cn("card relative scroll-mt-32 overflow-hidden px-5 pt-5 pb-6 sm:px-7", className)}
     >
       {flash ?
         <span key={flash} aria-hidden className="animate-flash pointer-events-none absolute inset-0" />
       : null}
       <div className="relative mb-5 flex items-center gap-3">
         {icon && (
-          <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent-soft text-on-accent-soft [&>svg]:size-5">
+          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-on-accent-soft [&>svg]:size-5">
             {icon}
           </span>
         )}
-        <h3 className="font-display min-w-0 flex-1 text-xl leading-tight font-semibold text-balance">{title}</h3>
+        <h3 className="font-display min-w-0 flex-1 text-lg leading-tight font-semibold text-balance sm:text-xl">{title}</h3>
         {aside && <div className="eyebrow shrink-0 text-end text-ink-soft">{aside}</div>}
       </div>
       <div className="relative">{children}</div>
@@ -88,7 +88,7 @@ export function Tag({
     <span
       {...rest}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm leading-tight font-medium",
+        "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm leading-tight font-medium",
         tone ? toneClasses[tone] : "bg-mute-soft text-ink",
         className,
       )}
@@ -141,7 +141,7 @@ export function Notice({
     <div
       role={role}
       className={cn(
-        "flex gap-3 rounded-2xl px-4 py-3.5 text-sm leading-6",
+        "flex gap-3 rounded-xl px-4 py-3.5 text-sm leading-6",
         toneClasses[tone],
         className,
       )}

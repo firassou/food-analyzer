@@ -3,7 +3,7 @@ import { checkTogether, type TogetherFinding } from "../lib/analysis/interaction
 import type { HistoryEntry } from "../lib/client/history";
 import { format, useI18n } from "../lib/i18n/I18nProvider";
 import type { Messages } from "../lib/i18n/messages";
-import { ScanThumb, useScanName } from "./History";
+import { ScanThumb, useScanName } from "./scans";
 import { Notice } from "./ui";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -27,13 +27,13 @@ export default function Together({ a, b, onBack }: { a: HistoryEntry; b: History
 
   return (
     <div className="animate-fade-up">
-      <button onClick={onBack} className="mb-3 inline-flex h-11 items-center gap-1.5 rounded-full bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule">
+      <button onClick={onBack} className="mb-3 inline-flex h-11 items-center gap-1.5 rounded-control bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule">
         <span aria-hidden className="inline-block rtl:-scale-x-100">
           ←
         </span>
         {t.compare.back}
       </button>
-      <article className="overflow-hidden rounded-[28px] bg-sheet ring-1 ring-rule">
+      <article className="overflow-hidden rounded-card bg-sheet ring-1 ring-rule">
         <div className="px-5 pt-6 pb-6 sm:px-7">
           <h2 className="font-display text-2xl font-bold">{c.title}</h2>
           <p className="mt-1.5 text-sm leading-6 text-ink-soft">{c.lead}</p>

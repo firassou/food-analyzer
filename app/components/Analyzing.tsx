@@ -16,16 +16,21 @@ export default function Analyzing() {
   }, [stepCount]);
 
   return (
-    <div aria-live="polite" className="animate-fade-up overflow-hidden rounded-[28px] bg-sheet ring-1 ring-rule">
+    <div aria-live="polite" className="card animate-fade-up overflow-hidden">
+      {/* no real progress exists: a steady bar that never claims to be done */}
+      <div aria-hidden className="h-1 bg-mute-soft">
+        <div className="h-full bg-accent transition-[width] duration-700 ease-out" style={{ width: `${((step + 1) / (stepCount + 1)) * 100}%` }} />
+      </div>
       <div className="px-5 pt-5 pb-5 sm:px-7">
         <p className="font-display text-lg font-semibold">{t.analyzing.title}</p>
+        {/* the steps arrive one by one, each as it is reached, and the next one waits in grey */}
         <ol className="mt-4">
-          {steps.map((label, i) => (
+          {steps.slice(0, step + 2).map((label, i) => (
             <li
               key={label}
               className={cn(
-                "flex items-center gap-3 py-2.5 text-sm transition-colors duration-500",
-                i === step ? "font-medium text-ink" : i < step ? "text-ink-soft" : "text-ink-soft/50",
+                "animate-fade-up flex items-center gap-3 py-2.5 text-sm transition-colors duration-500",
+                i === step ? "font-medium text-ink" : "text-ink-soft",
               )}
             >
               <span className="grid size-6 place-items-center">

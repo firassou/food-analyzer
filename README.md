@@ -1,4 +1,4 @@
-# Food Analyzer
+# LabelSight
 
 An AI food-label analyzer, built for phones. Take (or choose, drop, paste) a photo and get a single-page breakdown, in English, French or Arabic:
 

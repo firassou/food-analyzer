@@ -16,7 +16,7 @@ export default function Scanner({
 }) {
   const { t } = useI18n();
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-mute-soft ring-1 ring-rule">
+    <div className="relative overflow-hidden rounded-card bg-mute-soft ring-1 ring-rule">
       {src ? (
         <Image
           src={src}

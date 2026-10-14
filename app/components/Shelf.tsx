@@ -8,7 +8,7 @@ import { disableReminders, enableReminders, useReminderState } from "../lib/clie
 import { format, useI18n } from "../lib/i18n/I18nProvider";
 import { dateLocale } from "../lib/i18n/locales";
 import AskAi from "./AskAi";
-import { ScanThumb, useScanName } from "./History";
+import { ScanThumb, useScanName } from "./scans";
 import { togetherText } from "./Together";
 import { ArrowLeftIcon, BellIcon, cn, Notice, PillIcon, Section, ShelfIcon, SparkleIcon, toneClasses, type Tone } from "./ui";
 
@@ -40,13 +40,13 @@ export default function Shelf({ onBack, onOpen }: { onBack: () => void; onOpen: 
     <div className="animate-fade-up space-y-3">
       <button
         onClick={onBack}
-        className="inline-flex h-11 items-center gap-1.5 rounded-full bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule"
+        className="inline-flex h-11 items-center gap-1.5 rounded-control bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule"
       >
         <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
         {t.compare.back}
       </button>
 
-      <div className="rounded-[28px] bg-sheet px-5 py-6 ring-1 ring-rule sm:px-7">
+      <div className="rounded-card bg-sheet px-5 py-6 ring-1 ring-rule sm:px-7">
         <span aria-hidden className="grid size-12 place-items-center rounded-2xl bg-accent-soft text-on-accent-soft">
           <ShelfIcon className="size-6" />
         </span>
@@ -218,7 +218,7 @@ function Reminders() {
         aria-pressed={on}
         onClick={() => (on ? disableReminders() : void enableReminders())}
         className={cn(
-          "inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50",
+          "inline-flex min-h-11 items-center gap-2 rounded-control px-5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50",
           on ? "bg-accent-soft text-on-accent-soft ring-1 ring-accent" : "bg-accent text-on-accent",
         )}
       >

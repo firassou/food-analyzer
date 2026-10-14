@@ -5,7 +5,8 @@ import Analyzing from "./components/Analyzing";
 import AisleScanner from "./components/AisleScanner";
 import BarcodeScanner from "./components/BarcodeScanner";
 import Compare from "./components/Compare";
-import History from "./components/History";
+import HistoryScreen from "./components/History";
+import HomeScreen from "./components/Home";
 import InstallButton from "./components/InstallButton";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import { usePhotoPicker } from "./components/PhotoPicker";
@@ -13,24 +14,11 @@ import ProfileSheet, { ProfileButton } from "./components/ProfileSheet";
 import Scanner from "./components/Scanner";
 import Shelf from "./components/Shelf";
 import Together from "./components/Together";
-import RotatingWord from "./components/RotatingWord";
-import {
-  BarcodeIcon,
-  BottleIcon,
-  CameraIcon,
-  cn,
-  ImageIcon,
-  LabelIcon,
-  Notice,
-  PillIcon,
-  PlateIcon,
-  ShelfIcon,
-  SparkleIcon,
-  Spinner,
-} from "./components/ui";
+import { BarcodeIcon, CameraIcon, ClockIcon, cn, ImageIcon, Notice, ShelfIcon, Spinner } from "./components/ui";
 import { matchPhoto, type PhotoPrint } from "./lib/client/fingerprint";
 import { findScan, makeThumb, newScanId, savedScans, saveScan, updateScan, useHistory, type HistoryEntry, type Phrase } from "./lib/client/history";
 import { ImagePrepError, prepareImage } from "./lib/client/prepareImage";
+import { type Mode, useMode } from "./lib/client/mode";
 import { translateResult } from "./lib/client/translate";
 import { attentionCount, datedEntries } from "./lib/analysis/cabinet";
 import { addExcipientPhoto, withUserMarks } from "./lib/analysis/medicine";
@@ -79,6 +67,13 @@ export default function Home() {
   const [aisle, setAisle] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // the mode the reader is in: how the app looks, and what a new photo is taken as
+  const mode = useMode();
+  const modeRef = useRef<Mode>(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
   const [comparing, setComparing] = useState<[HistoryEntry, HistoryEntry] | null>(null);
   const [status, setStatus] = useState<Status>("preparing");
   const [result, setResult] = useState<{ result: LabelAnalysis; meta: AnalyzeMeta } | null>(null);
@@ -135,7 +130,7 @@ export default function Home() {
     try {
       const r =
         from.type === "photo" ?
-          await analyzeImage(from.image, controller.signal, lang)
+          await analyzeImage(from.image, controller.signal, lang, modeRef.current)
         : await lookupBarcode(from.code, controller.signal, lang);
       if (id !== requestId.current) return;
       setResult(r);
@@ -173,6 +168,7 @@ export default function Home() {
       setResult(null);
       setComparing(null);
       setShelfOpen(false);
+      setHistoryOpen(false);
       setOpen(true);
       setSource(null);
       setImageSrc(null);
@@ -265,6 +261,7 @@ export default function Home() {
       setScanning(false);
       setComparing(null);
       setShelfOpen(false);
+      setHistoryOpen(false);
       setOpen(true);
       setImageSrc(null);
       const from: Source = { type: "barcode", code };
@@ -310,6 +307,7 @@ export default function Home() {
     requestId.current++;
     cancelInFlight();
     setShelfOpen(false);
+    setHistoryOpen(false);
     setSource(null);
     setImageSrc(entry.thumb);
     showSaved(entry);
@@ -329,6 +327,7 @@ export default function Home() {
     setOpen(false);
     setComparing(null);
     setShelfOpen(false);
+    setHistoryOpen(false);
     setSource(null);
     setImageSrc(null);
     setResult(null);
@@ -398,9 +397,13 @@ export default function Home() {
     return () => controller.abort();
   }, [translating, result, locale, translateTry]);
 
+  // a medicine on screen is always shown in Medicine Mode, and any other result in Food mode
+  const shownMode: Mode = open && status === "done" && result ? (result.result.kind === "medicine" ? "medicine" : "food") : mode;
+
   return (
     <div
-      className="relative flex flex-1 flex-col"
+      data-mode={shownMode}
+      className="mode-root relative flex flex-1 flex-col"
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes("Files")) return;
         e.preventDefault();
@@ -428,14 +431,30 @@ export default function Home() {
           <button onClick={reset} className="-ms-1 flex min-w-0 items-center gap-3 rounded-2xl p-1">
             <Logo />
             {/* hidden from sight on a narrow phone, but still the button's name */}
-            <span dir="ltr" className="font-display sr-only truncate text-lg font-bold tracking-tight min-[430px]:not-sr-only">
-              Food Analyzer
+            <span dir="ltr" className="font-display sr-only truncate text-lg font-semibold tracking-tight min-[430px]:not-sr-only">
+              LabelSight
             </span>
           </button>
           <div className="ms-auto flex items-center gap-2">
             {history.length > 0 && (
               <button
                 onClick={() => {
+                  setHistoryOpen(true);
+                  setShelfOpen(false);
+                  setComparing(null);
+                  window.scrollTo({ top: 0 });
+                }}
+                aria-label={t.historyScreen.title}
+                title={t.historyScreen.title}
+                className="grid size-11 place-items-center rounded-full bg-mute-soft transition hover:bg-rule"
+              >
+                <ClockIcon className="size-5" />
+              </button>
+            )}
+            {history.length > 0 && (
+              <button
+                onClick={() => {
+                  setHistoryOpen(false);
                   setShelfOpen(true);
                   setComparing(null);
                   window.scrollTo({ top: 0 });
@@ -473,111 +492,48 @@ export default function Home() {
               <Together a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />
             : <Compare a={comparing[0]} b={comparing[1]} onBack={() => setComparing(null)} />}
           </div>
+        : historyOpen ?
+          <div className="mx-auto max-w-2xl">
+            <HistoryScreen
+              onBack={() => setHistoryOpen(false)}
+              onOpen={openSaved}
+              onCompare={(a, b) => {
+                setHistoryOpen(false);
+                setComparing([a, b]);
+              }}
+            />
+          </div>
         : !open ?
-          <section className="mx-auto max-w-2xl lg:max-w-5xl">
-            <div className="lg:grid lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-14">
-              <div>
-                <p className="animate-fade-up inline-flex items-center gap-2 rounded-full bg-accent-soft px-3.5 py-1.5 text-sm font-medium text-on-accent-soft">
-                  <SparkleIcon className="size-4" />
-                  {t.hero.badge}
-                </p>
-                <h1 className="animate-fade-up font-display mt-5 text-[2.6rem] leading-[1.06] font-bold tracking-tight text-balance sm:text-6xl">
-                  {t.hero.title} <RotatingWord words={t.hero.words} className="text-accent" />
-                </h1>
-                <p
-                  className="animate-fade-up mt-5 max-w-lg text-base leading-7 text-ink-soft sm:text-lg sm:leading-8"
-                  style={{ animationDelay: "60ms" }}
-                >
-                  {t.hero.lead}
-                </p>
-
-                {/* on a phone the dock holds these; a bigger screen gets them under the headline */}
-                <div className="animate-fade-up mt-7 hidden flex-wrap gap-3 sm:flex" style={{ animationDelay: "90ms" }}>
-                  <button
-                    onClick={picker.takePhoto}
-                    className="inline-flex h-14 items-center gap-2.5 rounded-[20px] bg-accent px-7 text-base font-semibold text-on-accent shadow-sm transition hover:brightness-110 active:scale-[0.98]"
-                  >
-                    <CameraIcon className="size-6" />
-                    {t.uploader.takePhoto}
-                  </button>
-                  <button
-                    onClick={picker.choosePhoto}
-                    className="inline-flex h-14 items-center gap-2.5 rounded-[20px] bg-mute-soft px-6 text-base font-semibold transition hover:bg-rule active:scale-[0.98]"
-                  >
-                    <ImageIcon className="size-5" />
-                    {t.uploader.choosePhoto}
-                  </button>
-                  <button
-                    onClick={() => setScanning(true)}
-                    className="inline-flex h-14 items-center gap-2.5 rounded-[20px] bg-mute-soft px-6 text-base font-semibold transition hover:bg-rule active:scale-[0.98]"
-                  >
-                    <BarcodeIcon className="size-5" />
-                    {t.dock.scan}
-                  </button>
-                </div>
-
-                {attention > 0 && (
-                  <button
-                    onClick={() => setShelfOpen(true)}
-                    className="animate-fade-up mt-6 flex w-full items-center gap-3 rounded-3xl bg-warn-soft px-4 py-3.5 text-start text-sm text-ink transition hover:brightness-95 active:scale-[0.99]"
-                  >
-                    <ShelfIcon className="size-5 shrink-0 text-warn" />
-                    <span className="min-w-0 flex-1 font-medium">{format(t.shelf.banner, { count: attention })}</span>
-                    <span className="shrink-0 font-semibold text-warn">{t.shelf.bannerOpen}</span>
-                  </button>
-                )}
-                {error && (
-                  <Notice tone="red" role="alert" className="animate-fade-up mt-6">
-                    {error}
-                  </Notice>
-                )}
-
-                {/* dropping and pasting need a mouse and a keyboard */}
-                <p className="mt-5 hidden text-sm text-ink-soft lg:[@media(hover:hover)_and_(pointer:fine)]:block">
-                  {t.uploader.hint}{" "}
-                  <kbd dir="ltr" className="rounded-md bg-mute-soft px-1.5 py-0.5 font-mono text-xs">
-                    Ctrl V
-                  </kbd>
-                </p>
-              </div>
-
-              {/* what it reads: one wide tile for the everyday case, three narrower ones */}
-              <ul className="animate-fade-up mt-10 grid grid-cols-2 gap-3 lg:mt-0" style={{ animationDelay: "120ms" }}>
-                {t.modes.map((mode, i) => {
-                  const Icon = [LabelIcon, BottleIcon, PlateIcon, PillIcon][i] ?? LabelIcon;
-                  return (
-                    <li
-                      key={mode.title}
-                      className={cn(
-                        "rounded-3xl bg-sheet p-4 ring-1 ring-rule sm:p-5",
-                        i === 0 || i === t.modes.length - 1 ? "col-span-2 flex items-center gap-4" : "flex flex-col gap-3",
-                      )}
-                    >
-                      <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-on-accent-soft">
-                        <Icon className="size-6" />
-                      </span>
-                      <div>
-                        <p className="font-display text-base leading-tight font-semibold sm:text-lg">{mode.title}</p>
-                        <p className="mt-1 text-sm leading-5 text-ink-soft">{mode.text}</p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
+          <>
+            <HomeScreen
+              mode={mode}
+              attention={attention}
+              error={error}
+              onCamera={picker.takePhoto}
+              onUpload={picker.choosePhoto}
+              onBarcode={() => setScanning(true)}
+              onOpen={openSaved}
+              onHistory={() => {
+                setHistoryOpen(true);
+                window.scrollTo({ top: 0 });
+              }}
+              onShelf={() => {
+                setShelfOpen(true);
+                window.scrollTo({ top: 0 });
+              }}
+              onWatchlist={() => setEditingProfile(true)}
+            />
             <div className="mx-auto max-w-2xl">
-              <History onOpen={openSaved} onCompare={(a, b) => setComparing([a, b])} />
               <InstallButton />
             </div>
-          </section>
+          </>
         : <div className={cn("grid gap-4", hasPhoto ? "lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10" : "mx-auto max-w-2xl")}>
             <aside className="lg:sticky lg:top-20 lg:self-start">
               {hasPhoto && <Scanner src={imageSrc} scanning={busy} compact={!busy} />}
               {status === "done" && canRedo && (
                 <button
                   onClick={analyze}
-                  className="mt-2 inline-flex h-11 items-center rounded-full px-1 text-sm font-medium text-accent underline underline-offset-4"
+                  className="mt-2 inline-flex h-11 items-center rounded-control px-1 text-sm font-medium text-accent underline underline-offset-4"
                 >
                   {t.actions.analyzeAgain}
                 </button>
@@ -589,7 +545,7 @@ export default function Home() {
                 (source?.type === "barcode" ?
                   <p
                     aria-live="polite"
-                    className="animate-fade-up flex items-center gap-3 rounded-[28px] bg-sheet px-5 py-6 text-sm font-medium ring-1 ring-rule"
+                    className="animate-fade-up flex items-center gap-3 rounded-card bg-sheet px-5 py-6 text-sm font-medium ring-1 ring-rule"
                   >
                     <Spinner className="text-accent" />
                     {t.barcode.looking}
@@ -644,7 +600,7 @@ export default function Home() {
                 />
               )}
               {status === "error" && (
-                <div role="alert" className="animate-fade-up overflow-hidden rounded-[28px] bg-bad-soft ring-1 ring-bad/20">
+                <div role="alert" className="animate-fade-up overflow-hidden rounded-card bg-bad-soft ring-1 ring-bad/20">
                   <div className="px-5 pt-5 pb-6 sm:px-7">
                     <p className="font-display text-xl font-bold">{t.status.failed}</p>
                     <p className="mt-2 text-sm leading-6 wrap-break-word text-ink-soft">{error}</p>
@@ -652,7 +608,7 @@ export default function Home() {
                     {canRedo && !(failure?.kind === "server" && failure.code === "not_found") && (
                       <button
                         onClick={analyze}
-                        className="mt-4 inline-flex h-11 items-center rounded-full bg-ink px-5 text-sm font-semibold text-paper transition active:scale-[0.98]"
+                        className="mt-4 inline-flex h-11 items-center rounded-control bg-ink px-5 text-sm font-semibold text-paper transition active:scale-[0.98]"
                       >
                         {t.actions.tryAgain}
                       </button>
@@ -665,15 +621,15 @@ export default function Home() {
         }
         {/* which version this is: see CHANGELOG.md */}
         <p dir="ltr" className="eyebrow mt-10 text-center text-ink-soft/70 tabular-nums">
-          Food Analyzer v{process.env.NEXT_PUBLIC_APP_VERSION}
+          LabelSight v{process.env.NEXT_PUBLIC_APP_VERSION}
         </p>
       </main>
 
       {/* Dock: the one primary action, where the thumb is */}
       <div
-        className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 print:hidden", !open && "sm:hidden")}
+        className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 print:hidden", !open && "hidden")}
       >
-        <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-[28px] bg-sheet/90 p-2 shadow-[0_8px_32px_-8px_rgb(0_0_0/0.35)] ring-1 ring-rule backdrop-blur-md">
+        <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-card bg-sheet/90 p-2 shadow-[0_8px_32px_-8px_rgb(0_0_0/0.35)] ring-1 ring-rule backdrop-blur-md">
           {busy ?
             <>
               <p className="flex min-w-0 flex-1 items-center gap-3 ps-4 text-sm font-medium" aria-live="polite">
@@ -682,7 +638,7 @@ export default function Home() {
               </p>
               <button
                 onClick={reset}
-                className="h-14 shrink-0 rounded-[20px] bg-mute-soft px-6 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
+                className="h-14 shrink-0 rounded-control bg-mute-soft px-6 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
               >
                 {t.actions.cancel}
               </button>
@@ -690,7 +646,7 @@ export default function Home() {
           : <>
               <button
                 onClick={picker.takePhoto}
-                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-[20px] bg-accent px-3 text-[15px] font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-control bg-accent px-3 text-[15px] font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
               >
                 <CameraIcon className="size-6 shrink-0" />
                 <span className="truncate">{open ? t.uploader.retake : t.uploader.takePhoto}</span>
@@ -699,7 +655,7 @@ export default function Home() {
                 onClick={picker.choosePhoto}
                 aria-label={open ? t.uploader.replace : t.uploader.choosePhoto}
                 title={open ? t.uploader.replace : t.uploader.choosePhoto}
-                className="grid size-14 shrink-0 place-items-center rounded-[20px] bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
+                className="grid size-14 shrink-0 place-items-center rounded-control bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
               >
                 <ImageIcon className="size-5" />
               </button>
@@ -707,7 +663,7 @@ export default function Home() {
                 onClick={() => setScanning(true)}
                 aria-label={t.dock.scan}
                 title={t.dock.scan}
-                className="grid size-14 shrink-0 place-items-center rounded-[20px] bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
+                className="grid size-14 shrink-0 place-items-center rounded-control bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
               >
                 <BarcodeIcon className="size-5" />
               </button>
@@ -717,7 +673,7 @@ export default function Home() {
       </div>
 
       {dragging && (
-        <div className="animate-fade-in pointer-events-none fixed inset-3 z-50 grid place-items-center rounded-[28px] border-2 border-dashed border-accent bg-paper/90">
+        <div className="animate-fade-in pointer-events-none fixed inset-3 z-50 grid place-items-center rounded-card border-2 border-dashed border-accent bg-paper/90">
           <p className="font-display text-2xl font-bold text-accent">{t.uploader.dropHere}</p>
         </div>
       )}
@@ -734,7 +690,7 @@ function Lookalike({ entry, onOpen, onAnalyze }: { entry: HistoryEntry; onOpen: 
   const date = new Intl.DateTimeFormat(dateLocale(locale), { day: "numeric", month: "long", ...(!thisYear && { year: "numeric" }) }).format(entry.at);
   const name = entry.result.product.name ?? entry.result.product.category ?? t.kinds[entry.result.kind];
   return (
-    <section aria-labelledby="lookalike-title" className="animate-fade-up rounded-[28px] bg-sheet px-5 py-6 ring-1 ring-rule sm:px-7">
+    <section aria-labelledby="lookalike-title" className="animate-fade-up rounded-card bg-sheet px-5 py-6 ring-1 ring-rule sm:px-7">
       <div aria-live="polite" className="flex items-center gap-4">
         {entry.thumb && (
           // eslint-disable-next-line @next/next/no-img-element -- a data URL kept in the browser
@@ -757,13 +713,13 @@ function Lookalike({ entry, onOpen, onAnalyze }: { entry: HistoryEntry; onOpen: 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={onOpen}
-          className="inline-flex h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+          className="inline-flex h-11 items-center rounded-control bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
         >
           {d.open}
         </button>
         <button
           onClick={onAnalyze}
-          className="inline-flex h-11 items-center rounded-full bg-mute-soft px-5 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
+          className="inline-flex h-11 items-center rounded-control bg-mute-soft px-5 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
         >
           {d.analyze}
         </button>
@@ -801,11 +757,13 @@ async function lookupBarcode(code: string, signal: AbortSignal, locale: Locale):
   throw new AnalysisFailure({ kind: "status", status: response.status });
 }
 
-async function analyzeImage(image: Blob, signal: AbortSignal, locale: Locale): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
+async function analyzeImage(image: Blob, signal: AbortSignal, locale: Locale, mode: Mode = "food"): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
   const formData = new FormData();
   formData.append("image", image, "label.jpg");
   // the language the summary, warnings and explanations are written in
   formData.append("lang", locale);
+  // taken in Medicine Mode: a hint for the model, which still says what the photo really shows
+  if (mode === "medicine") formData.append("mode", "medicine");
 
   let response: Response;
   try {

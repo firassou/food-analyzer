@@ -1,63 +1,137 @@
 @import "tailwindcss";
 
 /*
- * Calm utility: a cool off-white page, white surfaces, tonal containers and one blue.
- * Red / amber / green are reserved for verdicts. Colours are variables that flip
- * with the colour scheme, so components never need `dark:` variants.
+ * LabelSight design tokens. Two modes share one structure:
+ * - Food: warm oat paper, botanical charcoal, forest green, lime for good news, peach for "look closer".
+ * - Medicine (`[data-mode="medicine"]`): restrained white, deep teal, quiet and precise.
+ * Colours are variables that flip with the colour scheme and the mode, so components never
+ * need `dark:` or mode variants. Verdict colours (bad / warn / good) mean a verdict and
+ * nothing else. Text colours are tuned for WCAG AA on their own surfaces; the brighter
+ * brand hues (`*-strong`, lime, peach) are for fills, icons and borders.
  * See .claude/skills/ui-design-system.
  */
 :root {
   color-scheme: light dark;
-  --paper: #f5f7fa;
-  --sheet: #ffffff;
-  --ink: #12161c;
-  --ink-soft: #526070;
-  --rule: #dfe5ec;
-  --accent: #0b57d0;
+
+  /* surfaces and text */
+  --paper: #f7f4ee;
+  --sheet: #fffdf9;
+  --ink: #17241e;
+  --ink-soft: #4d5a53;
+  --rule: #e3ddd2;
+  /* the brand: forest green, and its tonal container */
+  --accent: #27624d;
   --on-accent: #ffffff;
-  --accent-soft: #d9e6fc;
-  --on-accent-soft: #0a2f6b;
-  --bad: #b3261e;
-  --bad-soft: #fbe3e0;
-  --warn: #8a4f00;
-  --warn-soft: #fdefc9;
-  --good: #146c2e;
-  --good-soft: #d9f1df;
-  --mute: #566272;
-  --mute-soft: #eaeef4;
+  --accent-soft: #dfeadb;
+  --on-accent-soft: #1b4536;
+  /* food accents: optimistic lime, peach for "worth a closer look" */
+  --lime: #c8e69b;
+  --lime-soft: #e6f2cf;
+  --on-lime: #1f3a12;
+  --peach: #ef9975;
+  --peach-soft: #fbe4d8;
+  --on-peach: #6b2a12;
+  /* verdicts */
+  --bad: #a8443c;
+  --bad-strong: #b94b43;
+  --bad-soft: #f7e2de;
+  --warn: #855610;
+  --warn-strong: #ca8428;
+  --warn-soft: #f7ead2;
+  --good: #2f6a3f;
+  --good-soft: #e5f1d3;
+  --mute: #58645d;
+  --mute-soft: #eee9e0;
+
+  /* shape and depth */
+  --r-card: 20px;
+  --r-control: 14px;
+  --elev-card: 0 1px 2px rgb(23 36 30 / 0.04), 0 8px 24px -16px rgb(23 36 30 / 0.18);
+  --elev-raised: 0 2px 4px rgb(23 36 30 / 0.06), 0 16px 40px -18px rgb(23 36 30 / 0.32);
+
+  /* motion: a soft spring for food, plain easing for medicine (see the mode below) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: linear(0, 0.23 6%, 0.62 14%, 0.92 23%, 1.04 31%, 1.06 37%, 1.03 47%, 1 60%, 0.995 75%, 1);
+  --rise-distance: 10px;
+  --dur-quick: 160ms;
+  --dur-base: 280ms;
+  --dur-slow: 520ms;
+
   /* Latin interface: the Latin faces lead, the Arabic one catches label text they lack */
   --stack-sans: var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
   --stack-display: var(--font-figtree), var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
+  --stack-editorial: var(--font-newsreader), Georgia, var(--font-arabic), serif;
   --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
 }
 
 /* Arabic interface: the Arabic face must lead, or the Latin faces' metric fallbacks
-   (a local Arial) claim the Arabic characters first. Its own Latin letters match it. */
+   (a local Arial) claim the Arabic characters first. Its own Latin letters match it.
+   There is no Arabic serif here: editorial headlines use the same face, heavier. */
 :root:lang(ar) {
   --stack-sans: var(--font-arabic), var(--font-geist-sans), system-ui, sans-serif;
   --stack-display: var(--font-arabic), var(--font-figtree), system-ui, sans-serif;
+  --stack-editorial: var(--font-arabic), var(--font-figtree), system-ui, sans-serif;
   --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
+}
+
+/* Medicine Mode: professional, calm, safety-first. No serif, no spring, no lift. */
+[data-mode="medicine"] {
+  --paper: #f5f7f7;
+  --sheet: #ffffff;
+  --rule: #dbe3e2;
+  --accent: #156b68;
+  --on-accent: #ffffff;
+  --accent-soft: #ddefed;
+  --on-accent-soft: #0f4b49;
+  --mute-soft: #edf2f1;
+  --ink-soft: #4a5856;
+  --elev-card: 0 1px 2px rgb(16 40 40 / 0.05);
+  --elev-raised: 0 1px 3px rgb(16 40 40 / 0.08), 0 10px 30px -18px rgb(16 40 40 / 0.25);
+  --ease-spring: var(--ease-out);
+  --rise-distance: 0px;
+  --stack-editorial: var(--stack-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #0d1015;
-    --sheet: #161a21;
-    --ink: #e8ebf0;
-    --ink-soft: #a2adbb;
-    --rule: #2a313b;
-    --accent: #a8c7fa;
-    --on-accent: #062e6f;
-    --accent-soft: #1c3a6b;
-    --on-accent-soft: #d3e3fd;
-    --bad: #f2b8b5;
-    --bad-soft: #471814;
-    --warn: #f2c35b;
-    --warn-soft: #3a2a08;
-    --good: #82d99c;
-    --good-soft: #12301c;
-    --mute: #a2adbb;
-    --mute-soft: #212730;
+    --paper: #101814;
+    --sheet: #18221d;
+    --ink: #ece7dd;
+    --ink-soft: #aab4ad;
+    --rule: #2b3631;
+    --accent: #8fcaa9;
+    --on-accent: #0d2a1e;
+    --accent-soft: #1f3a2e;
+    --on-accent-soft: #cfe9d9;
+    --lime: #c8e69b;
+    --lime-soft: #26361b;
+    --on-lime: #d6ecb6;
+    --peach: #ef9975;
+    --peach-soft: #3d241a;
+    --on-peach: #f6c7b2;
+    --bad: #f1a59d;
+    --bad-strong: #e0756b;
+    --bad-soft: #3d1e1b;
+    --warn: #ebbd6c;
+    --warn-strong: #ca8428;
+    --warn-soft: #382a12;
+    --good: #addb8e;
+    --good-soft: #213320;
+    --mute: #aab4ad;
+    --mute-soft: #212c27;
+    --elev-card: 0 1px 2px rgb(0 0 0 / 0.3);
+    --elev-raised: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 40px -18px rgb(0 0 0 / 0.6);
+  }
+  [data-mode="medicine"] {
+    --paper: #0f1717;
+    --sheet: #172121;
+    --rule: #283534;
+    --accent: #7fcfca;
+    --on-accent: #062b29;
+    --accent-soft: #163837;
+    --on-accent-soft: #c8ecea;
+    --mute-soft: #1e2928;
+    --ink-soft: #a7b5b3;
   }
 }
 
@@ -71,9 +145,17 @@
   --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent-soft: var(--on-accent-soft);
+  --color-lime: var(--lime);
+  --color-lime-soft: var(--lime-soft);
+  --color-on-lime: var(--on-lime);
+  --color-peach: var(--peach);
+  --color-peach-soft: var(--peach-soft);
+  --color-on-peach: var(--on-peach);
   --color-bad: var(--bad);
+  --color-bad-strong: var(--bad-strong);
   --color-bad-soft: var(--bad-soft);
   --color-warn: var(--warn);
+  --color-warn-strong: var(--warn-strong);
   --color-warn-soft: var(--warn-soft);
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);
@@ -81,22 +163,27 @@
   --color-mute-soft: var(--mute-soft);
   --font-sans: var(--stack-sans);
   --font-display: var(--stack-display);
+  --font-editorial: var(--stack-editorial);
   --font-mono: var(--stack-mono);
+  --radius-card: var(--r-card);
+  --radius-control: var(--r-control);
+  --shadow-card: var(--elev-card);
+  --shadow-raised: var(--elev-raised);
 }
 
 @theme {
-  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-fade-in: fade-in 0.3s ease-out both;
+  --animate-fade-up: fade-up var(--dur-slow) var(--ease-spring) both;
+  --animate-fade-in: fade-in var(--dur-base) ease-out both;
   --animate-scan: scan 2.2s ease-in-out infinite;
   --animate-grow: grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-flash: flash 1.2s ease-out;
-  --animate-word-in: word-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-word-out: word-out 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-breathe: breathe 3.6s ease-in-out infinite;
+  --animate-sheet-up: sheet-up var(--dur-base) var(--ease-spring) both;
 
   @keyframes fade-up {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(var(--rise-distance));
     }
     to {
       opacity: 1;
@@ -122,18 +209,6 @@
       transform: scaleX(0);
     }
   }
-  @keyframes word-in {
-    from {
-      opacity: 0;
-      transform: translateY(100%);
-    }
-  }
-  @keyframes word-out {
-    to {
-      opacity: 0;
-      transform: translateY(-100%);
-    }
-  }
   @keyframes flash {
     0% {
       background-color: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -142,6 +217,62 @@
       background-color: transparent;
     }
   }
+  /* the capture button, idle: a slow, small breath that invites the tap */
+  @keyframes breathe {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 28%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent);
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+}
+
+/* Arabic has no serif here: its editorial headlines are the same face, heavier, with room for two lines */
+:root:lang(ar) .font-editorial {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Medicine Mode: no breathing, no flourish; content simply appears */
+[data-mode="medicine"] .animate-breathe {
+  animation: none;
+}
+
+/* children of a `stagger` list enter one after another, 50 ms apart (food mode) */
+@utility stagger {
+  & > * {
+    animation: fade-up var(--dur-slow) var(--ease-spring) both;
+  }
+  & > :nth-child(2) {
+    animation-delay: 50ms;
+  }
+  & > :nth-child(3) {
+    animation-delay: 100ms;
+  }
+  & > :nth-child(4) {
+    animation-delay: 150ms;
+  }
+  & > :nth-child(5) {
+    animation-delay: 200ms;
+  }
+  & > :nth-child(n + 6) {
+    animation-delay: 250ms;
+  }
+}
+
+/* a card: warm white, a hairline and a soft shadow */
+@utility card {
+  background: var(--sheet);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-card), inset 0 0 0 1px var(--rule);
 }
 
 /* hides the scrollbar of horizontally scrolling rows (the section nav) but keeps them scrollable */
@@ -179,6 +310,16 @@ body {
   font-family: var(--font-sans);
 }
 
+/* the page's root in its mode: a mode switch repaints everything at once (a layer below the
+   utilities, so a card that carries a mode of its own keeps its surface) */
+@layer base {
+  .mode-root {
+    background: var(--paper);
+    color: var(--ink);
+    transition: background-color var(--dur-base) ease-out;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -198,13 +339,15 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
 }
 
 /* "Save as PDF" goes through the print dialog: just the sheet, on white, cards kept whole */
 @media print {
-  body {
+  body,
+  .mode-root {
     background: #fff;
   }
   section,

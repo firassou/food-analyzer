@@ -36,7 +36,7 @@ const PROVIDERS = {
     key: "OPENROUTER_API_KEY",
     baseURL: "https://openrouter.ai/api/v1",
     models: (env: Env) => list(env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free"),
-    headers: { "X-Title": "Food Analyzer" },
+    headers: { "X-Title": "LabelSight" },
   },
 } satisfies Record<string, { key: string; baseURL: string; models: (env: Env) => string[]; headers?: Record<string, string> }>;
 

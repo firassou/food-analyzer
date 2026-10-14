@@ -14,13 +14,36 @@ const withHistory = (page: Page, json: string) =>
 const open = (page: Page, name: string) => page.getByRole("button", { name: `Open ${name}` }).click();
 
 test.describe("home", () => {
-  test("shows the headline with a rotating word that changes", async ({ page }) => {
+  test("leads with one scan action, the watchlist and the way into Medicine Mode", async ({ page }) => {
     await page.goto("/");
-    const heading = page.getByRole("heading", { level: 1 });
-    await expect(heading).toContainText("Know what's really in your");
-    const visible = () => heading.locator("span[aria-hidden]").last().innerText();
-    const first = await visible();
-    await expect.poll(visible, { timeout: 8000 }).not.toBe(first);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Know what works for your body.");
+    await expect(page.getByRole("button", { name: "Scan a label" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My watchlist" })).toBeVisible();
+    // Medicine Mode is a place of its own, kept when the page is opened again
+    await page.getByRole("button", { name: "Open Medicine Mode" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Understand a medicine box.");
+    await expect(page.locator("[data-mode]").first()).toHaveAttribute("data-mode", "medicine");
+    await expect(page.getByText("It does not replace your pharmacist or your doctor.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Understand a medicine box.");
+    await page.getByRole("button", { name: "Back to Food" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Know what works for your body.");
+  });
+
+  test("a photo taken in Medicine Mode tells the AI it is probably a medicine", async ({ page }) => {
+    let mode: string | null = "";
+    await page.route("**/api/analyze", async (route) => {
+      // the multipart body, read as bytes: the photo and the text fields side by side
+      const body = route.request().postDataBuffer()?.toString("latin1") ?? "";
+      mode = body.match(/name="mode"\r\n\r\n(\w+)/)?.[1] ?? null;
+      await route.fulfill({ status: 503, json: { ok: false, error: "busy", code: "rate_limited" } });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open Medicine Mode" }).click();
+    const png = await sharp({ create: { width: 64, height: 48, channels: 3, background: "#fff" } }).png().toBuffer();
+    await page.locator('input[type="file"]:not([capture])').first().setInputFiles({ name: "box.png", mimeType: "image/png", buffer: png });
+    await expect(page.getByText("Analysis failed")).toBeVisible();
+    expect(mode).toBe("medicine");
   });
 
   test("the paste hint is for desktops only", async ({ page, isMobile }) => {
@@ -43,7 +66,7 @@ test.describe("home", () => {
     await context.addCookies([{ name: "lang", value: "ar", url: baseURL! }]);
     await page.goto("/");
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("اعرف");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("اعرف ما يناسب جسمك");
   });
 });
 
@@ -174,12 +197,12 @@ test.describe("the shelf", () => {
 
 test("several people can share the device", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "My profile" }).click();
+  await page.getByRole("button", { name: "My watchlist", exact: true }).click();
   await page.getByRole("button", { name: "Add a person" }).click();
   await page.getByRole("textbox", { name: "Name" }).fill("Lina");
   await page.getByRole("button", { name: "Milk" }).click();
   await page.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByRole("button", { name: /My profile: Lina/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /My watchlist: Lina/ })).toBeVisible();
 });
 
 test.describe("Ask AI and what it may know about the reader", () => {
@@ -208,7 +231,7 @@ test.describe("Ask AI and what it may know about the reader", () => {
     await withHistory(page, history(fromFixture("n1", "eu-biscuit.txt", { product: { name: "Biscuit" } })));
     await page.goto("/");
     await open(page, "Biscuit");
-    const switchControl = page.getByRole("switch", { name: "Use my profile and medicines" });
+    const switchControl = page.getByRole("switch", { name: "Use my watchlist and medicines" });
     await expect(switchControl).toHaveAttribute("aria-checked", "false");
     await ask(page, "Is this fine for me?", 1);
     expect(bodies[0].context).toBeUndefined();
@@ -421,7 +444,7 @@ test.describe("shelf mode", () => {
       await route.fulfill({ json: code === "3017620422003" ? known("Hazelnut spread", "eu-biscuit.txt") : known("Orange soda", "drink.txt") });
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Scan", exact: false }).first().click();
+    await page.getByRole("button", { name: "Scan a barcode" }).click();
     await page.getByRole("button", { name: "Scan a whole shelf" }).click();
     await expect(page.getByRole("dialog", { name: "Shelf mode" })).toBeVisible();
     // the milk in the first one is not in the second
@@ -445,7 +468,7 @@ test.describe("shelf mode", () => {
       navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("denied", "NotAllowedError"));
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Scan", exact: false }).first().click();
+    await page.getByRole("button", { name: "Scan a barcode" }).click();
     // the barcode scanner falls back to typing, and shelf mode is only offered over a live camera
     await expect(page.getByLabel("Or type the digits under the barcode")).toBeVisible();
     await expect(page.getByRole("button", { name: "Scan a whole shelf" })).toHaveCount(0);
@@ -455,10 +478,10 @@ test.describe("shelf mode", () => {
     await fakeCamera(page);
     await page.route("**/api/product*", (route) => route.fulfill({ json: known("Orange soda", "drink.txt") }));
     await page.goto("/");
-    await page.getByRole("button", { name: "Scan", exact: false }).first().click();
+    await page.getByRole("button", { name: "Scan a barcode" }).click();
     await page.getByRole("button", { name: "Scan a whole shelf" }).click();
     await expect(page.getByRole("button", { name: "Orange soda" }).first()).toBeVisible();
-    await expect(page.getByText("Add what you avoid in your profile")).toBeVisible();
+    await expect(page.getByText("Add what you avoid to your watchlist")).toBeVisible();
   });
 });
 
@@ -470,7 +493,7 @@ test("the app opens offline once it has been visited", async ({ page, context })
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Know what's really in your");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Know what works for your body.");
 });
 
 test.describe("a saved result follows the interface language", () => {
@@ -532,7 +555,7 @@ test("the same photo picked again opens its saved result without asking the AI",
   await pick();
   await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
   expect(analyses).toBe(1);
-  await page.getByRole("button", { name: "Food Analyzer" }).first().click();
+  await page.getByRole("button", { name: "LabelSight" }).first().click();
   await pick();
   await expect(page.getByText("You analyzed this exact photo before")).toBeVisible();
   expect(analyses).toBe(1);

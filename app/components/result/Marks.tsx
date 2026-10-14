@@ -58,7 +58,7 @@ export function DoseMarksPanel({
           <p className="text-sm leading-6 text-ink-soft">{med.noMarks}</p>
           <button
             onClick={() => setEditing(true)}
-            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
           >
             <PlusIcon className="size-4.5" />
             {med.addMarks}
@@ -90,7 +90,7 @@ export function DoseMarksPanel({
         {onChange && (
           <button
             onClick={() => setEditing(true)}
-            className="inline-flex h-11 items-center gap-1.5 rounded-full bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule active:scale-[0.97]"
+            className="inline-flex h-11 items-center gap-1.5 rounded-control bg-mute-soft px-4 text-sm font-medium transition hover:bg-rule active:scale-[0.97]"
           >
             <PencilIcon className="size-4" />
             {med.editMarks}
@@ -222,20 +222,20 @@ function DoseEditor({ start, onSave, onCancel }: { start: DoseMarks | null; onSa
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           onClick={() => onSave(empty ? null : dose)}
-          className="inline-flex h-11 items-center rounded-full bg-accent px-6 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+          className="inline-flex h-11 items-center rounded-control bg-accent px-6 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
         >
           {med.save}
         </button>
         <button
           onClick={onCancel}
-          className="inline-flex h-11 items-center rounded-full px-4 text-sm font-medium text-ink-soft transition hover:bg-rule/60"
+          className="inline-flex h-11 items-center rounded-control px-4 text-sm font-medium text-ink-soft transition hover:bg-rule/60"
         >
           {t.actions.cancel}
         </button>
         {start && (
           <button
             onClick={() => onSave(null)}
-            className="ms-auto inline-flex h-11 items-center rounded-full px-4 text-sm font-medium text-bad transition hover:bg-bad-soft"
+            className="ms-auto inline-flex h-11 items-center rounded-control px-4 text-sm font-medium text-bad transition hover:bg-bad-soft"
           >
             {med.remove}
           </button>

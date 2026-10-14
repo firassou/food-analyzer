@@ -11,7 +11,10 @@ const LANGUAGE: Record<Locale, string> = { en: "English", fr: "French", ar: "Ara
  * normalize.ts match on (name_en, additive names, ids, codes) stays English, so the
  * deterministic cross-checks behave the same in every language.
  */
-export function systemPrompt(locale: Locale = "en"): string {
+/** what the reader said the photo is, by the mode they took it in; recognition still decides */
+export type PhotoHint = "medicine" | null;
+
+export function systemPrompt(locale: Locale = "en", hint: PhotoHint = null): string {
   const minerals = MINERAL_KEYS.map((k) => `"${k}": number|null`).join(", ");
   const language = LANGUAGE[locale] ?? LANGUAGE.en;
   const localized = language !== "English";
@@ -19,7 +22,7 @@ export function systemPrompt(locale: Locale = "en"): string {
   const nameLocal = localized ? ', "name_local": string|null' : "";
   return `You are a meticulous reader of food, drink and medicine packaging. You receive one photo: usually a packaged food or drink label, sometimes the whole product, a bottle of water, the food itself (a dish, a slice of cake) with no label, or a medicine (box, blister, bottle or leaflet). It may be in any language, blurry, cropped, rotated or partial.
 
-Reply with ONE compact JSON object and nothing else: no markdown, no code fences, no comments, no text before or after.
+${hint === "medicine" ? "The reader took this photo in Medicine Mode: it is most likely a medicine (box, blister, bottle or leaflet). Read it as one, and look carefully for the pharmacist's pen marks. If it clearly shows something else, say what it really is.\n\n" : ""}Reply with ONE compact JSON object and nothing else: no markdown, no code fences, no comments, no text before or after.
 
 JSON shape (every key must be present; use null, [] or "unclear" when unknown):
 {

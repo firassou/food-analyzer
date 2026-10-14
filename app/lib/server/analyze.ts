@@ -2,7 +2,7 @@ import "server-only";
 import { analysisMessages } from "../analysis/messages";
 import { normalize } from "../analysis/normalize";
 import { lastAnswerObject, parseModelJson } from "../analysis/parse";
-import { systemPrompt, USER_PROMPT } from "../analysis/prompt";
+import { type PhotoHint, systemPrompt, USER_PROMPT } from "../analysis/prompt";
 import type { AnalyzeErrorCode, AnalyzeMeta, LabelAnalysis } from "../analysis/types";
 import type { Locale } from "../i18n/locales";
 import {
@@ -65,6 +65,7 @@ export async function analyzeLabel(
   imageDataUrl: string,
   signal: AbortSignal,
   locale: Locale = "en",
+  hint: PhotoHint = null,
 ): Promise<{ result: LabelAnalysis; meta: AnalyzeMeta }> {
   const targets = getTargets();
   if (targets.length === 0) {
@@ -94,7 +95,7 @@ export async function analyzeLabel(
 
     const t0 = Date.now();
     try {
-      const { content, reasoning, finish } = await streamCompletion(target, imageDataUrl, signal, remaining, locale);
+      const { content, reasoning, finish } = await streamCompletion(target, imageDataUrl, signal, remaining, locale, hint);
       const ms = Date.now() - t0;
       let parsed = parseModelJson(content);
       // reasoning models occasionally put the whole answer in the reasoning channel and
@@ -166,6 +167,7 @@ async function streamCompletion(
   outer: AbortSignal,
   budgetMs: number,
   locale: Locale,
+  hint: PhotoHint,
 ): Promise<{ content: string; reasoning: string; finish: string | null }> {
   const ctrl = new AbortController();
   let stall: StallError | null = null;
@@ -194,7 +196,7 @@ async function streamCompletion(
       {
         model: target.model,
         messages: [
-          { role: "system", content: systemPrompt(locale) },
+          { role: "system", content: systemPrompt(locale, hint) },
           {
             role: "user",
             content: [

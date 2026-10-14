@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Figtree, Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Figtree, Geist, Geist_Mono, IBM_Plex_Sans_Arabic, Newsreader } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import ServiceWorker from "./components/ServiceWorker";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
@@ -23,6 +23,12 @@ const figtree = Figtree({
   subsets: ["latin"],
 });
 
+// the restrained editorial serif of Food mode's big headlines (never in Medicine Mode)
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+});
+
 // The Latin faces have no Arabic glyphs; this one is fetched only when it is needed.
 // No metric fallback face: it leads the stack in Arabic (see globals.css), where a
 // local-Arial fallback would add nothing.
@@ -43,15 +49,15 @@ async function requestLocale(): Promise<Locale> {
 
 export async function generateMetadata(): Promise<Metadata> {
   const { title, description } = MESSAGES[await requestLocale()].meta;
-  return { title, description, appleWebApp: { capable: true, title: "Food Analyzer", statusBarStyle: "default" } };
+  return { title, description, appleWebApp: { capable: true, title: "LabelSight", statusBarStyle: "default" } };
 }
 
 export const viewport: Viewport = {
   // the page paints under the notch and the home indicator; the dock pads itself with safe-area insets
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d1015" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ee" },
+    { media: "(prefers-color-scheme: dark)", color: "#101814" },
   ],
 };
 
@@ -61,7 +67,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang={locale}
       dir={dirOf(locale)}
-      className={`${geistSans.variable} ${geistMono.variable} ${figtree.variable} ${plexArabic.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${figtree.variable} ${newsreader.variable} ${plexArabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider initialLocale={locale}>{children}</I18nProvider>

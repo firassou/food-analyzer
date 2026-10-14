@@ -3,12 +3,18 @@ name: ui-design-system
 description: Use when building or changing any UI in app/: new result sections, tiles, pages, the dock or states.
 ---
 
-# UI design system: "calm utility"
+# UI design system: LabelSight (since 0.15.0)
 
-Mobile first, in the manner of the big platforms (Material 3 / Apple Health): a cool off-white page, white surfaces, tonal containers, one blue, large rounded shapes, real icons, plain sentence-case labels. No gradients, glass, emoji icons or mono small caps. Sections are not all the same card: vary the inside (a big figure, a meter, chips, a stepper), keep the outside consistent.
+Mobile first, editorial, tactile and trustworthy, with **two modes**:
+- **Food**: warm oat paper (`#F7F4EE`), botanical charcoal ink, forest green (`#27624D`), soft lime for good news, peach for "worth a closer look". A restrained serif (`font-editorial`, Newsreader) for big Food headlines only. Friendly and personal.
+- **Medicine Mode** (`data-mode="medicine"` on any element): restrained white, deep teal (`#156B68`), pale-teal information surfaces, warm amber cautions. No serif, no spring, no breathing, no celebration: quiet, precise, safety-first, and the disclaimer ("explains packaging, does not replace a pharmacist or doctor") is always visible.
+The page root carries `data-mode` (`.mode-root`): the reader's chosen mode on the home and lists, the result's kind (medicine or not) on a result. A card can carry a mode of its own (the Medicine Mode entry on the Food home).
+
+No indigo/purple gradients, glass, blobs, emoji icons, dense dashboards or fake charts. Radius 14px for controls (`rounded-control`), 20px for cards (`rounded-card`, or the `card` utility: warm white, hairline, soft shadow); pills (`rounded-full`) only for round icon buttons, never for text buttons or chips (`rounded-md`/`rounded-lg`).
 
 ## Tokens (`app/globals.css`)
-- Colours are CSS variables that flip with the colour scheme, exposed as utilities: `paper` (page), `sheet` (surface), `ink`, `ink-soft`, `rule`, `accent` / `on-accent` (filled actions), `accent-soft` / `on-accent-soft` (tonal actions, chips, icon bubbles), and the verdict pairs `bad` / `bad-soft`, `warn` / `warn-soft`, `good` / `good-soft`, `mute` / `mute-soft` (tonal container for neutral blocks: use `bg-mute-soft/60-70`).
+- Colours are CSS variables that flip with the colour scheme **and the mode**, exposed as utilities: `paper` (page), `sheet` (surface), `ink`, `ink-soft`, `rule`, `accent` / `on-accent` (filled actions), `accent-soft` / `on-accent-soft` (tonal actions, chips, icon bubbles, medicine information surfaces), food accents `lime` / `on-lime` and `peach` / `peach-soft` / `on-peach`, and the verdict pairs `bad` / `bad-soft`, `warn` / `warn-soft`, `good` / `good-soft`, `mute` / `mute-soft`. Text colours pass WCAG AA on their own surfaces; the brighter hues (`bad-strong`, `warn-strong`, lime, peach) are for fills, icons and borders, never small text.
+- Shape, depth and motion are tokens too: `rounded-control`, `rounded-card`, `shadow-card`, `shadow-raised`, `--ease-spring` (Food: a soft spring; Medicine: plain ease-out), `--rise-distance` (0 in Medicine Mode), `animate-breathe` (the idle capture button; off in Medicine Mode), `animate-sheet-up`, and the `stagger` utility (children enter 50 ms apart). Everything stops under reduced motion.
 - **Never write `dark:` variants or raw Tailwind palette colours** (`zinc-*`, `emerald-*`): use the tokens, and dark mode follows.
 - Red, amber and green mean a verdict and nothing else. The accent blue is for actions, links and the brand.
 - Surfaces are separated by `ring-1 ring-rule` or by tone, not by heavy borders. Radius: 28px for sheets and cards, `rounded-3xl` for tiles, `rounded-2xl` for inner blocks, `rounded-[20px]` for dock buttons, `rounded-full` for chips and pills.
@@ -64,7 +70,7 @@ Mobile first, in the manner of the big platforms (Material 3 / Apple Health): a 
 
 ## Profile and medicine check
 - The profile is optional everywhere: no prompt to create one, no feature that requires it. `ProfileVerdict` renders nothing without a profile.
-- A medical or dietary verdict never says "safe": the green state is "nothing you avoid was found", the empty interaction state is "nothing stood out" with the reminder that the list is short.
+- A medical or dietary verdict never says "safe". The watchlist verdicts are "A good fit" (always with "nothing on your watchlist was found in what was read… check the pack yourself"), "Worth a closer look" and "Not a match for your watchlist"; the empty interaction state is "nothing stood out" with the reminder that the list is short. Never hide an allergen warning inside a list: without a watchlist, the label's allergens lead the result.
 
 ## Ask AI
 - Last section (`ask`), shown whenever `Content` gets an `ask` prop (the page always passes the scan's id). Other parts of the sheet can put a question to it (`askAbout` in `Content.tsx`: the additives' "Ask AI" button): it is sent as if typed. Medicines get their own intro, suggestions and a prompt that answers like a clinical pharmacist: practical advice, a short question instead of an assumption when the answer depends on something unknown, general knowledge always marked `[G]` (the stamp shows once per medicine answer, not on every paragraph), and the prescriber named once, where a change of treatment is concerned. Chat lives in `components/AskAi.tsx`; conversations are stored on the history entry through `saveChat` only. An unanswered question goes back into the input, never into the saved chat.

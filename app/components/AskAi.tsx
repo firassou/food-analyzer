@@ -194,7 +194,7 @@ export default function AskAi({
                 <span className="eyebrow text-ink-soft">{a.you}</span>
                 <p
                   dir="auto"
-                  className="max-w-[85%] rounded-3xl rounded-ee-lg bg-accent px-4 py-2.5 text-[15px] leading-6 wrap-break-word text-on-accent"
+                  className="max-w-[85%] rounded-2xl rounded-ee-md bg-accent px-4 py-2.5 text-[15px] leading-6 wrap-break-word text-on-accent"
                 >
                   {turn.text}
                 </p>
@@ -204,7 +204,7 @@ export default function AskAi({
                   <SparkleIcon className="size-3.5 text-accent" />
                   {a.answer}
                 </span>
-                <div className="w-full max-w-[94%] space-y-3 rounded-3xl rounded-es-lg bg-mute-soft/70 px-4 py-3.5">
+                <div className="w-full max-w-[94%] space-y-3 rounded-2xl rounded-es-md bg-mute-soft/70 px-4 py-3.5">
                   {splitAnswer(turn.text).map((block, j, blocks) => (
                     <div key={j}>
                       {/* a medicine answer is mostly general knowledge: each run of general paragraphs is stamped once */}
@@ -237,7 +237,7 @@ export default function AskAi({
                 type="button"
                 disabled={pending}
                 onClick={() => send(s)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-sheet px-4 py-2 text-start text-sm font-medium ring-1 ring-rule transition hover:bg-accent-soft hover:text-on-accent-soft hover:ring-accent focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.98] disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-2 rounded-control bg-sheet px-4 py-2 text-start text-sm font-medium ring-1 ring-rule transition hover:bg-accent-soft hover:text-on-accent-soft hover:ring-accent focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.98] disabled:opacity-50"
               >
                 <SparkleIcon className="size-4 shrink-0 text-accent" />
                 {s}
@@ -279,7 +279,7 @@ export default function AskAi({
               a.placeholderMedicine
             : a.placeholder
           }
-          className="h-12 min-w-0 flex-1 rounded-full bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
+          className="h-12 min-w-0 flex-1 rounded-control bg-mute-soft px-5 text-base placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-accent"
         />
         {canSpeak && (
           <button
