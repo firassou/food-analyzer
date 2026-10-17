@@ -1,6 +1,6 @@
 {
   "name": "labelsight",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,6 +16,8 @@
     "fetch:corpus": "node scripts/fetch-off-corpus.mjs"
   },
   "dependencies": {
+    "framer-motion": "^14.3.0",
+    "lucide-react": "^1.58.0",
     "next": "16.3.8",
     "openai": "^7.23.0",
     "react": "19.2.8",
