@@ -749,7 +749,7 @@ function Results({
       <nav
         ref={navRef}
         aria-label={r.nav}
-        className="animate-fade-in scrollbar-none sticky top-16 z-20 print:hidden -mx-4 flex gap-2 overflow-x-auto bg-paper/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0"
+        className="animate-fade-in scrollbar-none sticky top-16 z-20 print:hidden -mx-4 flex gap-2 overflow-x-auto bg-paper/70 px-4 py-2 backdrop-blur-xl backdrop-saturate-150 sm:mx-0 sm:px-0"
       >
         {sections.map((id) => (
           <button
@@ -770,7 +770,7 @@ function Results({
       {/* Overview */}
       <header
         id={sid("overview")}
-        className="animate-fade-up scroll-mt-32 rounded-card bg-sheet px-5 pt-6 pb-6 ring-1 ring-rule sm:px-7 sm:pt-7"
+        className="animate-fade-up card scroll-mt-32 px-5 pt-6 pb-6 sm:px-7 sm:pt-7"
       >
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip icon={kindIcons[kind]}>{t.kinds[kind]}</Chip>

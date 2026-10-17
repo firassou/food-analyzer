@@ -573,8 +573,9 @@ test("the same photo picked again opens its saved result without asking the AI",
   const pick = () => page.locator('input[type="file"]:not([capture])').first().setInputFiles({ name: "label.png", mimeType: "image/png", buffer: png });
   await page.goto("/");
   await pick();
+  // the home fades out as the result arrives, so its own h2 is no proof: wait for the analysis itself
+  await expect.poll(() => analyses).toBe(1);
   await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
-  expect(analyses).toBe(1);
   await page.getByRole("button", { name: "LabelSight" }).first().click();
   await pick();
   await expect(page.getByText("You analyzed this exact photo before")).toBeVisible();

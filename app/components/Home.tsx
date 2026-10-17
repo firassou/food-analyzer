@@ -1,4 +1,5 @@
 "use client";
+import { motion } from "framer-motion";
 import { RotatingSentence } from "./RotatingWord";
 import { useMemo, useSyncExternalStore } from "react";
 import { isEmptyProfile } from "../lib/analysis/profile";
@@ -8,6 +9,7 @@ import { type Mode, setMode } from "../lib/client/mode";
 import { useProfile } from "../lib/client/profile";
 import { format, useI18n } from "../lib/i18n/I18nProvider";
 import { dateLocale } from "../lib/i18n/locales";
+import { Stagger, usePress } from "../lib/motion";
 import { scanStatus, ScanThumb, StatusPill, useScanName } from "./scans";
 import {
   ArrowLeftIcon,
@@ -59,21 +61,23 @@ function FoodHome({ attention, error, onCamera, onUpload, onBarcode, onOpen, onH
   const { t } = useI18n();
   const h = t.home;
   const greeting = useGreeting();
+  const press = usePress();
   return (
     <section className="mx-auto max-w-2xl lg:grid lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:items-start lg:gap-12">
-      <div className="stagger">
-        <p className="text-sm font-medium text-ink-soft">{h.greeting[greeting]}</p>
-        <h1 className="font-editorial mt-2 text-[2.55rem] leading-[1.04] font-medium tracking-tight text-balance sm:text-6xl">{h.title}</h1>
+      <Stagger>
+        <p className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-ink-soft"><span aria-hidden className="size-1.5 rounded-full bg-accent shadow-[0_0_10px_2px] shadow-accent/60" />{h.greeting[greeting]}</p>
+        <h1 className="font-display mt-3 bg-linear-to-br from-ink from-40% to-accent bg-clip-text text-[2.5rem] leading-[1.05] font-semibold tracking-[-0.035em] text-balance text-transparent sm:text-6xl rtl:leading-snug">{h.title}</h1>
         <RotatingSentence text={h.lead} template={h.leadRotating} things={h.leadThings} className="mt-4 max-w-md text-base leading-7 text-ink-soft" />
 
         <div className="mt-8">
-          <button
+          <motion.button
+            {...press}
             onClick={onCamera}
-            className="animate-breathe flex h-16 w-full items-center justify-center gap-3 rounded-control bg-accent px-6 text-lg font-semibold text-on-accent shadow-raised transition hover:brightness-110 active:scale-[0.99] sm:w-auto sm:min-w-72"
+            className="animate-breathe flex h-16 w-full items-center justify-center gap-3 rounded-control bg-brand px-6 text-lg font-semibold text-on-accent shadow-raised transition-[filter] hover:brightness-110 sm:w-auto sm:min-w-72"
           >
             <CameraIcon className="size-6" />
             {h.scan}
-          </button>
+          </motion.button>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:gap-3">
             <SecondaryAction icon={<ImageIcon className="size-5" />} onClick={onUpload}>
               {h.upload}
@@ -97,13 +101,13 @@ function FoodHome({ attention, error, onCamera, onUpload, onBarcode, onOpen, onH
             {error}
           </Notice>
         )}
-      </div>
+      </Stagger>
 
-      <div className="stagger mt-10 space-y-3 lg:mt-0">
+      <Stagger className="mt-10 space-y-3 lg:mt-0">
         <Watchlist onEdit={onWatchlist} />
         <RecentScans onOpen={onOpen} onAll={onHistory} />
         <MedicineEntry />
-      </div>
+      </Stagger>
     </section>
   );
 }
@@ -139,7 +143,7 @@ function MedicineHome({ attention, error, onCamera, onUpload, onOpen, onHistory,
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:gap-3">
           <button
             onClick={onCamera}
-            className="flex h-14 items-center justify-center gap-3 rounded-control bg-accent px-6 text-base font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
+            className="flex h-14 items-center justify-center gap-3 rounded-control bg-brand px-6 text-base font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
           >
             <CameraIcon className="size-6" />
             {m.scan}
@@ -157,7 +161,7 @@ function MedicineHome({ attention, error, onCamera, onUpload, onOpen, onHistory,
       </div>
 
       <div className="mt-10 space-y-3 lg:mt-0">
-        <div className="card px-5 py-5">
+        <div className="card card-lift px-5 py-5">
           <div className="flex items-center gap-2">
             <h2 className="font-display flex-1 text-lg font-semibold">{m.yours}</h2>
             {medicines.length > 0 && <SeeAll onClick={onHistory} />}
@@ -183,13 +187,14 @@ function MedicineHome({ attention, error, onCamera, onUpload, onOpen, onHistory,
 
 function SecondaryAction({ icon, onClick, children }: { icon: React.ReactNode; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <motion.button
+      {...usePress()}
       onClick={onClick}
-      className="inline-flex h-12 items-center justify-center gap-2 rounded-control bg-sheet px-4 text-sm font-semibold text-ink shadow-card ring-1 ring-rule transition hover:bg-mute-soft active:scale-[0.99] sm:px-5"
+      className="inline-flex h-12 items-center justify-center gap-2 rounded-control bg-sheet px-4 text-sm font-semibold text-ink shadow-card ring-1 ring-rule transition-colors hover:bg-mute-soft sm:px-5"
     >
       <span className="text-accent">{icon}</span>
       {children}
-    </button>
+    </motion.button>
   );
 }
 
@@ -230,7 +235,7 @@ function Watchlist({ onEdit }: { onEdit: () => void }) {
     ...profile.diets.map((d) => t.profile.diets[d]),
   ];
   return (
-    <div className="card px-5 py-5">
+    <div className="card card-lift px-5 py-5">
       <div className="flex items-center gap-2">
         <h2 className="font-display flex-1 text-lg font-semibold">{h.watchlist}</h2>
         {!empty && (
@@ -271,7 +276,7 @@ function RecentScans({ onOpen, onAll }: { onOpen: (e: HistoryEntry) => void; onA
   const entries = useHistory();
   if (entries.length === 0) return null;
   return (
-    <div className="card px-5 py-5">
+    <div className="card card-lift px-5 py-5">
       <div className="flex items-center gap-2">
         <h2 className="font-display flex-1 text-lg font-semibold">{t.home.recent}</h2>
         <SeeAll onClick={onAll} />
@@ -322,7 +327,7 @@ function MedicineEntry() {
   const { t } = useI18n();
   const h = t.home;
   return (
-    <div data-mode="medicine" className="card px-5 py-5">
+    <div data-mode="medicine" className="card card-lift px-5 py-5">
       <div className="flex items-start gap-4">
         <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-on-accent-soft">
           <PillIcon className="size-6" />
@@ -335,7 +340,7 @@ function MedicineEntry() {
               setMode("medicine");
               window.scrollTo({ top: 0 });
             }}
-            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-on-accent transition hover:brightness-110"
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control bg-brand px-4 text-sm font-semibold text-on-accent transition hover:brightness-110"
           >
             {h.medicineOpen}
             <ChevronIcon className="size-4 rtl:-scale-x-100" />

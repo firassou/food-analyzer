@@ -1,53 +1,57 @@
 @import "tailwindcss";
 
 /*
- * LabelSight design tokens. Two modes share one structure:
- * - Food: warm oat paper, botanical charcoal, forest green, lime for good news, peach for "look closer".
- * - Medicine (`[data-mode="medicine"]`): restrained white, deep teal, quiet and precise.
+ * LabelSight design tokens: "Verdant Glass". Slate neutrals, emerald as the brand and teal as its
+ * partner, on a canvas that glows softly at the top. Two modes share one structure:
+ * - Food: emerald on cool slate-white (light) or deep green-black (dark).
+ * - Medicine (`[data-mode="medicine"]`): teal on clinical slate, quieter, with no lift or glow.
  * Colours are variables that flip with the colour scheme and the mode, so components never
  * need `dark:` or mode variants. Verdict colours (bad / warn / good) mean a verdict and
  * nothing else. Text colours are tuned for WCAG AA on their own surfaces; the brighter
- * brand hues (`*-strong`, lime, peach) are for fills, icons and borders.
- * See .claude/skills/ui-design-system.
+ * hues (`*-strong`, mint, amber) are for fills, icons and borders.
+ * See UI_RULES.md.
  */
 :root {
   color-scheme: light dark;
 
   /* surfaces and text */
-  --paper: #f7f4ee;
-  --sheet: #fffdf9;
-  --ink: #17241e;
-  --ink-soft: #4d5a53;
-  --rule: #e3ddd2;
-  /* the brand: forest green, and its tonal container */
-  --accent: #27624d;
+  --paper: #f3f7f5;
+  --sheet: #ffffff;
+  --ink: #0b1512;
+  --ink-soft: #46584f;
+  --rule: #dbe5e0;
+  /* the brand: emerald, its teal partner, and the tonal container */
+  --accent: #047857;
+  --accent-2: #0f766e;
   --on-accent: #ffffff;
-  --accent-soft: #dfeadb;
-  --on-accent-soft: #1b4536;
-  /* food accents: optimistic lime, peach for "worth a closer look" */
-  --lime: #c8e69b;
-  --lime-soft: #e6f2cf;
-  --on-lime: #1f3a12;
-  --peach: #ef9975;
-  --peach-soft: #fbe4d8;
-  --on-peach: #6b2a12;
+  --accent-soft: #d6f5e6;
+  --on-accent-soft: #064e3b;
+  --grad-accent: linear-gradient(135deg, #059669 0%, #0f766e 100%);
+  --glow: #10b981;
+  /* good news is mint, "worth a closer look" is amber (names kept: lime, peach) */
+  --lime: #6ee7b7;
+  --lime-soft: #d9f7ea;
+  --on-lime: #064e3b;
+  --peach: #f59e0b;
+  --peach-soft: #fdecc8;
+  --on-peach: #6b3a05;
   /* verdicts */
-  --bad: #a8443c;
-  --bad-strong: #b94b43;
-  --bad-soft: #f7e2de;
-  --warn: #855610;
-  --warn-strong: #ca8428;
-  --warn-soft: #f7ead2;
-  --good: #2f6a3f;
-  --good-soft: #e5f1d3;
-  --mute: #58645d;
-  --mute-soft: #eee9e0;
+  --bad: #b42323;
+  --bad-strong: #dc2f2f;
+  --bad-soft: #fde4e4;
+  --warn: #8a4b05;
+  --warn-strong: #d97706;
+  --warn-soft: #fcebc9;
+  --good: #047857;
+  --good-soft: #d6f5e6;
+  --mute: #4b5b55;
+  --mute-soft: #e9efec;
 
   /* shape and depth */
   --r-card: 20px;
   --r-control: 14px;
-  --elev-card: 0 1px 2px rgb(23 36 30 / 0.04), 0 8px 24px -16px rgb(23 36 30 / 0.18);
-  --elev-raised: 0 2px 4px rgb(23 36 30 / 0.06), 0 16px 40px -18px rgb(23 36 30 / 0.32);
+  --elev-card: 0 1px 2px rgb(8 28 22 / 0.04), 0 10px 28px -18px rgb(8 28 22 / 0.2);
+  --elev-raised: 0 2px 4px rgb(8 28 22 / 0.06), 0 18px 44px -20px rgb(8 28 22 / 0.34);
 
   /* motion: a soft spring for food, plain easing for medicine (see the mode below) */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -57,81 +61,88 @@
   --dur-base: 280ms;
   --dur-slow: 520ms;
 
-  /* Latin interface: the Latin faces lead, the Arabic one catches label text they lack */
+  /* Latin interface: Geist for everything; the Arabic face catches label text it lacks */
   --stack-sans: var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
-  --stack-display: var(--font-figtree), var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
-  --stack-editorial: var(--font-newsreader), Georgia, var(--font-arabic), serif;
+  --stack-display: var(--font-geist-sans), var(--font-arabic), system-ui, sans-serif;
+  --stack-editorial: var(--stack-display);
   --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
 }
 
-/* Arabic interface: the Arabic face must lead, or the Latin faces' metric fallbacks
-   (a local Arial) claim the Arabic characters first. Its own Latin letters match it.
-   There is no Arabic serif here: editorial headlines use the same face, heavier. */
+/* Arabic interface: the Arabic face must lead, or the Latin face's metric fallback
+   (a local Arial) claims the Arabic characters first. Its own Latin letters match it. */
 :root:lang(ar) {
   --stack-sans: var(--font-arabic), var(--font-geist-sans), system-ui, sans-serif;
-  --stack-display: var(--font-arabic), var(--font-figtree), system-ui, sans-serif;
-  --stack-editorial: var(--font-arabic), var(--font-figtree), system-ui, sans-serif;
+  --stack-display: var(--font-arabic), var(--font-geist-sans), system-ui, sans-serif;
+  --stack-editorial: var(--stack-display);
   --stack-mono: var(--font-geist-mono), var(--font-arabic), ui-monospace, monospace;
 }
 
-/* Medicine Mode: professional, calm, safety-first. No serif, no spring, no lift. */
+/* Medicine Mode: professional, calm, safety-first. Teal on clinical slate, no spring, no lift. */
 [data-mode="medicine"] {
-  --paper: #f5f7f7;
+  --paper: #f1f5f8;
   --sheet: #ffffff;
-  --rule: #dbe3e2;
-  --accent: #156b68;
+  --rule: #d9e2ea;
+  --accent: #0f766e;
+  --accent-2: #0e7490;
   --on-accent: #ffffff;
-  --accent-soft: #ddefed;
-  --on-accent-soft: #0f4b49;
-  --mute-soft: #edf2f1;
-  --ink-soft: #4a5856;
-  --elev-card: 0 1px 2px rgb(16 40 40 / 0.05);
-  --elev-raised: 0 1px 3px rgb(16 40 40 / 0.08), 0 10px 30px -18px rgb(16 40 40 / 0.25);
+  --accent-soft: #d5f3ef;
+  --on-accent-soft: #134e4a;
+  --grad-accent: linear-gradient(135deg, #0f766e 0%, #0e7490 100%);
+  --glow: #14b8a6;
+  --mute-soft: #e9eff4;
+  --ink-soft: #465663;
+  --elev-card: 0 1px 2px rgb(15 35 50 / 0.05);
+  --elev-raised: 0 1px 3px rgb(15 35 50 / 0.08), 0 12px 32px -20px rgb(15 35 50 / 0.28);
   --ease-spring: var(--ease-out);
   --rise-distance: 0px;
-  --stack-editorial: var(--stack-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #101814;
-    --sheet: #18221d;
-    --ink: #ece7dd;
-    --ink-soft: #aab4ad;
-    --rule: #2b3631;
-    --accent: #8fcaa9;
-    --on-accent: #0d2a1e;
-    --accent-soft: #1f3a2e;
-    --on-accent-soft: #cfe9d9;
-    --lime: #c8e69b;
-    --lime-soft: #26361b;
-    --on-lime: #d6ecb6;
-    --peach: #ef9975;
-    --peach-soft: #3d241a;
-    --on-peach: #f6c7b2;
-    --bad: #f1a59d;
-    --bad-strong: #e0756b;
-    --bad-soft: #3d1e1b;
-    --warn: #ebbd6c;
-    --warn-strong: #ca8428;
-    --warn-soft: #382a12;
-    --good: #addb8e;
-    --good-soft: #213320;
-    --mute: #aab4ad;
-    --mute-soft: #212c27;
-    --elev-card: 0 1px 2px rgb(0 0 0 / 0.3);
-    --elev-raised: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 40px -18px rgb(0 0 0 / 0.6);
+    --paper: #060d0b;
+    --sheet: #0e1915;
+    --ink: #ecf6f1;
+    --ink-soft: #9db4aa;
+    --rule: #1c2c26;
+    --accent: #34d399;
+    --accent-2: #2dd4bf;
+    --on-accent: #03241a;
+    --accent-soft: #0f3023;
+    --on-accent-soft: #a7f3d0;
+    --grad-accent: linear-gradient(135deg, #34d399 0%, #2dd4bf 100%);
+    --glow: #10b981;
+    --lime: #6ee7b7;
+    --lime-soft: #0f3023;
+    --on-lime: #a7f3d0;
+    --peach: #fbbf24;
+    --peach-soft: #3a290a;
+    --on-peach: #fcd89a;
+    --bad: #fca5a5;
+    --bad-strong: #ef4444;
+    --bad-soft: #3a1717;
+    --warn: #fcd34d;
+    --warn-strong: #d97706;
+    --warn-soft: #36270b;
+    --good: #6ee7b7;
+    --good-soft: #0f3023;
+    --mute: #9db4aa;
+    --mute-soft: #16241f;
+    --elev-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --elev-raised: 0 2px 6px rgb(0 0 0 / 0.4), 0 18px 44px -18px rgb(0 0 0 / 0.7);
   }
   [data-mode="medicine"] {
-    --paper: #0f1717;
-    --sheet: #172121;
-    --rule: #283534;
-    --accent: #7fcfca;
-    --on-accent: #062b29;
-    --accent-soft: #163837;
-    --on-accent-soft: #c8ecea;
-    --mute-soft: #1e2928;
-    --ink-soft: #a7b5b3;
+    --paper: #050d11;
+    --sheet: #0c171b;
+    --rule: #1b2a31;
+    --accent: #2dd4bf;
+    --accent-2: #22d3ee;
+    --on-accent: #032421;
+    --accent-soft: #0c302f;
+    --on-accent-soft: #99f6e4;
+    --grad-accent: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 100%);
+    --glow: #14b8a6;
+    --mute-soft: #15232a;
+    --ink-soft: #9fb4bd;
   }
 }
 
@@ -142,6 +153,7 @@
   --color-ink-soft: var(--ink-soft);
   --color-rule: var(--rule);
   --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent-soft: var(--on-accent-soft);
@@ -235,7 +247,7 @@
   }
 }
 
-/* Arabic has no serif here: its editorial headlines are the same face, heavier, with room for two lines */
+/* Arabic headlines: heavier, with room for two lines */
 :root:lang(ar) .font-editorial {
   font-weight: 600;
   line-height: 1.3;
@@ -268,11 +280,47 @@
   }
 }
 
-/* a card: warm white, a hairline and a soft shadow */
+/* a card: a faint tonal gradient, a hairline and layered soft shadows */
 @utility card {
-  background: var(--sheet);
+  background: linear-gradient(165deg, var(--sheet) 0%, color-mix(in srgb, var(--sheet) 93%, var(--accent)) 100%);
   border-radius: var(--r-card);
-  box-shadow: var(--elev-card), inset 0 0 0 1px var(--rule);
+  box-shadow: var(--elev-card), inset 0 0 0 1px var(--rule), inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+}
+
+/* a card you can act on: lifts and glows under a pointer (Medicine Mode: stays put, only the glow) */
+@utility card-lift {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow:
+        var(--elev-raised),
+        inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--rule)),
+        0 14px 44px -14px color-mix(in srgb, var(--accent) 38%, transparent);
+    }
+  }
+}
+[data-mode="medicine"] .card-lift:hover {
+  transform: none;
+}
+
+/* the brand fill: emerald into teal, with a faint inner highlight */
+@utility bg-brand {
+  background: var(--grad-accent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+}
+
+/* glass: a translucent, blurred surface for what floats above the page (dock, nav, sheets) */
+@utility glass {
+  background: color-mix(in srgb, var(--sheet) 68%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow:
+    var(--elev-raised),
+    inset 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 40%, transparent);
 }
 
 /* hides the scrollbar of horizontally scrolling rows (the section nav) but keeps them scrollable */
@@ -313,8 +361,13 @@ body {
 /* the page's root in its mode: a mode switch repaints everything at once (a layer below the
    utilities, so a card that carries a mode of its own keeps its surface) */
 @layer base {
+  /* the canvas: slate, with a soft aurora of the brand colours falling from the top */
   .mode-root {
-    background: var(--paper);
+    background:
+      radial-gradient(56rem 30rem at 8% -10%, color-mix(in srgb, var(--glow) 17%, transparent), transparent 62%),
+      radial-gradient(44rem 26rem at 104% -4%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 62%),
+      var(--paper);
+    background-repeat: no-repeat;
     color: var(--ink);
     transition: background-color var(--dur-base) ease-out;
   }
@@ -357,5 +410,13 @@ body {
   }
   * {
     box-shadow: none !important;
+  }
+  /* sections reveal as they scroll into view; a printout must show all of them */
+  section,
+  header,
+  article,
+  main > div {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

@@ -10,7 +10,7 @@ description: Use when implementing a Part B feature or any new analysis capabili
 2. Deterministic logic in `knowledge.ts` / `normalize.ts`, with Vitest tests (follow `label-knowledge-rules` / `normalize-invariants`).
 3. Prompt (`prompt.ts`), only if the model must extract new data.
 4. API (`app/api/analyze/route.ts`).
-5. UI, following `ui-design-system`.
+5. UI, following `UI_RULES.md`.
 6. README (contract, env vars, feature notes).
 7. `verify-app`.
 

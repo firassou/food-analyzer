@@ -16,7 +16,7 @@ description: Use before writing or changing any Next.js code (routes, layouts, c
 - Server-only modules (`app/lib/server/*`) start with `import "server-only"`. Modules in `app/lib/analysis/` are shared with the client and must never import server code.
 - `"use client"` goes only on interactive components (`app/page.tsx`, `app/Content.tsx`, `app/components/*`, `app/lib/i18n/I18nProvider.tsx`), never on `layout.tsx`. The layout is async: it reads the `lang` cookie and `Accept-Language` (`cookies()` / `headers()` are async), so the page renders per request.
 - Layouts use the global `LayoutProps<"/">` type helper (no import needed): `export default function RootLayout({ children }: LayoutProps<"/">)`.
-- Fonts are loaded with `next/font/google` (Geist, Geist Mono, Bricolage Grotesque, IBM Plex Sans Arabic) as CSS variables, combined into `--stack-*` in `globals.css` and mapped to `--font-sans` / `--font-display` / `--font-mono` in `@theme inline`.
+- Fonts are loaded with `next/font/google` (Geist, Geist Mono, IBM Plex Sans Arabic) as CSS variables, combined into `--stack-*` in `globals.css` and mapped to `--font-sans` / `--font-display` / `--font-mono` in `@theme inline`.
 - `sharp` is on Next's default `serverExternalPackages` list, so `next.config.ts` needs no entry for it.
 - Path alias: `@/*` maps to the repo root.
 

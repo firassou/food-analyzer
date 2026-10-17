@@ -97,7 +97,7 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
         if (e.target === ref.current) ref.current?.close();
       }}
       aria-labelledby="profile-title"
-      className="animate-sheet-up mx-auto mt-auto mb-0 max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-card bg-sheet p-0 text-ink shadow-raised ring-1 ring-rule backdrop:bg-ink/45 sm:m-auto sm:w-[min(34rem,calc(100vw-1.5rem))] sm:rounded-card"
+      className="animate-sheet-up mx-auto mt-auto mb-0 max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-card bg-sheet p-0 text-ink shadow-raised ring-1 ring-rule backdrop:animate-fade-in backdrop:bg-ink/35 backdrop:backdrop-blur-md sm:m-auto sm:w-[min(34rem,calc(100vw-1.5rem))] sm:rounded-card"
     >
       <div className="px-5 pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-7 sm:pb-6">
         <div className="flex items-start gap-3">
@@ -203,7 +203,7 @@ export default function ProfileSheet({ onClose }: { onClose: () => void }) {
         <div className="mt-5 flex items-center gap-3">
           <button
             onClick={() => ref.current?.close()}
-            className="h-12 flex-1 rounded-control bg-accent text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
+            className="h-12 flex-1 rounded-control bg-brand text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.99]"
           >
             {p.done}
           </button>
@@ -430,7 +430,7 @@ function HealthConditions({ profile, onChange }: { profile: Profile; onChange: (
                 <button
                   type="button"
                   onClick={() => add(ai.ids, ai.others)}
-                  className="inline-flex min-h-11 items-center rounded-control bg-accent px-5 text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                  className="inline-flex min-h-11 items-center rounded-control bg-brand px-5 text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
                 >
                   {c.aiConfirm}
                 </button>

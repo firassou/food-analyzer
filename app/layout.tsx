@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Figtree, Geist, Geist_Mono, IBM_Plex_Sans_Arabic, Newsreader } from "next/font/google";
+import { Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import ServiceWorker from "./components/ServiceWorker";
 import { I18nProvider } from "./lib/i18n/I18nProvider";
@@ -14,18 +14,6 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-// headings and big figures
-const figtree = Figtree({
-  variable: "--font-figtree",
-  subsets: ["latin"],
-});
-
-// the restrained editorial serif of Food mode's big headlines (never in Medicine Mode)
-const newsreader = Newsreader({
-  variable: "--font-newsreader",
   subsets: ["latin"],
 });
 
@@ -56,8 +44,8 @@ export const viewport: Viewport = {
   // the page paints under the notch and the home indicator; the dock pads itself with safe-area insets
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f4ee" },
-    { media: "(prefers-color-scheme: dark)", color: "#101814" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f7f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#060d0b" },
   ],
 };
 
@@ -67,7 +55,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang={locale}
       dir={dirOf(locale)}
-      className={`${geistSans.variable} ${geistMono.variable} ${figtree.variable} ${newsreader.variable} ${plexArabic.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${plexArabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider initialLocale={locale}>{children}</I18nProvider>

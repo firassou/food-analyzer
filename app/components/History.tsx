@@ -190,7 +190,7 @@ export default function HistoryScreen({
                 onCompare(chosen[0], chosen[1]);
                 stopPicking();
               }}
-              className="mt-4 h-12 w-full rounded-control bg-accent text-sm font-semibold text-on-accent transition active:scale-[0.99] disabled:opacity-35"
+              className="mt-4 h-12 w-full rounded-control bg-brand text-sm font-semibold text-on-accent transition active:scale-[0.99] disabled:opacity-35"
             >
               {h.compareNow}
             </button>

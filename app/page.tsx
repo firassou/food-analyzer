@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import Content from "./Content";
 import Analyzing from "./components/Analyzing";
 import AisleScanner from "./components/AisleScanner";
@@ -26,6 +27,7 @@ import { addExcipientPhoto, withUserMarks } from "./lib/analysis/medicine";
 import { remindIfDue } from "./lib/client/reminders";
 import type { AnalyzeErrorCode, AnalyzeMeta, AnalyzeResponse, LabelAnalysis } from "./lib/analysis/types";
 import { format, rich, useI18n } from "./lib/i18n/I18nProvider";
+import { Float, MotionRoot, PageView, PressButton } from "./lib/motion";
 import { dateLocale, type Locale } from "./lib/i18n/locales";
 import type { Messages } from "./lib/i18n/messages";
 
@@ -412,6 +414,7 @@ export default function Home() {
   const shownMode: Mode = open && status === "done" && result ? (result.result.kind === "medicine" ? "medicine" : "food") : mode;
 
   return (
+    <MotionRoot mode={shownMode}>
     <div
       data-mode={shownMode}
       className="mode-root relative flex flex-1 flex-col"
@@ -437,7 +440,7 @@ export default function Home() {
       {aisle && <AisleScanner onOpen={openFromAisle} onClose={closeAisle} />}
       {editingProfile && <ProfileSheet onClose={() => setEditingProfile(false)} />}
 
-      <header className="sticky top-0 z-30 bg-paper/85 backdrop-blur-md print:hidden">
+      <header className="sticky top-0 z-30 border-b border-ink/5 bg-paper/70 backdrop-blur-xl backdrop-saturate-150 print:hidden">
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-6">
           <button onClick={reset} className="-ms-1 flex min-w-0 items-center gap-3 rounded-2xl p-1">
             <Logo />
@@ -492,6 +495,8 @@ export default function Home() {
       </header>
 
       <main className="pb-dock mx-auto w-full max-w-5xl flex-1 px-4 pt-7 sm:px-6 sm:pt-12">
+        <AnimatePresence mode="wait" initial={false}>
+        <PageView key={shelfOpen ? "shelf" : comparing ? "compare" : historyOpen ? "history" : !open ? "home" : "result"}>
         {shelfOpen ?
           <div className="mx-auto max-w-2xl">
             <Shelf onBack={() => setShelfOpen(false)} onOpen={openSaved} />
@@ -630,6 +635,8 @@ export default function Home() {
             </div>
           </div>
         }
+        </PageView>
+        </AnimatePresence>
         {/* which version this is: see CHANGELOG.md */}
         <p dir="ltr" className="eyebrow mt-10 text-center text-ink-soft/70 tabular-nums">
           LabelSight v{process.env.NEXT_PUBLIC_APP_VERSION}
@@ -640,47 +647,47 @@ export default function Home() {
       <div
         className={cn("bottom-safe pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 print:hidden", !open && "hidden")}
       >
-        <div className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-card bg-sheet/90 p-2 shadow-[0_8px_32px_-8px_rgb(0_0_0/0.35)] ring-1 ring-rule backdrop-blur-md">
+        <Float className="glass pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-card p-2">
           {busy ?
             <>
               <p className="flex min-w-0 flex-1 items-center gap-3 ps-4 text-sm font-medium" aria-live="polite">
                 <Spinner className="shrink-0 text-accent" />
                 <span className="truncate">{status === "preparing" ? t.actions.preparing : t.actions.analyzing}</span>
               </p>
-              <button
+              <PressButton
                 onClick={reset}
-                className="h-14 shrink-0 rounded-control bg-mute-soft px-6 text-sm font-semibold transition hover:bg-rule active:scale-[0.98]"
+                className="h-14 shrink-0 rounded-control bg-mute-soft px-6 text-sm font-semibold transition-colors hover:bg-rule"
               >
                 {t.actions.cancel}
-              </button>
+              </PressButton>
             </>
           : <>
-              <button
+              <PressButton
                 onClick={picker.takePhoto}
-                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-control bg-accent px-3 text-[15px] font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                className="flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-control bg-brand px-3 text-[15px] font-semibold text-on-accent transition-[filter] hover:brightness-110"
               >
                 <CameraIcon className="size-6 shrink-0" />
                 <span className="truncate">{open ? t.uploader.retake : t.uploader.takePhoto}</span>
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 onClick={picker.choosePhoto}
                 aria-label={open ? t.uploader.replace : t.uploader.choosePhoto}
                 title={open ? t.uploader.replace : t.uploader.choosePhoto}
-                className="grid size-14 shrink-0 place-items-center rounded-control bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
+                className="grid size-14 shrink-0 place-items-center rounded-control bg-mute-soft transition-colors hover:bg-rule"
               >
                 <ImageIcon className="size-5" />
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 onClick={() => setScanning(true)}
                 aria-label={t.dock.scan}
                 title={t.dock.scan}
-                className="grid size-14 shrink-0 place-items-center rounded-control bg-mute-soft transition hover:bg-rule active:scale-[0.98]"
+                className="grid size-14 shrink-0 place-items-center rounded-control bg-mute-soft transition-colors hover:bg-rule"
               >
                 <BarcodeIcon className="size-5" />
-              </button>
+              </PressButton>
             </>
           }
-        </div>
+        </Float>
       </div>
 
       {dragging && (
@@ -689,6 +696,7 @@ export default function Home() {
         </div>
       )}
     </div>
+    </MotionRoot>
   );
 }
 
@@ -724,7 +732,7 @@ function Lookalike({ entry, onOpen, onAnalyze }: { entry: HistoryEntry; onOpen: 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={onOpen}
-          className="inline-flex h-11 items-center rounded-control bg-accent px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
+          className="inline-flex h-11 items-center rounded-control bg-brand px-5 text-sm font-semibold text-on-accent transition active:scale-[0.98]"
         >
           {d.open}
         </button>
@@ -742,13 +750,18 @@ function Lookalike({ entry, onOpen, onAnalyze }: { entry: HistoryEntry; onOpen: 
 /** a leaf inside a scanner's corner marks: the same mark as the app icon */
 function Logo() {
   return (
-    <svg viewBox="0 0 64 64" className="size-9 shrink-0" aria-hidden>
-      <rect width="64" height="64" rx="16" className="fill-accent" />
-      <g fill="none" className="stroke-on-accent" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M13 23v-5a5 5 0 0 1 5-5h5M41 13h5a5 5 0 0 1 5 5v5M51 41v5a5 5 0 0 1-5 5h-5M23 51h-5a5 5 0 0 1-5-5v-5" />
+    <svg viewBox="0 0 64 64" className="size-9 shrink-0 drop-shadow-[0_4px_10px_color-mix(in_srgb,var(--glow)_45%,transparent)]" aria-hidden>
+      <defs>
+        <linearGradient id="ls-logo" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#10b981" />
+          <stop offset="1" stopColor="#0f766e" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="18" fill="url(#ls-logo)" />
+      <g fill="none" stroke="#fff" strokeWidth="4.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 24v-5a5 5 0 0 1 5-5h5M40 14h5a5 5 0 0 1 5 5v5M50 40v5a5 5 0 0 1-5 5h-5M24 50h-5a5 5 0 0 1-5-5v-5" strokeOpacity=".7" />
+        <path d="m22.5 33 7 7 12.5-14.5" strokeWidth="5.2" />
       </g>
-      <path d="M22.5 41.5C22.5 30 30 22.5 42 22.5c0 12-7.5 19-19.5 19Z" className="fill-on-accent" />
-      <path d="M24 40 35 29" className="stroke-accent" strokeWidth="3" strokeLinecap="round" fill="none" />
     </svg>
   );
 }
